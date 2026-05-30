@@ -1,0 +1,65 @@
+// Element Plus 相关
+
+// 表单项组件 - 修复标签与输入框垂直对齐问题
+.el-form-item {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 32px !important;
+
+  .el-form-item__label {
+    line-height: 32px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  .el-form-item__content {
+    line-height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    flex: 1 !important;
+
+    // 确保按钮容器也垂直居中
+    .el-button {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+  }
+
+  // 针对没有 label 的表单项（如按钮组）
+  &:not([label]) .el-form-item__content,
+  > .el-form-item__content:only-child {
+    display: flex !important;
+    align-items: center !important;
+    line-height: 32px !important;
+  }
+}
+
+// 侧边栏的 item 的 popper
+.el-popper {
+  .el-menu {
+    background-color: var(--el-bg-color);
+    .el-menu-item {
+      background-color: var(--el-bg-color);
+      &.is-active,
+      &:hover {
+        background-color: var(--el-bg-color-overlay);
+        color: #ffffff;
+      }
+    }
+    .el-sub-menu__title {
+      background-color: var(--el-bg-color);
+    }
+    .el-sub-menu {
+      &.is-active {
+        > .el-sub-menu__title {
+          color: #ffffff;
+        }
+      }
+    }
+  }
+  .el-menu--horizontal {
+    border: none;
+  }
+}

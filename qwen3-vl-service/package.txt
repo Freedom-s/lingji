@@ -1,0 +1,5 @@
+# 构建镜像
+docker build -t qwen3-vl-embedding .
+
+# 运行容器 (记得加 --gpus all)
+docker run --gpus all -p 8000:8000 -e MODEL_PATH="Qwen/Qwen3-VL-Embedding-2B" qwen3-vl-embedding

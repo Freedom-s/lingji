@@ -1,0 +1,30 @@
+{
+    "factory_llm_infos": [
+        {
+            "name": "OpenAI-API-Compatible",
+            "logo": "",
+            "tags": "CHAT,EMBEDDING,RERANK",
+            "status": "1",
+            "llm": [
+                {
+                    "llm_name": "Qwen/Qwen3-VL-32B-Instruct",
+                    "tags": "CHAT",
+                    "max_tokens": 262144,
+                    "model_type": "chat"
+                },
+                {
+                    "llm_name": "qwen3-vl",
+                    "tags": "EMBEDDING",
+                    "max_tokens": 32768,
+                    "model_type": "embedding"
+                },
+                {
+                    "llm_name": "qwen3-vl-rerank",
+                    "tags": "RERANK",
+                    "max_tokens": 32768,
+                    "model_type": "rerank"
+                }
+            ]
+        }
+    ]
+}

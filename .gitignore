@@ -1,0 +1,139 @@
+# =====================
+# Python
+# =====================
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg
+*.egg-info/
+eggs/
+.eggs/
+dist/
+build/
+*.manifest
+*.spec
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# =====================
+# JavaScript / Node
+# =====================
+node_modules/
+*.tsbuildinfo
+.npm/
+.yarn/
+
+# =====================
+# Virtual environments
+# =====================
+.venv/
+venv/
+env/
+ENV/
+
+# =====================
+# Environment variables
+# =====================
+.env
+.env.local
+.env.*.local
+
+# =====================
+# IDE / Editor
+# =====================
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# =====================
+# OS files
+# =====================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# =====================
+# Logs
+# =====================
+*.log
+logs/
+/logs
+
+# =====================
+# Flask session files
+# =====================
+flask_session/
+/flask_session
+api/flask_session
+
+# =====================
+# Model & cache directories
+# =====================
+huggingface.co/
+nltk_data/
+docker/models/
+docker/ragflow-logs/
+vllm/models/
+management/models--*/
+rag/res/deepdoc
+api/apps/models
+
+# =====================
+# Project-specific ignores
+# =====================
+deer-flow/
+Qwen3-VL-Embedding-2B/
+Qwen3-VL-Reranker-2B/
+
+# =====================
+# SDK generated files
+# =====================
+sdk/python/ragflow.egg-info/
+sdk/python/build/
+sdk/python/dist/
+sdk/python/ragflow_sdk.egg-info/
+
+# =====================
+# Umi / Web cache
+# =====================
+web/node_modules/.cache/
+management/web/types/auto
+web/public/logo_secret.svg
+web/public/logo_old.svg
+web/public/logo.svg
+web/src/locales/zh.ts
+
+# =====================
+# Claude Code
+# =====================
+.claude/
+
+# =====================
+# Other state/cache directories
+# =====================
+.omc/
+.trie
+.python-version
+Cargo.lock
+**/*.rs.bk
+
+# =====================
+# Temporary / debug files
+# =====================
+table_schema_output.txt
+API_DOCUMENTATION.md
+IMPLEMENTATION_SUMMARY.md
+修改文件列表.md
+前端到后端完整流程详解.md
+9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+
+# =====================
+# Hash-like temporary files (SHA-1 style)
+# =====================
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]

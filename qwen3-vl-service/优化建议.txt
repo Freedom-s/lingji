@@ -1,0 +1,68 @@
+优化一：开启 Flash Attention 2 (性能提升 30%+)
+前提，必须要下载flash-attn
+在model_engine.py的__init__里面：
+# 修改 model_engine.py 中的初始化代码
+self.model = Qwen3VLEmbedder.from_pretrained(
+    model_name_or_path,
+    trust_remote_code=True,
+    torch_dtype=torch.float16,        # 强制使用半精度 (节省一半显存)
+    attn_implementation="flash_attention_2", # 核心加速配置
+    **kwargs
+).to(device)
+
+
+优化三：图片下载与解码的异步化 (解决 IO 瓶颈)
+痛点： 目前的流程是：Batcher 取任务 -> 进入 GPU 线程 -> 下载图片(串行/慢) -> 推理。 如果 16 张图片下载需要 2 秒，GPU 就要空转 2 秒。GPU 的时间比黄金还贵，不能用来等网络 IO。
+
+优化方案： 在进入 Batcher 之前，或者在 Batcher 内部但在送入 GPU 之前，并行预加载图片。
+
+修改 app.py： 利用 FastAPI 的异步特性，在 Request 进来时就并发下载图片。
+
+import aiohttp
+from PIL import Image
+from io import BytesIO
+
+# 新增：异步图片下载器
+async def fetch_image(url: str) -> Image.Image:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            data = await resp.read()
+            return Image.open(BytesIO(data)).convert("RGB")
+
+@app.post("/v1/embeddings")
+async def create_embedding(request: EmbeddingRequest):
+    # ... 解析输入 ...
+    
+    # 优化点：在进入 batcher 之前，先把图片对象准备好！
+    # 这样进入 batcher 后，GPU 拿到的直接是内存里的 Image 对象，无需等待网络
+    tasks = []
+    for item in processed_inputs:
+        if "image" in item and isinstance(item["image"], str) and item["image"].startswith("http"):
+            # 这是一个网络 IO 任务
+            tasks.append(fetch_image(item["image"]))
+        else:
+            tasks.append(asyncio.sleep(0)) # 占位
+
+    # 并发执行下载
+    downloaded_images = await asyncio.gather(*tasks)
+
+    # 将下载好的 Image 对象替换回 input 字典
+    final_inputs = []
+    for i, item in enumerate(processed_inputs):
+        if downloaded_images[i]:
+             # 替换 URL 为真实的 Image 对象
+            item["image"] = downloaded_images[i] 
+        final_inputs.append(item)
+
+    # 发送给 Batcher (此时全是内存操作，极快)
+    embeddings = await asyncio.gather(*[batcher.embed(inp) for inp in final_inputs])
+
+
+优化五：多 GPU 负载均衡 (Scale Up)
+如果你有一台 4 卡 A100 服务器，目前的 app.py 只能用一张卡。
+优化方案： 不要在 Python 代码里写复杂的 device 分配逻辑。使用 Gunicorn 或 Docker Replica。
+# 容器 1
+docker run --gpus '"device=0"' -p 8001:8000 ...
+# 容器 2
+docker run --gpus '"device=1"' -p 8002:8000 ...
+然后前置一个 Nginx 做负载均衡，把请求轮询分发给 8001-8004。这是最稳定、解耦的扩展方案。

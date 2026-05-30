@@ -1,0 +1,247 @@
+.drawerContent {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.centerState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+// ============================================================================
+// 主布局
+// ============================================================================
+
+.noteBody {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.noteToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.noteToolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.noteToolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pageHint {
+  font-size: 12px;
+}
+
+// ============================================================================
+// 编辑模式
+// ============================================================================
+
+.editArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editHint {
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.noteTextarea {
+  flex: 1;
+  border: none !important;
+  border-radius: 0 !important;
+  resize: none;
+  font-size: 15px !important;
+  line-height: 1.9 !important;
+  padding: 12px 16px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  &:focus {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+// ============================================================================
+// 渲染模式（Typora 风格）
+// ============================================================================
+
+.previewArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  cursor: text;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #333;
+
+  h1, h2, h3 {
+    border-bottom: none;
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    padding-bottom: 0;
+  }
+
+  h1 { font-size: 1.6em; }
+  h2 { font-size: 1.4em; }
+  h3 { font-size: 1.2em; }
+
+  p { margin-bottom: 0.8em; }
+
+  ul, ol { padding-left: 1.5em; }
+
+  blockquote {
+    border-left: 3px solid #1677ff;
+    background: #f0f5ff;
+    padding: 8px 16px;
+    border-radius: 0 6px 6px 0;
+    color: #555;
+  }
+
+  code {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  pre {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 16px;
+
+    code { background: none; padding: 0; }
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+
+    th, td {
+      border: 1px solid #e8e8e8;
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    th { background: #fafafa; font-weight: 600; }
+  }
+}
+
+.emptyPreview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+// ============================================================================
+// 笔记列表
+// ============================================================================
+
+.noteListContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.noteListHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.noteList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+}
+
+.noteListItem {
+  padding: 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #1677ff;
+    background: #f6f9ff;
+  }
+}
+
+.noteListItemHeader {
+  margin-bottom: 6px;
+}
+
+.noteSummary {
+  font-size: 13px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ============================================================================
+// Dark mode
+// ============================================================================
+
+:global([data-theme='dark']) {
+  .noteToolbar {
+    border-bottom-color: #303030;
+  }
+
+  .noteTextarea {
+    background: #141414 !important;
+    color: #d4d4d4 !important;
+  }
+
+  .previewArea {
+    color: #d4d4d4;
+
+    blockquote {
+      background: #1a2a3a;
+      color: #a0b0c0;
+    }
+
+    code { background: #2a2a2a; }
+    pre { background: #2a2a2a; }
+
+    table {
+      th, td { border-color: #434343; }
+      th { background: #1a1a2e; }
+    }
+  }
+
+  .noteListHeader { border-bottom-color: #303030; }
+
+  .noteListItem {
+    border-color: #434343;
+    background: #1a1a2e;
+
+    &:hover {
+      border-color: #1677ff;
+      background: #1f2940;
+    }
+  }
+}

@@ -1,0 +1,24 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 灵机AI Favicon - 简化版智能灯泡 -->
+  <defs>
+    <linearGradient id="faviconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="32" cy="32" r="30" fill="url(#faviconGradient)"/>
+  
+  <!-- 灯泡主体 -->
+  <path d="M32 12C25.3726 12 20 17.3726 20 24C20 27.6 21.6 30.8 24 33.6V39C24 40.6569 25.3431 42 27 42H37C38.6569 42 40 40.6569 40 39V33.6C42.4 30.8 44 27.6 44 24C44 17.3726 38.6274 12 32 12Z" 
+        fill="white" 
+        opacity="0.95"/>
+  
+  <!-- 灯泡底座 -->
+  <rect x="28" y="44" width="8" height="4" rx="1" fill="#FCD34D"/>
+  <rect x="29" y="48" width="6" height="3" rx="1" fill="#FCD34D"/>
+  
+  <!-- 闪电符号 -->
+  <path d="M33 22L29 29H32L28 36L32 29H29L33 22Z" fill="#2563EB" opacity="0.8"/>
+</svg>

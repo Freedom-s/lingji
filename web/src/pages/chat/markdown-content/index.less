@@ -1,0 +1,239 @@
+.markdownContentWrapper {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #333;
+
+  // 加载状态样式
+  :global(.loading-text) {
+    color: #1890ff;
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.6;
+      }
+    }
+  }
+
+  // 标题样式
+  :global(h1) {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 16px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e8e8e8;
+  }
+
+  :global(h2) {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 14px 0 10px 0;
+  }
+
+  :global(h3) {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 12px 0 8px 0;
+  }
+
+  :global(h4), :global(h5), :global(h6) {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 10px 0 6px 0;
+  }
+
+  // 段落样式
+  :global(p) {
+    margin: 8px 0;
+    line-height: 1.7;
+  }
+
+  // 列表样式
+  :global(ul), :global(ol) {
+    margin: 8px 0;
+    padding-left: 24px;
+  }
+
+  :global(li) {
+    margin: 4px 0;
+    line-height: 1.7;
+  }
+
+  // 代码块样式
+  :global(code) {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #d63384;
+  }
+
+  :global(pre) {
+    background: #f8f9fa;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    margin: 12px 0;
+    padding: 16px;
+    overflow-x: auto;
+
+    code {
+      background: transparent;
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 0;
+    }
+  }
+
+  // 引用样式
+  :global(blockquote) {
+    padding: 12px 16px;
+    border-left: 4px solid #1890ff;
+    background: #f0f7ff;
+    margin: 12px 0;
+    color: #555;
+    border-radius: 4px;
+  }
+
+  // 表格样式
+  :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  :global(th), :global(td) {
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
+    text-align: left;
+  }
+
+  :global(th) {
+    background: #fafafa;
+    font-weight: 600;
+  }
+
+  :global(tr:hover) {
+    background: #f5f5f5;
+  }
+
+  // 链接样式
+  :global(a) {
+    color: #1890ff;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  // 思考过程样式
+  :global(section.think) {
+    padding: 12px 16px;
+    background: #fafafa;
+    border-left: 3px solid #d5d3d3;
+    margin: 12px 0;
+    font-size: 13px;
+    color: #666;
+    border-radius: 4px;
+    line-height: 1.6;
+  }
+
+  // 附件内容相关样式
+  :global(strong) {
+    &:contains('📎 附件内容') {
+      color: #1890ff;
+      display: block;
+      border-bottom: 2px solid #e6f7ff;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    &:contains('📄') {
+      color: #52c41a;
+      font-size: 15px;
+      margin-top: 12px;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      background: #f6ffed;
+      border-left: 4px solid #52c41a;
+      border-radius: 6px;
+      display: inline-block;
+      font-weight: 500;
+    }
+  }
+}
+
+.referencePopoverWrapper {
+  max-width: 60vw;
+}
+
+.referenceChunkImage {
+  width: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.referenceImagePreview {
+  max-width: 70vw;
+  max-height: 70vh;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.chunkContentText {
+  .chunkText;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+.documentLink {
+  padding: 0;
+}
+
+.referenceIcon {
+  padding: 0 6px;
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 18px;
+  background-color: #1890ff;
+  animation: blink 0.8s infinite;
+  vertical-align: text-bottom;
+  @keyframes blink {
+    0% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
+
+.fileThumbnail {
+  display: inline-block;
+  max-width: 40px;
+  border-radius: 4px;
+}

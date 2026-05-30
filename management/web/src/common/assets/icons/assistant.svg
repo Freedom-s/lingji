@@ -1,0 +1,17 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- 机器人头部 -->
+    <rect x="6" y="3" width="12" height="8" rx="2" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 机器人身体 -->
+    <path d="M8 11V19" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 11V19" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 19H16" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 天线 -->
+    <path d="M12 3V1" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="1" r="1" fill="#667085"/>
+    <!-- 眼睛 -->
+    <circle cx="9" cy="7" r="1.5" fill="#667085"/>
+    <circle cx="15" cy="7" r="1.5" fill="#667085"/>
+    <!-- 手臂 -->
+    <path d="M4 13L6 15" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M20 13L18 15" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

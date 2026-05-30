@@ -1,0 +1,266 @@
+// 全局 CSS 变量
+@import "./variables.css";
+// Transition
+@import "./transition.scss";
+// Element Plus
+@import "./element-plus.css";
+@import "./element-plus.scss";
+// Vxe Table
+@import "./vxe-table.css";
+@import "./vxe-table.scss";
+// 注册多主题
+@import "./theme/register.scss";
+// Mixins
+@import "./mixins.scss";
+// View Transition
+@import "./view-transition.scss";
+
+// 业务页面几乎都应该在根元素上挂载 class="app-container"，以保持页面美观
+.app-container {
+  padding: var(--spacing-xl); // 24px - 大气感留白
+  background-color: var(--color-bg-base);
+  min-height: calc(100vh - var(--v3-header-height));
+}
+
+.search-wrapper {
+  margin-bottom: 18px;
+
+  .search-form {
+    :deep(.el-form-item__content) {
+      width: 100%;
+    }
+
+    :deep(.el-input),
+    :deep(.el-select) {
+      width: 100%;
+      max-width: 260px;
+    }
+
+    :deep(.el-input__wrapper) {
+      min-height: 46px;
+    }
+
+    :deep(.el-form-item__label) {
+      min-height: 46px;
+      line-height: 46px !important;
+    }
+
+    @media screen and (min-width: 768px) {
+      :deep(.el-form-item) {
+        margin-bottom: 0;
+      }
+    }
+
+    .search-actions {
+      height: 100%;
+
+      :deep(.el-form-item__content) {
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 10px;
+        min-height: 46px;
+      }
+
+      :deep(.el-button) {
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+.table-card {
+  :deep(.el-card__body) {
+    padding: 24px;
+  }
+}
+
+.toolbar-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .el-button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .selection-info {
+    flex-shrink: 0;
+  }
+}
+
+.selection-info {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.table-wrapper {
+  margin-bottom: 18px;
+}
+
+.operation-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+
+  .el-button {
+    padding: 4px 8px !important;
+    font-size: 13px !important;
+  }
+
+  .el-divider--vertical {
+    height: 16px;
+    margin: 0 4px;
+    border-color: rgba(203, 213, 225, 0.9);
+  }
+}
+
+.pager-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 18px;
+  border-top: 1px solid rgba(226, 232, 240, 0.82);
+}
+
+.no-data {
+  color: var(--color-text-disabled);
+  font-size: 13px;
+}
+
+@media screen and (max-width: 768px) {
+  .app-container {
+    padding: 16px;
+  }
+
+  .search-wrapper,
+  .table-card {
+    :deep(.el-card__body) {
+      padding: 18px;
+    }
+  }
+
+  .toolbar-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .pager-wrapper {
+    justify-content: center;
+
+    :deep(.el-pagination) {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  }
+
+  .operation-buttons {
+    flex-direction: column;
+
+    .el-divider--vertical {
+      display: none;
+    }
+  }
+}
+
+html {
+  height: 100%;
+  // 灰色模式
+  &.grey-mode {
+    filter: grayscale(1);
+  }
+  // 色弱模式
+  &.color-weakness {
+    filter: invert(0.8);
+  }
+}
+
+body {
+  height: 100%;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-base);
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑",
+    sans-serif;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  @extend %scrollbar;
+}
+
+#app {
+  height: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+a,
+a:focus,
+a:hover {
+  color: inherit;
+  outline: none;
+  text-decoration: none;
+  transition: color var(--transition-base) var(--ease-out);
+}
+
+div:focus {
+  outline: none;
+}
+
+// 通用过渡效果
+* {
+  transition-timing-function: var(--ease-out);
+}
+
+// 尊重用户的减少动画偏好
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

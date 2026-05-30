@@ -1,0 +1,583 @@
+"""
+学习页面 API - 思维导图、概念速记闪卡、随堂测验
+"""
+
+import json
+import logging
+import random
+import time
+from flask import request
+from flask_login import login_required, current_user
+
+from api.db.db_models import DocumentGeneration, StudentCardProgress, StudentQuizResult, StudentNote, KnowledgePointMastery, Dialog, Document
+from api.db.db_models import DB
+from api.utils import get_uuid
+from api.utils.api_utils import get_json_result
+from api import settings
+
+page_name = "learning"
+logger = logging.getLogger(__name__)
+
+
+@manager.route("/mindmap/<doc_id>", methods=["GET"])
+@login_required
+def get_mindmap(doc_id):
+    """获取文档的思维导图"""
+    try:
+        row = (
+            DocumentGeneration.select()
+            .where(
+                DocumentGeneration.doc_id == doc_id,
+                DocumentGeneration.generation_type == "mindmap",
+            )
+            .first()
+        )
+        if row and row.content:
+            return get_json_result(data=json.loads(row.content))
+        return get_json_result(data=None, message="思维导图尚未生成")
+    except Exception as e:
+        logger.error(f"get mindmap error: {e}")
+        return get_json_result(data=None, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/flashcards/<doc_id>", methods=["GET"])
+@login_required
+def get_flashcards(doc_id):
+    """获取文档的概念速记闪卡，附带当前学生的学习进度"""
+    try:
+        row = (
+            DocumentGeneration.select()
+            .where(
+                DocumentGeneration.doc_id == doc_id,
+                DocumentGeneration.generation_type == "flashcards",
+            )
+            .first()
+        )
+        cards = json.loads(row.content) if row and row.content else []
+
+        # 获取当前学生的进度
+        progress = {}
+        if current_user and hasattr(current_user, "id"):
+            progress_rows = (
+                StudentCardProgress.select()
+                .where(
+                    StudentCardProgress.student_id == current_user.id,
+                    StudentCardProgress.doc_id == doc_id,
+                )
+            )
+            progress = {p.card_index: p.status for p in progress_rows}
+
+        return get_json_result(data={"cards": cards, "progress": progress})
+    except Exception as e:
+        logger.error(f"get flashcards error: {e}")
+        return get_json_result(data={"cards": [], "progress": {}}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/flashcards/<doc_id>/progress", methods=["POST"])
+@login_required
+def update_flashcard_progress(doc_id):
+    """更新学生对某张卡片的记忆状态"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
+
+        data = request.json
+        card_index = data.get("card_index")
+        status = data.get("status")
+
+        if card_index is None or not status:
+            return get_json_result(data=False, message="card_index、status 为必填项", code=settings.RetCode.ARGUMENT_ERROR)
+        if status not in ("remembered", "unclear"):
+            return get_json_result(data=False, message="status 必须为 remembered 或 unclear", code=settings.RetCode.ARGUMENT_ERROR)
+
+        # Upsert: 先查再更新/插入
+        existing = (
+            StudentCardProgress.select()
+            .where(
+                StudentCardProgress.student_id == current_user.id,
+                StudentCardProgress.doc_id == doc_id,
+                StudentCardProgress.card_index == card_index,
+            )
+            .first()
+        )
+
+        if existing:
+            existing.status = status
+            existing.save()
+        else:
+            StudentCardProgress.create(
+                id=get_uuid(),
+                student_id=current_user.id,
+                doc_id=doc_id,
+                card_index=card_index,
+                status=status,
+            )
+
+        return get_json_result(data=True, message="更新成功")
+    except Exception as e:
+        logger.error(f"update flashcard progress error: {e}")
+        return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/quiz/<doc_id>", methods=["GET"])
+@login_required
+def get_quiz(doc_id):
+    """获取文档的随堂测验题目"""
+    try:
+        row = (
+            DocumentGeneration.select()
+            .where(
+                DocumentGeneration.doc_id == doc_id,
+                DocumentGeneration.generation_type == "quiz",
+            )
+            .first()
+        )
+        questions = json.loads(row.content) if row and row.content else []
+        return get_json_result(data={"questions": questions})
+    except Exception as e:
+        logger.error(f"get quiz error: {e}")
+        return get_json_result(data={"questions": []}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/quiz/<doc_id>/result", methods=["POST"])
+@login_required
+def submit_quiz_result(doc_id):
+    """提交单道题的作答结果"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
+
+        data = request.json
+        question_index = data.get("question_index")
+        student_answer = data.get("student_answer")
+        is_correct = data.get("is_correct", False)
+
+        if question_index is None:
+            return get_json_result(data=False, message="question_index 为必填项", code=settings.RetCode.ARGUMENT_ERROR)
+
+        StudentQuizResult.create(
+            id=get_uuid(),
+            student_id=current_user.id,
+            doc_id=doc_id,
+            question_index=question_index,
+            student_answer=student_answer,
+            is_correct=is_correct,
+        )
+
+        return get_json_result(data=True, message="提交成功")
+    except Exception as e:
+        logger.error(f"submit quiz result error: {e}")
+        return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/quiz/<doc_id>/result", methods=["GET"])
+@login_required
+def get_quiz_result(doc_id):
+    """获取当前学生对某文档的测验结果"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={"results": []}, message="用户未登录")
+
+        rows = (
+            StudentQuizResult.select()
+            .where(
+                StudentQuizResult.student_id == current_user.id,
+                StudentQuizResult.doc_id == doc_id,
+            )
+            .order_by(StudentQuizResult.create_time.desc())
+        )
+        results = [
+            {
+                "question_index": r.question_index,
+                "student_answer": r.student_answer,
+                "is_correct": r.is_correct,
+            }
+            for r in rows
+        ]
+        return get_json_result(data={"results": results})
+    except Exception as e:
+        logger.error(f"get quiz result error: {e}")
+        return get_json_result(data={"results": []}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+# ============================================================
+# 个性化测验 API（SM-2 遗忘曲线 + 知识点追踪）
+# ============================================================
+
+def _calc_next_review(correct: bool, ease: float, interval: int):
+    """SM-2 算法：计算新的 ease_factor 和下次复习间隔（天）"""
+    if correct:
+        new_ease = min(3.5, ease + 0.15)
+        new_interval = max(1, min(120, int(interval * new_ease)))
+    else:
+        new_ease = max(1.3, ease - 0.2)
+        new_interval = 1
+    return new_ease, new_interval
+
+
+def _collect_quiz_pool(kb_ids: list[str]) -> list[dict]:
+    """从指定知识库下的所有文档中收集测验题目"""
+    all_q = []
+    for dg in DocumentGeneration.select().where(
+        DocumentGeneration.generation_type == "quiz"
+    ):
+        if not dg.content:
+            continue
+        try:
+            questions = json.loads(dg.content)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for q in questions:
+            q["_doc_id"] = dg.doc_id
+            all_q.append(q)
+    # 过滤：只保留归属指定知识库的文档的题目
+    doc_ids = list({q["_doc_id"] for q in all_q})
+    valid_docs = set()
+    for doc in Document.select(Document.id).where(
+        Document.id.in_(doc_ids), Document.kb_id.in_(kb_ids)
+    ):
+        valid_docs.add(doc.id)
+    return [q for q in all_q if q["_doc_id"] in valid_docs]
+
+
+@manager.route("/personalized-quiz/start", methods=["POST"])
+@login_required
+def start_personalized_quiz():
+    """启动个性化测验：传入 dialog_id，返回个性化题目列表"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={"questions": []}, message="用户未登录")
+
+        data = request.json or {}
+        dialog_id = data.get("dialog_id")
+        count = data.get("count", 10)
+
+        if not dialog_id:
+            return get_json_result(data={"questions": []}, message="dialog_id 为必填项", code=settings.RetCode.ARGUMENT_ERROR)
+
+        # 从 dialog 获取 kb_ids
+        dialog = Dialog.get_or_none(Dialog.id == dialog_id)
+        if not dialog:
+            return get_json_result(data={"questions": []}, message="助教不存在", code=settings.RetCode.NOT_FOUND)
+
+        try:
+            kb_ids = json.loads(dialog.kb_ids) if isinstance(dialog.kb_ids, str) else dialog.kb_ids
+        except (json.JSONDecodeError, TypeError):
+            kb_ids = []
+        if not kb_ids:
+            return get_json_result(data={"questions": []}, message="该助教未关联知识库")
+
+        # 收集题目池
+        quiz_pool = _collect_quiz_pool(kb_ids)
+        if not quiz_pool:
+            return get_json_result(data={"questions": [], "message": "暂无可用题目"})
+
+        # 查询学生知识点掌握度
+        mastery_rows = list(
+            KnowledgePointMastery.select().where(
+                KnowledgePointMastery.student_id == current_user.id
+            )
+        )
+        mastery_map = {}
+        for m in mastery_rows:
+            mastery_map[m.node_id] = {
+                "correct_count": m.correct_count,
+                "wrong_count": m.wrong_count,
+                "next_review_time": float(m.next_review_time) if m.next_review_time else None,
+                "review_count": m.review_count,
+            }
+
+        # 按知识点分组题目
+        kp_to_qs: dict[str, list[dict]] = {}
+        for q in quiz_pool:
+            kp_ids = q.get("knowledge_point_ids", [])
+            if not kp_ids:
+                kp_ids = [f"uncat_{q['_doc_id']}"]
+            for kp in kp_ids:
+                kp_to_qs.setdefault(kp, []).append(q)
+
+        # 计算优先级分数
+        now = time.time()
+        scored = []
+        for kp_id, qs in kp_to_qs.items():
+            m = mastery_map.get(kp_id, {})
+            score = 0.0
+            correct_c = m.get("correct_count", 0)
+            wrong_c = m.get("wrong_count", 0)
+            review_c = m.get("review_count", 0)
+            next_t = m.get("next_review_time")
+
+            if review_c == 0:
+                score = 4.0  # 从未复习 → 最优先
+            else:
+                total = correct_c + wrong_c
+                acc = correct_c / total if total > 0 else 0
+                if next_t and next_t < now:
+                    score += 3.0  # 过期该复习了
+                if acc < 0.5 and total >= 2:
+                    score += 2.0  # 薄弱点
+
+            if score > -50:
+                scored.append((kp_id, score, qs))
+
+        # 排序，取 Top N
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        selected = []
+        used_ids = set()
+        for kp_id, score, qs in scored[:count]:
+            available = [q for q in qs if q["id"] not in used_ids]
+            if not available:
+                continue
+            pick = min(2 if score >= 3 else 1, len(available))
+            for q in random.sample(available, pick):
+                used_ids.add(q["id"])
+                selected.append({
+                    "id": q["id"],
+                    "doc_id": q.get("_doc_id", ""),
+                    "knowledge_point_ids": q.get("knowledge_point_ids", []),
+                    "question": q["question"],
+                    "options": q["options"],
+                    "correct": q.get("correct", ""),
+                    "explanations": q.get("explanations", {}),
+                })
+            if len(selected) >= count:
+                break
+
+        random.shuffle(selected)
+        return get_json_result(data={"questions": selected})
+
+    except Exception as e:
+        logger.error(f"personalized quiz start error: {e}")
+        return get_json_result(data={"questions": []}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/personalized-quiz/answer", methods=["POST"])
+@login_required
+def answer_personalized_quiz():
+    """提交个性化测验单题答案，同步更新知识点掌握度"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
+
+        data = request.json or {}
+        doc_id = data.get("doc_id")
+        knowledge_point_ids = data.get("knowledge_point_ids", [])
+        is_correct = data.get("is_correct", False)
+
+        # 记录作答 (student_quiz_result)
+        StudentQuizResult.create(
+            id=get_uuid(),
+            student_id=current_user.id,
+            doc_id=doc_id or "",
+            question_index=data.get("question_id", 0),
+            student_answer=data.get("student_answer", ""),
+            is_correct=is_correct,
+        )
+
+        # 更新知识点掌握度
+        if knowledge_point_ids:
+            now_ts = int(time.time())
+            for kp_id in knowledge_point_ids:
+                existing = KnowledgePointMastery.select().where(
+                    KnowledgePointMastery.student_id == current_user.id,
+                    KnowledgePointMastery.doc_id == doc_id,
+                    KnowledgePointMastery.node_id == kp_id,
+                ).first()
+
+                if existing:
+                    current_interval = max(1, (existing.review_count or 1))
+                    new_ease, new_interval = _calc_next_review(
+                        is_correct, existing.ease_factor, current_interval
+                    )
+                    next_review = int(now_ts + new_interval * 86400)
+                    if is_correct:
+                        existing.correct_count += 1
+                    else:
+                        existing.wrong_count += 1
+                    existing.ease_factor = new_ease
+                    existing.review_count = (existing.review_count or 0) + 1
+                    existing.last_review_time = now_ts
+                    existing.next_review_time = next_review
+                    existing.save()
+                else:
+                    new_ease, new_interval = _calc_next_review(is_correct, 2.5, 1)
+                    next_review = int(now_ts + new_interval * 86400)
+                    KnowledgePointMastery.create(
+                        id=get_uuid(),
+                        student_id=current_user.id,
+                        doc_id=doc_id or "",
+                        node_id=kp_id,
+                        correct_count=1 if is_correct else 0,
+                        wrong_count=0 if is_correct else 1,
+                        ease_factor=new_ease,
+                        review_count=1,
+                        last_review_time=now_ts,
+                        next_review_time=next_review,
+                    )
+
+        return get_json_result(data=True, message="提交成功")
+    except Exception as e:
+        logger.error(f"personalized quiz answer error: {e}")
+        return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/knowledge-report", methods=["GET"])
+@login_required
+def get_knowledge_report():
+    """获取学生在某助教下的知识点掌握度报告"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={"weak_points": [], "strong_points": [], "stats": {}}, message="用户未登录")
+
+        dialog_id = request.args.get("dialog_id")
+        if not dialog_id:
+            return get_json_result(data={"weak_points": [], "strong_points": [], "stats": {}}, message="dialog_id 为必填项")
+
+        dialog = Dialog.get_or_none(Dialog.id == dialog_id)
+        if not dialog:
+            return get_json_result(data={"weak_points": [], "strong_points": [], "stats": {}}, message="助教不存在")
+
+        try:
+            kb_ids = json.loads(dialog.kb_ids) if isinstance(dialog.kb_ids, str) else dialog.kb_ids
+        except (json.JSONDecodeError, TypeError):
+            kb_ids = []
+
+        rows = KnowledgePointMastery.select().where(
+            KnowledgePointMastery.student_id == current_user.id,
+            KnowledgePointMastery.doc_id.in_(
+                Document.select(Document.id).where(Document.kb_id.in_(kb_ids))
+            ),
+        )
+
+        weak, strong = [], []
+        tc, tw = 0, 0
+        now = time.time()
+        for r in rows:
+            total = r.correct_count + r.wrong_count
+            acc = r.correct_count / total if total > 0 else 0
+            entry = {
+                "node_id": r.node_id,
+                "correct_count": r.correct_count,
+                "wrong_count": r.wrong_count,
+                "accuracy": round(acc, 2),
+                "review_count": r.review_count,
+                "need_review": r.next_review_time and float(r.next_review_time) < now,
+            }
+            if acc < 0.5 or entry["need_review"]:
+                weak.append(entry)
+            elif acc >= 0.8:
+                strong.append(entry)
+            tc += r.correct_count
+            tw += r.wrong_count
+
+        total = tc + tw
+        return get_json_result(data={
+            "weak_points": weak,
+            "strong_points": strong,
+            "stats": {
+                "total_correct": tc,
+                "total_wrong": tw,
+                "total_attempts": total,
+                "overall_accuracy": round(tc / total, 2) if total > 0 else 0,
+                "knowledge_points_count": len(rows),
+            },
+        })
+    except Exception as e:
+        logger.error(f"knowledge report error: {e}")
+        return get_json_result(data={"weak_points": [], "strong_points": [], "stats": {}}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+# ============================================================
+# 笔记相关 API
+# ============================================================
+
+@manager.route("/note/<doc_id>", methods=["GET"])
+@login_required
+def get_note(doc_id):
+    """获取某文档某页的笔记"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={"content": ""}, message="用户未登录")
+
+        page_number = request.args.get("page_number", 1, type=int)
+
+        row = (
+            StudentNote.select()
+            .where(
+                StudentNote.student_id == current_user.id,
+                StudentNote.doc_id == doc_id,
+                StudentNote.page_number == page_number,
+            )
+            .first()
+        )
+        return get_json_result(data={"content": row.content if row else ""})
+    except Exception as e:
+        logger.error(f"get note error: {e}")
+        return get_json_result(data={"content": ""}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/note/<doc_id>", methods=["POST"])
+@login_required
+def save_note(doc_id):
+    """保存或更新某文档某页的笔记（upsert）"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
+
+        data = request.json
+        page_number = data.get("page_number")
+        content = data.get("content", "")
+
+        if page_number is None:
+            return get_json_result(data=False, message="page_number 为必填项", code=settings.RetCode.ARGUMENT_ERROR)
+
+        # Upsert
+        existing = (
+            StudentNote.select()
+            .where(
+                StudentNote.student_id == current_user.id,
+                StudentNote.doc_id == doc_id,
+                StudentNote.page_number == page_number,
+            )
+            .first()
+        )
+
+        if existing:
+            existing.content = content
+            existing.save()
+        else:
+            StudentNote.create(
+                id=get_uuid(),
+                student_id=current_user.id,
+                doc_id=doc_id,
+                page_number=page_number,
+                content=content,
+            )
+
+        return get_json_result(data=True, message="保存成功")
+    except Exception as e:
+        logger.error(f"save note error: {e}")
+        return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/notes/<doc_id>", methods=["GET"])
+@login_required
+def get_all_notes(doc_id):
+    """获取某文档所有页面的笔记（用于预览哪些页有笔记）"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={"notes": {}}, message="用户未登录")
+
+        rows = (
+            StudentNote.select()
+            .where(
+                StudentNote.student_id == current_user.id,
+                StudentNote.doc_id == doc_id,
+            )
+        )
+        notes = {str(r.page_number): r.content for r in rows}
+        return get_json_result(data={"notes": notes})
+    except Exception as e:
+        logger.error(f"get all notes error: {e}")
+        return get_json_result(data={"notes": {}}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)

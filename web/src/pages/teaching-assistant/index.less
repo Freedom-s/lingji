@@ -1,0 +1,60 @@
+.teachingAssistant {
+  padding: 48px 0;
+  overflow: auto;
+  width: 100%;
+}
+
+.topWrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0 60px 72px;
+
+  .title {
+    font-family: Inter;
+    font-size: 30px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 38px;
+    color: var(--ant-color-info);
+  }
+  .description {
+    font-family: Inter;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 24px;
+    margin-top: 8px;
+  }
+
+  .topButton {
+    font-family: Inter;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 20px;
+  }
+
+  .filterButton {
+    display: flex;
+    align-items: center;
+    .topButton();
+  }
+}
+
+.cardContainer {
+  padding: 0 60px;
+  overflow: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  width: 100%;
+}
+
+.empty {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}

@@ -1,0 +1,179 @@
+.messageItem {
+  padding: 20px 0;
+  .messageItemSection {
+    display: inline-block;
+  }
+  .messageItemSectionLeft {
+    width: 95%;
+    max-width: 1200px;  // 增加最大宽度，给更多内容空间
+  }
+  .messageItemContent {
+    display: inline-flex;
+    gap: 10px;  // 减小间距：16px -> 10px
+  }
+  .messageItemContentReverse {
+    flex-direction: row-reverse;
+  }
+
+  .messageTextBase() {
+    padding: 12px 16px;
+    border-radius: 12px;
+    line-height: 1.6;
+    max-width: 100%;
+    & > p {
+      margin: 0;
+      line-height: 1.6;
+    }
+  }
+  .messageText {
+    .chunkText();
+    .messageTextBase();
+    background-color: #f0f7ff;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    flex: 1;  // 添加：让内容占据剩余空间
+    min-width: 0;  // 添加：允许内容收缩
+
+    // 加载状态骨架屏
+    &.loading {
+      position: relative;
+      overflow: hidden;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.3) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        animation: shimmer 1.5s infinite;
+      }
+
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+    }
+  }
+  .messageTextDark {
+    .chunkText();
+    .messageTextBase();
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    word-break: break-word;
+    border: 1px solid #333;
+    flex: 1;  // 添加：让内容占据剩余空间
+    min-width: 0;  // 添加：允许内容收缩
+    :global(section.think) {
+      color: rgb(166, 166, 166);
+      border-left-color: rgb(78, 78, 86);
+    }
+
+    // 暗色主题加载状态
+    &.loading {
+      position: relative;
+      overflow: hidden;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.1) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        animation: shimmer 1.5s infinite;
+      }
+
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+    }
+  }
+
+  .messageUserText {
+    .chunkText();
+    .messageTextBase();
+    background-color: #ffffff;
+    border: 1px solid #e8e8e8;
+    word-break: break-word;
+    text-align: justify;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    flex: 1;  // 添加：让内容占据剩余空间
+    min-width: 0;  // 添加：允许内容收缩
+  }
+  .messageEmpty {
+    width: 300px;
+  }
+
+  .thumbnailImg {
+    max-width: 20px;
+  }
+}
+
+.messageItemLeft {
+  text-align: left;
+}
+
+.messageItemRight {
+  text-align: right;
+}
+
+// 页面引用样式
+.pageReferenceContainer {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+
+  .pageCard {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid #e8e8e8;
+
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-color: #1890ff;
+    }
+  }
+
+  .pageImageWrapper {
+    flex-shrink: 0;
+  }
+}
+
+// 暗色主题支持
+[data-theme='dark'] {
+  .pageReferenceContainer {
+    background: #1f1f1f;
+
+    .pageCard {
+      background: #2a2a2a;
+      border-color: #3a3a3a;
+
+      &:hover {
+        border-color: #1890ff;
+      }
+    }
+  }
+}

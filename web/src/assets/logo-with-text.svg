@@ -1,0 +1,57 @@
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 灵机 Logo 完整版 -->
+  <defs>
+    <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#60A5FA;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 背景圆形装饰 -->
+  <circle cx="30" cy="30" r="28" fill="url(#mainGradient)" opacity="0.1"/>
+  
+  <!-- 主图标 - 智能灯泡 -->
+  <g transform="translate(10, 10)">
+    <!-- 灯泡主体 -->
+    <path d="M30 15C30 8.37258 24.6274 3 18 3C11.3726 3 6 8.37258 6 15C6 18.5 7.5 21.5 10 24.5V30C10 31.6569 11.3431 33 13 33H23C24.6569 33 26 31.6569 26 30V24.5C28.5 21.5 30 18.5 30 15Z" 
+          fill="url(#mainGradient)" 
+          filter="url(#glow)"/>
+    
+    <!-- 灯泡底座 -->
+    <rect x="14" y="35" width="12" height="4" rx="2" fill="#F97316"/>
+    <rect x="15" y="39" width="10" height="3" rx="1.5" fill="#EA580C"/>
+    
+    <!-- 闪电符号 -->
+    <path d="M22 16L18 23H21L17 30L21 23H18L22 16Z" fill="white" opacity="0.95"/>
+    
+    <!-- 光芒效果 -->
+    <circle cx="18" cy="15" r="3" fill="white" opacity="0.3"/>
+  </g>
+  
+  <!-- 文字部分 -->
+  <g transform="translate(65, 0)">
+    <!-- 主标题 "灵机AI" -->
+    <text x="0" y="32" font-family="'Noto Sans SC', 'PingFang SC', sans-serif" font-size="24" font-weight="700" fill="#1E293B" letter-spacing="1">
+      灵机AI
+    </text>
+    
+    <!-- 副标题 -->
+    <text x="0" y="48" font-family="'Noto Sans SC', 'PingFang SC', sans-serif" font-size="12" fill="#64748B" letter-spacing="0.5">
+      智能助学平台
+    </text>
+  </g>
+  
+  <!-- 装饰性元素 - 小星星 -->
+  <circle cx="160" cy="15" r="2" fill="#F97316" opacity="0.6"/>
+  <circle cx="170" cy="25" r="1.5" fill="#2563EB" opacity="0.4"/>
+  <circle cx="165" cy="35" r="1" fill="#3B82F6" opacity="0.5"/>
+</svg>

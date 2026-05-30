@@ -1,0 +1,34 @@
+<svg viewBox="0 0 180 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 灵机 Logo - 深色主题版本 -->
+  <defs>
+    <linearGradient id="logoGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#93C5FD;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 灯泡图标 -->
+  <g transform="translate(8, 6)">
+    <!-- 灯泡主体 -->
+    <path d="M18 10C18 4.47715 13.5228 0 8 0C2.47715 0 -2 4.47715 -2 10C-2 13 -0.5 15.5 1.5 18L1.5 22C1.5 23.3807 2.61929 24.5 4 24.5H12C13.3807 24.5 14.5 23.3807 14.5 22V18C16.5 15.5 18 13 18 10Z" 
+          fill="url(#logoGradient2)" 
+          transform="translate(10, 3)"/>
+    
+    <!-- 灯泡底座 -->
+    <rect x="13" y="30" width="10" height="4" rx="1.5" fill="#FB923C"/>
+    <rect x="14" y="34" width="8" height="2.5" rx="1.2" fill="#FB923C"/>
+    
+    <!-- 闪电符号 -->
+    <path d="M20 13L17 19H19.5L16 25L19.5 19H17L20 13Z" fill="white" opacity="0.95"/>
+  </g>
+  
+  <!-- 文字 "灵机AI" - 浅色文字 -->
+  <text x="58" y="30" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="22" font-weight="700" fill="#F1F5F9">
+    灵机AI
+  </text>
+  
+  <!-- 副标题 -->
+  <text x="58" y="42" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#CBD5E1">
+    智能助学平台
+  </text>
+</svg>

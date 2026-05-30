@@ -1,0 +1,101 @@
+<svg viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 品牌蓝色渐变 -->
+    <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 浅蓝渐变 -->
+    <linearGradient id="lightBlueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#93C5FD;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- 背景装饰渐变 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.15" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景装饰圆形 -->
+  <circle cx="250" cy="200" r="160" fill="url(#bgGradient)"/>
+  <circle cx="180" cy="280" r="80" fill="url(#bgGradient)" opacity="0.6"/>
+  <circle cx="320" cy="120" r="60" fill="url(#bgGradient)" opacity="0.5"/>
+
+  <!-- 中央教师形象 -->
+  <g transform="translate(185, 140)">
+    <!-- 头部 -->
+    <circle cx="65" cy="35" r="28" fill="url(#primaryGradient)"/>
+
+    <!-- 身体 -->
+    <path d="M35 65 Q65 60 95 65 L102 145 L28 145 Z" fill="url(#primaryGradient)"/>
+
+    <!-- 衬衫领口 -->
+    <path d="M55 65 L65 90 L75 65" fill="white" opacity="0.9"/>
+
+    <!-- 领带（橙色点缀） -->
+    <rect x="60" y="72" width="10" height="32" rx="3" fill="#F97316"/>
+
+    <!-- 眼镜 -->
+    <g stroke="white" stroke-width="2" fill="none" opacity="0.8">
+      <circle cx="55" cy="32" r="8"/>
+      <circle cx="75" cy="32" r="8"/>
+      <line x1="63" y1="32" x2="67" y2="32"/>
+    </g>
+  </g>
+
+  <!-- 浮动元素：数据卡片 -->
+  <g transform="translate(60, 80)" opacity="0.85">
+    <!-- 卡片背景 -->
+    <rect x="0" y="0" width="70" height="50" rx="8" fill="white" opacity="0.95"/>
+    <!-- 图表线条 -->
+    <path d="M15 35 L25 25 L35 30 L45 18 L55 22" stroke="url(#primaryGradient)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 数据点 -->
+    <circle cx="25" cy="25" r="3" fill="#F97316"/>
+    <circle cx="45" cy="18" r="3" fill="#F97316"/>
+  </g>
+
+  <!-- 浮动元素：书本 -->
+  <g transform="translate(360, 70)" opacity="0.85">
+    <!-- 书本 -->
+    <path d="M5 15 L35 8 L35 45 L5 52 Z" fill="url(#lightBlueGradient)"/>
+    <path d="M35 8 L65 15 L65 52 L35 45 Z" fill="#60A5FA"/>
+    <!-- 书脊 -->
+    <line x1="35" y1="8" x2="35" y2="45" stroke="white" stroke-width="2" opacity="0.5"/>
+  </g>
+
+  <!-- 浮动元素：学生群组图标 -->
+  <g transform="translate(50, 260)" opacity="0.85">
+    <!-- 学生1 -->
+    <circle cx="20" cy="20" r="16" fill="url(#lightBlueGradient)"/>
+    <path d="M8 40 Q20 35 32 40 L35 60 L5 60 Z" fill="url(#lightBlueGradient)"/>
+
+    <!-- 学生2 -->
+    <circle cx="55" cy="20" r="16" fill="#60A5FA"/>
+    <path d="M43 40 Q55 35 67 40 L70 60 L40 60 Z" fill="#60A5FA"/>
+  </g>
+
+  <!-- 浮动元素：知识库图标 -->
+  <g transform="translate(370, 250)" opacity="0.85">
+    <!-- 数据库/知识库图标 -->
+    <rect x="0" y="0" width="60" height="70" rx="8" fill="white" opacity="0.95"/>
+    <!-- AI 图标 -->
+    <circle cx="30" cy="25" r="12" fill="url(#primaryGradient)"/>
+    <text x="30" y="30" text-anchor="middle" fill="white" font-size="14" font-weight="bold">AI</text>
+    <!-- 文档线 -->
+    <line x1="15" y1="45" x2="45" y2="45" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+    <line x1="15" y1="55" x2="38" y2="55" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- 装饰点（橙色） -->
+  <circle cx="140" cy="180" r="5" fill="#F97316" opacity="0.6"/>
+  <circle cx="360" cy="140" r="4" fill="#F97316" opacity="0.5"/>
+  <circle cx="400" cy="280" r="6" fill="#F97316" opacity="0.4"/>
+  <circle cx="100" cy="320" r="4" fill="#F97316" opacity="0.5"/>
+
+  <!-- 装饰线条 -->
+  <path d="M80 100 Q100 90 120 100" stroke="white" stroke-width="2" fill="none" opacity="0.3" stroke-linecap="round"/>
+  <path d="M380 320 Q400 310 420 320" stroke="white" stroke-width="2" fill="none" opacity="0.3" stroke-linecap="round"/>
+</svg>

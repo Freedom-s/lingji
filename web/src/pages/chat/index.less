@@ -1,0 +1,191 @@
+/* 灵机AI助学平台 - 聊天页面样式 */
+
+.chatWrapper {
+  height: 100%;
+  width: 100%;
+  background: #F8FAFC;
+
+  /* AI助手列表区域 */
+  .chatAppWrapper {
+    width: 280px;
+    padding: 20px;
+    background: white;
+    border-right: 1px solid #E2E8F0;
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+
+    &.collapsed {
+      width: 64px;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .chatAppContent {
+      overflow-y: auto;
+      width: 100%;
+      padding-right: 8px;
+    }
+
+    .chatAppCard {
+      border-radius: 16px;
+      border: 1px solid #E2E8F0;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      :global(.ant-card-body) {
+        padding: 16px;
+      }
+      
+      &:hover {
+        border-color: #2563EB;
+        box-shadow: 0 4px 16px rgba(37, 99, 235, 0.1);
+        transform: translateY(-2px);
+      }
+      
+      .cubeIcon {
+        transition: all 0.2s ease;
+        &:hover {
+          cursor: pointer;
+          transform: scale(1.1);
+        }
+      }
+    }
+    
+    .chatAppCardSelected {
+      border-color: #2563EB;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.02) 100%);
+      
+      :global(.ant-card-body) {
+        background: transparent;
+        border-radius: 16px;
+      }
+    }
+    
+    .chatAppCardSelectedDark {
+      border-color: #3B82F6;
+      background: rgba(59, 130, 246, 0.1);
+      
+      :global(.ant-card-body) {
+        background: transparent;
+        border-radius: 16px;
+      }
+    }
+  }
+
+  /* 对话列表区域 */
+  .chatTitleWrapper {
+    width: 240px;
+    padding: 20px 16px;
+    background: white;
+    border-right: 1px solid #E2E8F0;
+    transition: all 0.3s ease-in-out;
+    overflow: hidden;
+
+    &.collapsed {
+      width: 64px;
+      padding: 0;
+      flex-shrink: 0;
+    }
+  }
+
+  .chatTitle {
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    
+    b {
+      font-size: 18px;
+      color: #1E293B;
+    }
+  }
+
+  .chatTitleContent {
+    padding: 0 8px;
+    overflow: auto;
+  }
+
+  .chatSpin {
+    :global(.ant-spin-container) {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+  }
+
+  .chatTitleCard {
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    :global(.ant-card-body) {
+      padding: 12px;
+    }
+    
+    &:hover {
+      border-color: #2563EB;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+      transform: translateX(4px);
+    }
+  }
+
+  .chatTitleCardSelected {
+    border-color: #2563EB;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%);
+    
+    :global(.ant-card-body) {
+      background: transparent;
+      border-radius: 12px;
+      font-weight: 600;
+      color: #2563EB;
+    }
+  }
+  
+  .chatTitleCardSelectedDark {
+    border-color: #3B82F6;
+    background: rgba(59, 130, 246, 0.15);
+    
+    :global(.ant-card-body) {
+      background: transparent;
+      border-radius: 12px;
+      font-weight: 600;
+      color: #60A5FA;
+    }
+  }
+
+  .divider {
+    margin: 0;
+    height: 100%;
+    border-color: #E2E8F0;
+  }
+}
+
+/* 优化按钮样式 */
+:global {
+  .ant-btn-primary {
+    background: #2563EB;
+    border-color: #2563EB;
+    border-radius: 12px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: #1D4ED8;
+      border-color: #1D4ED8;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      transform: translateY(-1px);
+    }
+  }
+  
+  .ant-tag {
+    border-radius: 8px;
+    padding: 2px 12px;
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #DBEAFE;
+    font-weight: 500;
+  }
+  
+  .ant-divider-horizontal {
+    margin: 16px 0;
+    border-color: #E2E8F0;
+  }
+}
