@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ from urllib.parse import urlparse
 
 import requests
 from database import MINIO_CONFIG, get_es_client, get_minio_client
+from elasticsearch.helpers import bulk
 from magic_pdf.config.enums import SupportedPdfParseMethod
 from magic_pdf.data.data_reader_writer import FileBasedDataReader, FileBasedDataWriter
 from magic_pdf.data.dataset import PymuDocDataset
@@ -31,6 +33,9 @@ tknzr = JiebaTokenizer() # 改用普通的jieba分词来做
 
 # OCR 服务地址
 OCR_URL = "http://localhost:8888/file_parse"
+
+# OCR 并发页面的最大并发数
+OCR_MAX_WORKERS = 2
 
 # Embedding 并发请求的最大并发数
 EMBEDDING_MAX_WORKERS = 4
@@ -110,6 +115,60 @@ def capture_stdout_stderr(doc_id):
         sys.stderr = old_stderr
 
 
+def _process_single_page_ocr(item, bucket_name, minio_client):
+    """处理单个页面的 OCR：从 MinIO 拉取图片 → 调用 OCR 服务 → 返回结果"""
+    item_id = item.get("id")
+    item_file_id = item.get("file_id")
+    item_location = item.get("location")
+    item_page_number = item.get("page_number")
+    item_minio_url = f"minio://{bucket_name}/{item_location}"
+
+    minio_response = None
+    item_base64 = None
+    item_content = ""
+
+    try:
+        basename = os.path.basename(item_location)
+        minio_response = minio_client.get_object(bucket_name, item_location)
+        image_data = minio_response.read()
+        item_base64 = base64.b64encode(image_data).decode("utf-8")
+        ocr_response = requests.post(
+            OCR_URL,
+            files={"file": (basename, BytesIO(image_data), "image/jpeg")},
+            timeout=60,
+        )
+        ocr_response.raise_for_status()
+        item_content = ocr_response.json().get("md_content") or ""
+        item_content = re.sub(r"!\[\]\(images/[^\)]+\)", "", item_content)
+    except Exception as e:
+        item_content = ""
+        logger.error(f"[Parser-ERROR] OCR解析失败 {item_location}: {e}")
+    finally:
+        if minio_response:
+            minio_response.close()
+            minio_response.release_conn()
+
+    item_base64_data_url = f"data:image/jpeg;base64,{item_base64}" if item_base64 else None
+
+    return {
+        "id": item_id,
+        "file_id": item_file_id,
+        "page_content": item_content,
+        "location": item_minio_url,
+        "page_number": item_page_number,
+        "image_base64": item_base64_data_url,
+    }
+
+
+def _generate_in_background(doc_id, full_content, page_count, tenant_id):
+    """在后台线程中生成课件内容（思维导图、闪卡、测验），失败不影响解析结果"""
+    try:
+        logger.info(f"[Parser-INFO] 后台开始为文档 {doc_id} 生成课件内容")
+        generate_all_for_document(doc_id, full_content, page_count, tenant_id)
+    except Exception as gen_err:
+        logger.error(f"[Parser-ERROR] 课件内容生成失败（不影响解析）: {gen_err}")
+
+
 def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_info):
     """
     目前以文本为中心的RAG是这样一个流程：
@@ -183,8 +242,8 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
         if not minio_client.bucket_exists(bucket_name):
             raise Exception(f"存储桶不存在: {bucket_name}")
 
-        update_progress(0.1, f"正在从存储中获取文件页面: {file_location}")
-        
+        update_progress(0.05, f"正在从存储中获取文件页面: {file_location}")
+
         # 预先把所有的页面给处理好吧
         """
         [
@@ -195,62 +254,26 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
             location: minio://localhost:9000/bucket/location  (提供一个完整的minio_url) 到时候传递给embedding来进行计算，直接返回结果。
         ]
         """
+        # 并发 OCR：MinIO 拉取 + OCR 调用都是 I/O 密集型，并行处理大幅提速
+        update_progress(0.1, f"并发处理 {len(pages_info)} 个页面的OCR...")
         file_pages_info = []
-        for item in pages_info:
-            # 一次调用ocr去获取每张页面的ocr信息
-            item_id = item.get('id')
-            item_file_id = item.get('file_id')
-            item_location = item.get('location')
-            item_page_number = item.get('page_number')
-            item_minio_url = f"minio://{bucket_name}/{item_location}"
+        with ThreadPoolExecutor(max_workers=OCR_MAX_WORKERS) as ocr_executor:
+            futures = {
+                ocr_executor.submit(_process_single_page_ocr, item, bucket_name, minio_client): item
+                for item in pages_info
+            }
+            for future in as_completed(futures):
+                file_pages_info.append(future.result())
 
-            # 获取minio的图片对象
-            minio_response = None
-            item_base64 = None
-            try:
-                # 1、获取文件的名称
-                basename = os.path.basename(item_location)
-                # 2、获取minio流并读取图片数据
-                minio_response = minio_client.get_object(bucket_name, item_location)
-                image_data = minio_response.read()
-                # 3、转换为base64
-                item_base64 = base64.b64encode(image_data).decode('utf-8')
-                # 4、使用读取的数据发送OCR请求（使用BytesIO包装二进制数据）
-                ocr_response = requests.post(OCR_URL, files={"file": (basename, BytesIO(image_data), "image/jpeg")}, timeout=60)
-                ocr_response.raise_for_status()
-                # 5、获取结果
-                item_content = ocr_response.json().get('md_content') or ""
-                # 6、清理 Markdown 中的图片链接（格式：![](images/xxx.jpg)）
-                item_content = re.sub(r'!\[\]\(images/[^\)]+\)', '', item_content)
-            except Exception as e:
-                item_content = ""
-                logger.error(f"[Parser-ERROR] OCR解析失败 {item_location}: {e}")
-            finally:
-                # 及时释放资源，防止内存泄漏
-                if minio_response:
-                    minio_response.close()
-                    minio_response.release_conn()
-
-            # 将base64包装成data URL格式
-            item_base64_data_url = None
-            if item_base64:
-                item_base64_data_url = f"data:image/jpeg;base64,{item_base64}"
-
-            file_pages_info.append({
-                "id": item_id,
-                "file_id": item_file_id,
-                "page_content": item_content,
-                "location": item_minio_url,
-                "page_number": item_page_number,
-                "image_base64": item_base64_data_url  # 使用data URL格式
-            })
-        print(f'页面ocr的结果: 共{len(file_pages_info)}个页面')
+        # 按页码排序，保持顺序一致
+        file_pages_info.sort(key=lambda p: p["page_number"])
+        print(f"页面ocr的结果: 共{len(file_pages_info)}个页面")
         # 打印简要信息，避免输出大量base64数据
         for page in file_pages_info[:3]:  # 只打印前3页的简要信息
             print(f"  - 页面 {page['page_number']}: ID={page['id']}, 内容长度={len(page['page_content'])}, 图片base64长度={len(page.get('image_base64', ''))}")
         if len(file_pages_info) > 3:
             print(f"  ... 以及其他 {len(file_pages_info) - 3} 个页面")
-        update_progress(0.2, "文件页面已经进行了ocr解析")
+        update_progress(0.35, "文件页面已经进行了ocr解析")
 
         # 下一步，我需要去进行页面和文字的嵌入
         # 先去调用一次来获取embedding向量维度
@@ -276,10 +299,10 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
             logger.error(f"[Parser-ERROR] 获取embedding维度失败: {e}")
             raise Exception(f"[Parser-ERROR] 获取embedding维度失败: {e}")
 
-        update_progress(0.5, "获取embedding嵌入维度成功")
+        update_progress(0.4, "获取embedding嵌入维度成功")
 
         # 3. 进行嵌入，保存结果 (存储到ES)
-        update_progress(0.8, "保存解析结果")
+        update_progress(0.45, "准备Elasticsearch索引")
         es_client = get_es_client()
         index_name = f"ragflow_{tenant_id}" #es中的名称
         vector_text_field_name = f"text_{embedding_dim}_vec" #es的维度
@@ -382,7 +405,7 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
 
         # 并发获取所有页面的embedding
         embedding_results = []
-        update_progress(0.6, f"并发获取{len(file_pages_info)}个页面的embedding向量...")
+        update_progress(0.5, f"并发获取{len(file_pages_info)}个页面的embedding向量...")
 
         with ThreadPoolExecutor(max_workers=EMBEDDING_MAX_WORKERS) as executor:
             # 提交所有任务
@@ -400,43 +423,48 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
 
         update_progress(0.85, f"成功获取{len(embedding_results)}个页面的embedding向量")
 
-        # 将embedding结果存储到ES
-        page_count = 0
+        # 将embedding结果批量存储到ES（bulk API 比逐条 index 快数倍）
         page_ids_list = []
-        page_data_map = {page['id']: page for page in file_pages_info}
+        page_data_map = {page["id"]: page for page in file_pages_info}
 
+        current_time_es = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_timestamp_es = datetime.now().timestamp()
+
+        bulk_actions = []
         for result in embedding_results:
-            page_id = result['page_id']
+            page_id = result["page_id"]
             page_data = page_data_map[page_id]
-
             chunk_id = generate_uuid()
-            try:
-                current_time_es = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                current_timestamp_es = datetime.now().timestamp()
+            page_ids_list.append(chunk_id)
 
-                es_doc = {
+            bulk_actions.append({
+                "_index": index_name,
+                "_id": chunk_id,
+                "_source": {
                     "page_id": page_id,
                     "doc_id": doc_id,
                     "kb_id": kb_id,
                     "docnm_kwd": doc_info["name"],
-                    "content_with_weight": page_data['page_content'],
-                    "content_ltks": tokenize_text(page_data['page_content']),
-                    "page_num_int": page_data['page_number'],
+                    "content_with_weight": page_data["page_content"],
+                    "content_ltks": tokenize_text(page_data["page_content"]),
+                    "page_num_int": page_data["page_number"],
                     "create_time": current_time_es,
                     "create_timestamp_flt": current_timestamp_es,
-                    "img_url": page_data['location'],
-                    vector_text_field_name: result['embedding_text_vec'],
-                    vector_image_field_name: result['embedding_image_vec']
-                }
+                    "img_url": page_data["location"],
+                    vector_text_field_name: result["embedding_text_vec"],
+                    vector_image_field_name: result["embedding_image_vec"],
+                },
+            })
 
-                es_client.index(index=index_name, id=chunk_id, document=es_doc)
+        if bulk_actions:
+            chunk_size = 50
+            success_count, errors = bulk(es_client, bulk_actions, chunk_size=chunk_size)
+            if errors:
+                error_details = "; ".join(str(e) for e in errors[:3])
+                raise Exception(f"[Parser-ERROR] ES 批量写入失败: {error_details}")
+            logger.info(f"[Parser-INFO] ES 批量写入成功，{success_count} 条记录")
 
-                page_count += 1
-                page_ids_list.append(chunk_id)
-
-            except Exception as e:
-                logger.error(f"[Parser-ERROR] 存储页面 {page_id} 到ES失败: {e}")
-                raise Exception(f"[Parser-ERROR] 存储页面 {page_id} 到ES失败: {e}")
+        page_count = len(page_ids_list)
 
         # 打印匹配总结信息
         logger.info(f"[Parser-INFO] 共处理 {page_count} 个页面。")
@@ -450,18 +478,18 @@ def perform_parse(doc_id, doc_info, file_info, embedding_config, kb_info, pages_
         update_progress(1.0, "解析完成")
         logger.info(f"[Parser-INFO] 解析完成，文档ID: {doc_id}, 耗时: {process_duration:.2f}s, 块数: {page_count}")
 
-        # 6. 异步生成课件内容（思维导图、闪卡、测验），失败不影响解析
-        try:
-            # 收集所有页面的文字内容
-            all_page_contents = [page["page_content"] for page in file_pages_info if page.get("page_content")]
-            full_content = "\n\n".join(all_page_contents)
-            if len(full_content.strip()) > 100:
-                update_progress(1.0, "正在生成思维导图、概念速记、随堂测验...")
-                generate_all_for_document(doc_id, full_content, page_count, tenant_id)
-            else:
-                logger.warning(f"[Parser-WARNING] 文档 {doc_id} 内容过少，跳过生成")
-        except Exception as gen_err:
-            logger.error(f"[Parser-ERROR] 课件内容生成失败（不影响解析）: {gen_err}")
+        # 6. 启动后台线程异步生成课件内容（思维导图、闪卡、测验），不阻塞解析完成
+        all_page_contents = [page["page_content"] for page in file_pages_info if page.get("page_content")]
+        full_content = "\n\n".join(all_page_contents)
+        if len(full_content.strip()) > 100:
+            update_progress(1.0, "解析完成，课件内容将在后台生成...")
+            threading.Thread(
+                target=_generate_in_background,
+                args=(doc_id, full_content, page_count, tenant_id),
+                daemon=True,
+            ).start()
+        else:
+            logger.warning(f"[Parser-WARNING] 文档 {doc_id} 内容过少，跳过生成")
 
         return {"success": True, "chunk_count": page_count}
     except Exception as e:

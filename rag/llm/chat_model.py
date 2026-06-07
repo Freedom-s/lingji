@@ -42,12 +42,10 @@ class Base(ABC):
             
             ans = ""
             message = response.choices[0].message
-            
-            # 如果有思考的信息，把思考的信息用<think>标签来进行包裹
-            if hasattr(message, "reasoning_content") and message.reasoning_content:
-                ans += f"<think>\n{message.reasoning_content}\n</think>\n"
-            
-            # 然后再加上对应ai的回复内容
+
+            # 直接取 content 回复，不包含 reasoning_content
+            # reasoning_content（<think> 标签）会干扰下游的 JSON 解析和关键词匹配，
+            # 需要 reasoning 的场景使用 chat_streamly（流式接口会保留）
             if message.content:
                 ans += message.content.strip()
             

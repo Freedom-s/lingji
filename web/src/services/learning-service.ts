@@ -16,7 +16,7 @@ const learningService = {
 
   getQuiz: (docId: string) => unwrap(request.get(`${BASE}/quiz/${docId}`)),
 
-  submitQuizResult: (docId: string, data: { question_index: number; student_answer: string; is_correct: boolean }) =>
+  submitQuizResult: (docId: string, data: { question_index: number; student_answer: string }) =>
     unwrap(request.post(`${BASE}/quiz/${docId}/result`, { data })),
 
   getQuizResult: (docId: string) => unwrap(request.get(`${BASE}/quiz/${docId}/result`)),
@@ -38,7 +38,6 @@ const learningService = {
     question_id: number;
     knowledge_point_ids: string[];
     student_answer: string;
-    is_correct: boolean;
   }) => unwrap(request.post(`${BASE}/personalized-quiz/answer`, { data })),
 
   getKnowledgeReport: (dialogId: string) =>

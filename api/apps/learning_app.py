@@ -9,7 +9,7 @@ import time
 from flask import request
 from flask_login import login_required, current_user
 
-from api.db.db_models import DocumentGeneration, StudentCardProgress, StudentQuizResult, StudentNote, KnowledgePointMastery, Dialog, Document
+from api.db.db_models import DocumentGeneration, StudentCardProgress, StudentQuizResult, StudentNote, KnowledgePointMastery, Dialog, Document, Conversation
 from api.db.db_models import DB
 from api.utils import get_uuid
 from api.utils.api_utils import get_json_result
@@ -43,7 +43,7 @@ def get_mindmap(doc_id):
 @manager.route("/flashcards/<doc_id>", methods=["GET"])
 @login_required
 def get_flashcards(doc_id):
-    """获取文档的概念速记闪卡，附带当前学生的学习进度"""
+    """获取文档的概念速记闪卡，附带当前学生的学习进度和知识点标签映射"""
     try:
         row = (
             DocumentGeneration.select()
@@ -67,7 +67,10 @@ def get_flashcards(doc_id):
             )
             progress = {p.card_index: p.status for p in progress_rows}
 
-        return get_json_result(data={"cards": cards, "progress": progress})
+        # 获取知识点标签映射（从思维导图中提取）
+        kp_labels = _build_kp_label_map([doc_id]).get(doc_id, {})
+
+        return get_json_result(data={"cards": cards, "progress": progress, "kp_labels": kp_labels})
     except Exception as e:
         logger.error(f"get flashcards error: {e}")
         return get_json_result(data={"cards": [], "progress": {}}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
@@ -122,7 +125,7 @@ def update_flashcard_progress(doc_id):
 @manager.route("/quiz/<doc_id>", methods=["GET"])
 @login_required
 def get_quiz(doc_id):
-    """获取文档的随堂测验题目"""
+    """获取文档的随堂测验题目（不含答案），由后端判题"""
     try:
         row = (
             DocumentGeneration.select()
@@ -133,7 +136,21 @@ def get_quiz(doc_id):
             .first()
         )
         questions = json.loads(row.content) if row and row.content else []
-        return get_json_result(data={"questions": questions})
+
+        # 不返回 correct 和 explanations，防止学生从网络请求中看到答案
+        sanitized = []
+        for q in questions:
+            sanitized.append({
+                "id": q.get("id"),
+                "question": q.get("question", ""),
+                "options": q.get("options", {}),
+                "knowledge_point_ids": q.get("knowledge_point_ids", []),
+            })
+
+        # 获取知识点标签映射（从思维导图中提取）
+        kp_labels = _build_kp_label_map([doc_id]).get(doc_id, {})
+
+        return get_json_result(data={"questions": sanitized, "kp_labels": kp_labels})
     except Exception as e:
         logger.error(f"get quiz error: {e}")
         return get_json_result(data={"questions": []}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
@@ -142,7 +159,7 @@ def get_quiz(doc_id):
 @manager.route("/quiz/<doc_id>/result", methods=["POST"])
 @login_required
 def submit_quiz_result(doc_id):
-    """提交单道题的作答结果"""
+    """提交单道题的作答结果，后端判题并返回是否正确及解析"""
     try:
         if not current_user or not hasattr(current_user, "id"):
             return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
@@ -150,11 +167,29 @@ def submit_quiz_result(doc_id):
         data = request.json
         question_index = data.get("question_index")
         student_answer = data.get("student_answer")
-        is_correct = data.get("is_correct", False)
 
         if question_index is None:
             return get_json_result(data=False, message="question_index 为必填项", code=settings.RetCode.ARGUMENT_ERROR)
 
+        # 从数据库查出正确 answer，后端判题
+        row = (
+            DocumentGeneration.select()
+            .where(
+                DocumentGeneration.doc_id == doc_id,
+                DocumentGeneration.generation_type == "quiz",
+            )
+            .first()
+        )
+        questions = json.loads(row.content) if row and row.content else []
+        question = next((q for q in questions if q.get("id") == question_index), None)
+        if not question:
+            return get_json_result(data=False, message="题目不存在", code=settings.RetCode.NOT_FOUND)
+
+        correct_answer = question.get("correct", "")
+        is_correct = student_answer == correct_answer
+        explanations = question.get("explanations", {})
+
+        # 记录作答
         StudentQuizResult.create(
             id=get_uuid(),
             student_id=current_user.id,
@@ -164,7 +199,11 @@ def submit_quiz_result(doc_id):
             is_correct=is_correct,
         )
 
-        return get_json_result(data=True, message="提交成功")
+        return get_json_result(data={
+            "is_correct": is_correct,
+            "correct_answer": correct_answer,
+            "explanations": explanations,
+        }, message="提交成功")
     except Exception as e:
         logger.error(f"submit quiz result error: {e}")
         return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
@@ -213,6 +252,46 @@ def _calc_next_review(correct: bool, ease: float, interval: int):
         new_ease = max(1.3, ease - 0.2)
         new_interval = 1
     return new_ease, new_interval
+
+
+def _extract_kp_labels(mindmap_data: dict) -> dict[str, str]:
+    """从思维导图 JSON 中递归提取 {node_id: label} 映射"""
+    labels = {}
+
+    def walk(node: dict):
+        if not isinstance(node, dict):
+            return
+        nid = node.get("id")
+        label = node.get("label")
+        if nid and label:
+            labels[str(nid)] = label
+        for child in node.get("children", []) or []:
+            walk(child)
+
+    if isinstance(mindmap_data, dict):
+        root = mindmap_data.get("root")
+        if root:
+            walk(root)
+    return labels
+
+
+def _build_kp_label_map(doc_ids: list[str]) -> dict[str, dict[str, str]]:
+    """为多个文档构建 {doc_id: {node_id: label}} 映射"""
+    kp_map: dict[str, dict[str, str]] = {}
+    for dg in DocumentGeneration.select().where(
+        DocumentGeneration.generation_type == "mindmap",
+        DocumentGeneration.doc_id.in_(doc_ids),
+    ):
+        if not dg.content:
+            continue
+        try:
+            mindmap_data = json.loads(dg.content)
+            labels = _extract_kp_labels(mindmap_data)
+            if labels:
+                kp_map[dg.doc_id] = labels
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return kp_map
 
 
 def _collect_quiz_pool(kb_ids: list[str]) -> list[dict]:
@@ -287,6 +366,10 @@ def start_personalized_quiz():
                 "review_count": m.review_count,
             }
 
+        # 构建知识点 ID → 名称映射（从思维导图中提取）
+        doc_ids_in_pool = list({q["_doc_id"] for q in quiz_pool})
+        kp_label_map = _build_kp_label_map(doc_ids_in_pool)
+
         # 按知识点分组题目
         kp_to_qs: dict[str, list[dict]] = {}
         for q in quiz_pool:
@@ -323,26 +406,43 @@ def start_personalized_quiz():
         # 排序，取 Top N
         scored.sort(key=lambda x: x[1], reverse=True)
 
+        def _pick_from_pool(kp_list, max_per_kp):
+            nonlocal selected, used_ids
+            for kp_id, score, qs in kp_list:
+                available = [q for q in qs if q["id"] not in used_ids]
+                if not available:
+                    continue
+                pick = min(max_per_kp(score), len(available))
+                # 按题目 ID 排序取前 N 个，保证每次点击结果一致
+                available.sort(key=lambda x: x["id"])
+                for q in available[:pick]:
+                    used_ids.add(q["id"])
+                    doc_id = q.get("_doc_id", "")
+                    kp_ids = q.get("knowledge_point_ids", [])
+                    # 解析知识点 ID → 名称
+                    doc_labels = kp_label_map.get(doc_id, {})
+                    kp_names = [doc_labels.get(kp, kp) for kp in kp_ids]
+                    selected.append({
+                        "id": q["id"],
+                        "doc_id": doc_id,
+                        "knowledge_point_ids": kp_ids,
+                        "knowledge_point_names": kp_names,
+                        "question": q["question"],
+                        "options": q["options"],
+                    })
+                if len(selected) >= count:
+                    return True
+            return False
+
         selected = []
         used_ids = set()
-        for kp_id, score, qs in scored[:count]:
-            available = [q for q in qs if q["id"] not in used_ids]
-            if not available:
-                continue
-            pick = min(2 if score >= 3 else 1, len(available))
-            for q in random.sample(available, pick):
-                used_ids.add(q["id"])
-                selected.append({
-                    "id": q["id"],
-                    "doc_id": q.get("_doc_id", ""),
-                    "knowledge_point_ids": q.get("knowledge_point_ids", []),
-                    "question": q["question"],
-                    "options": q["options"],
-                    "correct": q.get("correct", ""),
-                    "explanations": q.get("explanations", {}),
-                })
-            if len(selected) >= count:
-                break
+        top_kps = scored[:count]
+
+        # 第一轮：每个知识点最多选 2 题（高优先级）或 1 题
+        done = _pick_from_pool(top_kps, lambda s: 2 if s >= 3 else 1)
+        # 第二轮：如果题目不够，放宽上限，从剩余题目中补齐
+        if not done and len(selected) < count:
+            _pick_from_pool(scored, lambda s: count - len(selected))
 
         random.shuffle(selected)
         return get_json_result(data={"questions": selected})
@@ -355,23 +455,39 @@ def start_personalized_quiz():
 @manager.route("/personalized-quiz/answer", methods=["POST"])
 @login_required
 def answer_personalized_quiz():
-    """提交个性化测验单题答案，同步更新知识点掌握度"""
+    """提交个性化测验单题答案，后端判题并同步更新知识点掌握度"""
     try:
         if not current_user or not hasattr(current_user, "id"):
             return get_json_result(data=False, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
 
         data = request.json or {}
-        doc_id = data.get("doc_id")
+        doc_id = data.get("doc_id") or ""
+        question_id = data.get("question_id", 0)
         knowledge_point_ids = data.get("knowledge_point_ids", [])
-        is_correct = data.get("is_correct", False)
+        student_answer = data.get("student_answer", "")
+
+        # 从数据库查出正确 answer，后端判题
+        row = (
+            DocumentGeneration.select()
+            .where(
+                DocumentGeneration.doc_id == doc_id,
+                DocumentGeneration.generation_type == "quiz",
+            )
+            .first()
+        )
+        questions = json.loads(row.content) if row and row.content else []
+        question = next((q for q in questions if q.get("id") == question_id), None)
+        correct_answer = question.get("correct", "") if question else ""
+        is_correct = student_answer == correct_answer
+        explanations = question.get("explanations", {}) if question else {}
 
         # 记录作答 (student_quiz_result)
         StudentQuizResult.create(
             id=get_uuid(),
             student_id=current_user.id,
             doc_id=doc_id or "",
-            question_index=data.get("question_id", 0),
-            student_answer=data.get("student_answer", ""),
+            question_index=question_id,
+            student_answer=student_answer,
             is_correct=is_correct,
         )
 
@@ -416,7 +532,11 @@ def answer_personalized_quiz():
                         next_review_time=next_review,
                     )
 
-        return get_json_result(data=True, message="提交成功")
+        return get_json_result(data={
+            "is_correct": is_correct,
+            "correct_answer": correct_answer,
+            "explanations": explanations,
+        }, message="提交成功")
     except Exception as e:
         logger.error(f"personalized quiz answer error: {e}")
         return get_json_result(data=False, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
@@ -581,3 +701,154 @@ def get_all_notes(doc_id):
     except Exception as e:
         logger.error(f"get all notes error: {e}")
         return get_json_result(data={"notes": {}}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+# ============================================================
+# 学情分析 API
+# ============================================================
+
+@manager.route("/analytics/overview", methods=["GET"])
+@login_required
+def get_analytics_overview():
+    """学情分析总览：统计、趋势、掌握度分布、薄弱点、待复习"""
+    try:
+        if not current_user or not hasattr(current_user, "id"):
+            return get_json_result(data={}, message="用户未登录", code=settings.RetCode.AUTHENTICATION_ERROR)
+
+        student_id = current_user.id
+        now = time.time()
+        thirty_days_ago = int((now - 30 * 86400) * 1000)  # ms
+
+        # ---- stats ----
+        total_cards = StudentCardProgress.select().where(
+            StudentCardProgress.student_id == student_id
+        ).count()
+        total_quiz = StudentQuizResult.select().where(
+            StudentQuizResult.student_id == student_id
+        ).count()
+        quiz_correct = StudentQuizResult.select().where(
+            StudentQuizResult.student_id == student_id,
+            StudentQuizResult.is_correct == True,
+        ).count()
+        quiz_accuracy = round(quiz_correct / total_quiz, 2) if total_quiz > 0 else 0
+
+        # 知识点掌握度
+        kp_rows = list(KnowledgePointMastery.select().where(
+            KnowledgePointMastery.student_id == student_id
+        ))
+
+        # 构建知识点 ID → 名称映射
+        doc_ids = list({r.doc_id for r in kp_rows})
+        kp_label_map = _build_kp_label_map(doc_ids)
+        def _kp_label(node_id, doc_id):
+            return kp_label_map.get(doc_id, {}).get(node_id, node_id)
+
+        kp_all = []
+        mastered = 0
+        overdue = 0
+        for r in kp_rows:
+            total = r.correct_count + r.wrong_count
+            acc = r.correct_count / total if total > 0 else 0
+            need_review = bool(r.next_review_time and float(r.next_review_time) < now)
+            kp_all.append({
+                "node_id": r.node_id,
+                "label": _kp_label(r.node_id, r.doc_id),
+                "doc_id": r.doc_id,
+                "correct_count": r.correct_count,
+                "wrong_count": r.wrong_count,
+                "accuracy": round(acc, 2),
+                "review_count": r.review_count,
+                "need_review": need_review,
+            })
+            if acc >= 0.8 and total >= 2:
+                mastered += 1
+            if need_review:
+                overdue += 1
+
+        # 学习天数
+        study_dates = set()
+        for r in StudentCardProgress.select(StudentCardProgress.create_time).where(
+            StudentCardProgress.student_id == student_id
+        ):
+            if r.create_time:
+                study_dates.add(time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000)))
+        for r in StudentQuizResult.select(StudentQuizResult.create_time).where(
+            StudentQuizResult.student_id == student_id
+        ):
+            if r.create_time:
+                study_dates.add(time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000)))
+        for r in Conversation.select(Conversation.create_time).where(
+            Conversation.user_id == student_id
+        ):
+            if r.create_time:
+                study_dates.add(time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000)))
+
+        # ---- daily_trend: 最近 30 天每日活动 ----
+        date_cards = {}
+        date_quizzes = {}
+        date_convs = {}
+
+        for r in StudentCardProgress.select(
+            StudentCardProgress.create_time
+        ).where(
+            StudentCardProgress.student_id == student_id,
+            StudentCardProgress.create_time >= thirty_days_ago,
+        ):
+            if r.create_time:
+                d = time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000))
+                date_cards[d] = date_cards.get(d, 0) + 1
+
+        for r in StudentQuizResult.select(
+            StudentQuizResult.create_time
+        ).where(
+            StudentQuizResult.student_id == student_id,
+            StudentQuizResult.create_time >= thirty_days_ago,
+        ):
+            if r.create_time:
+                d = time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000))
+                date_quizzes[d] = date_quizzes.get(d, 0) + 1
+
+        for r in Conversation.select(
+            Conversation.create_time
+        ).where(
+            Conversation.user_id == student_id,
+            Conversation.create_time >= thirty_days_ago,
+        ):
+            if r.create_time:
+                d = time.strftime("%Y-%m-%d", time.localtime(r.create_time / 1000))
+                date_convs[d] = date_convs.get(d, 0) + 1
+
+        daily_trend = []
+        for i in range(29, -1, -1):
+            day = time.strftime("%Y-%m-%d", time.localtime(now - i * 86400))
+            daily_trend.append({
+                "date": day,
+                "cards": date_cards.get(day, 0),
+                "quizzes": date_quizzes.get(day, 0),
+                "conversations": date_convs.get(day, 0),
+            })
+
+        # ---- weak_points & review_queue ----
+        weak_points = [x for x in kp_all if x["accuracy"] < 0.6 and (x["correct_count"] + x["wrong_count"]) >= 2]
+        weak_points.sort(key=lambda x: x["accuracy"])
+
+        review_queue = [x for x in kp_all if x["need_review"]]
+
+        return get_json_result(data={
+            "stats": {
+                "total_cards_reviewed": total_cards,
+                "total_quiz_attempts": total_quiz,
+                "quiz_accuracy": quiz_accuracy,
+                "knowledge_points_mastered": mastered,
+                "total_study_days": len(study_dates),
+                "review_overdue_count": overdue,
+            },
+            "mastery_distribution": kp_all,
+            "daily_trend": daily_trend,
+            "weak_points": weak_points,
+            "review_queue": review_queue,
+        })
+
+    except Exception as e:
+        logger.error(f"analytics overview error: {e}")
+        return get_json_result(data={}, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)

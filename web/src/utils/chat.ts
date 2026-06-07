@@ -56,15 +56,36 @@ export const preprocessLaTeX = (content: string) => {
   return inlineProcessedContent;
 };
 
+/**
+ * 将 LLM 输出中的 <think> 标签转换为可折叠的 details 元素
+ * - 已闭合（完整输出）：<details class="think">，默认折叠
+ * - 未闭合（流式输出中）：<details class="think" open>，保持展开
+ */
 export function replaceThinkToSection(text: string = '') {
   if (!text || typeof text !== 'string') {
     return text || '';
   }
-  const pattern = /<think>([\s\S]*?)<\/think>/g;
 
-  const result = text.replace(pattern, '<section class="think">$1</section>');
+  // 1. 替换已闭合的 <think>...</think>
+  const completeResult = text.replace(
+    /<think>([\s\S]*?)<\/think>/g,
+    (_, content: string) =>
+      `<details class="think"><summary>💭 思考过程</summary>${content}</details>`,
+  );
 
-  return result;
+  // 如果已经处理了闭合标签，直接返回
+  if (completeResult !== text) return completeResult;
+
+  // 2. 处理未闭合的 <think>（流式输出中，</think> 还未到）
+  if (text.includes('<think>')) {
+    return text.replace(
+      /<think>([\s\S]*?)$/,
+      (_, content: string) =>
+        `<details class="think" open><summary>💭 思考过程</summary>${content}</details>`,
+    );
+  }
+
+  return text;
 }
 
 export function setInitialChatVariableEnabledFieldValue(

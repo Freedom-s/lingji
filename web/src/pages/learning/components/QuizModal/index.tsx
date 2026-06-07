@@ -2,6 +2,7 @@ import { Modal, Spin, Empty, Result, Button, Progress, Typography, Radio, Space,
 import { CheckCircleFilled, CloseCircleFilled, ThunderboltOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { useEffect, useState, useCallback } from 'react';
 import learningService from '@/services/learning-service';
+import MathText from '@/components/math-text';
 import styles from './index.less';
 
 const { Text, Title, Paragraph } = Typography;
@@ -10,10 +11,15 @@ interface QuizQuestion {
   id: number;
   question: string;
   options: Record<string, string>;
-  correct: string;
-  explanations: Record<string, string>;
   knowledge_point_ids?: string[];
+  knowledge_point_names?: string[];
   doc_id?: string;
+}
+
+interface SubmitResult {
+  is_correct: boolean;
+  correct_answer: string;
+  explanations: Record<string, string>;
 }
 
 interface QuizModalProps {
@@ -27,12 +33,14 @@ interface QuizModalProps {
 const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizModalProps) => {
   const [loading, setLoading] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [kpLabels, setKpLabels] = useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
 
   const isPersonalized = mode === 'personalized';
 
@@ -46,6 +54,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
         .then((res: any) => {
           if (res?.code === 0 && res?.data?.questions?.length > 0) {
             setQuestions(res.data.questions);
+            setKpLabels(res.data.kp_labels || {});
           }
         })
         .catch((err: any) => setError(err?.message || '获取个性化测验失败'))
@@ -59,6 +68,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
         .then((res: any) => {
           if (res?.code === 0 && res?.data?.questions?.length > 0) {
             setQuestions(res.data.questions);
+            setKpLabels(res.data.kp_labels || {});
           }
         })
         .catch((err: any) => setError(err?.message || '获取测验失败'))
@@ -74,6 +84,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
       setSubmitted(false);
       setScore(0);
       setFinished(false);
+      setSubmitResult(null);
     }
   }, [open, docId, dialogId, fetchQuiz]);
 
@@ -82,31 +93,32 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
     setSelectedAnswer(value);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedAnswer) return;
     const question = questions[currentIndex];
-    const isCorrect = selectedAnswer === question.correct;
-    if (isCorrect) setScore((s) => s + 1);
-    setSubmitted(true);
 
-    if (isPersonalized) {
-      learningService
-        .answerPersonalizedQuiz({
+    try {
+      let body: any;
+      if (isPersonalized) {
+        body = await learningService.answerPersonalizedQuiz({
           doc_id: question.doc_id || docId || '',
           question_id: question.id,
           knowledge_point_ids: question.knowledge_point_ids || [],
           student_answer: selectedAnswer,
-          is_correct: isCorrect,
-        })
-        .catch(() => {});
-    } else {
-      learningService
-        .submitQuizResult(docId!, {
+        });
+      } else {
+        body = await learningService.submitQuizResult(docId!, {
           question_index: question.id,
           student_answer: selectedAnswer,
-          is_correct: isCorrect,
-        })
-        .catch(() => {});
+        });
+      }
+      // unwrap 返回的是 { code, data, message }，body.data 才是实际结果
+      const res: SubmitResult = body?.data || body;
+      setSubmitResult(res);
+      if (res.is_correct) setScore((s) => s + 1);
+      setSubmitted(true);
+    } catch {
+      // API 失败时不做判题回退
     }
   };
 
@@ -115,6 +127,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
       setCurrentIndex(currentIndex + 1);
       setSelectedAnswer(null);
       setSubmitted(false);
+      setSubmitResult(null);
     } else {
       setFinished(true);
     }
@@ -127,6 +140,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
     setSubmitted(false);
     setScore(0);
     setFinished(false);
+    setSubmitResult(null);
   };
 
   const renderContent = () => {
@@ -170,19 +184,19 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
           <Text type="secondary">{currentIndex + 1} / {questions.length}</Text>
         </div>
 
-        {isPersonalized && question.knowledge_point_ids && question.knowledge_point_ids.length > 0 && (
+        {question.knowledge_point_ids && question.knowledge_point_ids.length > 0 && (
           <div className={styles.kpTags}>
-            {question.knowledge_point_ids.map((kp) => (
-              <Tag key={kp} color="blue">{kp}</Tag>
+            {question.knowledge_point_ids.map((kp, idx) => (
+              <Tag key={idx} color="blue">{question.knowledge_point_names?.[idx] || kpLabels[kp] || kp}</Tag>
             ))}
           </div>
         )}
 
         <div className={styles.questionCard}>
-          <Title level={5} className={styles.questionText}>{question.question}</Title>
+          <Title level={5} className={styles.questionText}><MathText text={question.question} /></Title>
           <Radio.Group className={styles.optionsGroup} value={selectedAnswer} onChange={(e) => handleSelect(e.target.value)}>
             {optionKeys.map((key) => {
-              const isCorrect = key === question.correct;
+              const isCorrect = key === submitResult?.correct_answer;
               const isSelected = selectedAnswer === key;
               const showResult = submitted;
               let optionClass = styles.option;
@@ -191,12 +205,12 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
               return (
                 <div key={key} className={optionClass}>
                   <Radio value={key} disabled={submitted}>
-                    <span className={styles.optionLabel}>{key}. {question.options[key]}</span>
+                    <span className={styles.optionLabel}>{key}. <MathText inline text={question.options[key]} /></span>
                   </Radio>
                   {showResult && isCorrect && <CheckCircleFilled className={styles.iconCorrect} />}
                   {showResult && isSelected && !isCorrect && <CloseCircleFilled className={styles.iconWrong} />}
                   {showResult && (
-                    <div className={styles.explanation}>{question.explanations[key] || ''}</div>
+                    <div className={styles.explanation}><MathText inline text={submitResult?.explanations[key]} /></div>
                   )}
                 </div>
               );

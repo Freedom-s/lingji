@@ -194,7 +194,7 @@ def encode_image(image_path: str) -> str:
     tags=["projects"],
     summary="Parse files (supports local files and S3)",
 )
-async def file_parse(
+def file_parse(
     file: UploadFile = None,
     file_path: str = Form(None),
     parse_method: str = Form("auto"),

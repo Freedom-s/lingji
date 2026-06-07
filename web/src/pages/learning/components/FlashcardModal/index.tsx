@@ -1,7 +1,8 @@
-import { Modal, Spin, Empty, Result, Button, Progress, Typography } from 'antd';
+import { Modal, Spin, Empty, Result, Button, Progress, Typography, Tag } from 'antd';
 import { CheckOutlined, QuestionOutlined } from '@ant-design/icons';
 import { useEffect, useState, useCallback } from 'react';
 import learningService from '@/services/learning-service';
+import MathText from '@/components/math-text';
 import styles from './index.less';
 
 const { Text, Title } = Typography;
@@ -10,6 +11,7 @@ interface Flashcard {
   id: number;
   question: string;
   answer: string;
+  knowledge_point_ids?: string[];
 }
 
 interface FlashcardModalProps {
@@ -21,6 +23,7 @@ interface FlashcardModalProps {
 const FlashcardModal = ({ open, docId, onClose }: FlashcardModalProps) => {
   const [loading, setLoading] = useState(false);
   const [cards, setCards] = useState<Flashcard[]>([]);
+  const [kpLabels, setKpLabels] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState<Record<number, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -35,12 +38,9 @@ const FlashcardModal = ({ open, docId, onClose }: FlashcardModalProps) => {
       .then((res: any) => {
         if (res?.code === 0 && res?.data?.cards?.length > 0) {
           setCards(res.data.cards);
+          setKpLabels(res.data.kp_labels || {});
           setProgress(res.data.progress || {});
-          // 从上次没记住的地方开始
-          const firstUnclear = res.data.cards.findIndex(
-            (_: Flashcard, i: number) => res.data.progress[i] !== 'remembered',
-          );
-          setCurrentIndex(firstUnclear >= 0 ? firstUnclear : 0);
+          setCurrentIndex(0);
         }
       })
       .catch((err: any) => setError(err?.message || '获取闪卡失败'))
@@ -104,9 +104,17 @@ const FlashcardModal = ({ open, docId, onClose }: FlashcardModalProps) => {
           <Text type="secondary">{currentIndex + 1} / {cards.length}</Text>
         </div>
 
+        {card.knowledge_point_ids && card.knowledge_point_ids.length > 0 && (
+          <div className={styles.kpTags}>
+            {card.knowledge_point_ids.map((kp, idx) => (
+              <Tag key={idx} color="blue">{kpLabels[kp] || kp}</Tag>
+            ))}
+          </div>
+        )}
+
         <div className={`${styles.card} ${showAnswer ? styles.flipped : ''}`}>
           <div className={styles.cardFront}>
-            <Title level={5} className={styles.cardQuestion}>{card.question}</Title>
+            <div className={styles.cardQuestion}><MathText text={card.question} /></div>
             {!showAnswer && (
               <Button type="primary" onClick={handleShowAnswer} icon={<QuestionOutlined />}>
                 查看答案
@@ -116,7 +124,7 @@ const FlashcardModal = ({ open, docId, onClose }: FlashcardModalProps) => {
 
           {showAnswer && (
             <div className={styles.cardBack}>
-              <Text className={styles.cardAnswer}>{card.answer}</Text>
+              <div className={styles.cardAnswer}><MathText text={card.answer} /></div>
               <div className={styles.cardActions}>
                 <Button
                   type={currentStatus === 'remembered' ? 'primary' : 'default'}

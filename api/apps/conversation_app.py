@@ -138,6 +138,81 @@ def extract_file_content(file_content_bytes, filename, content_type):
         return f'文件处理失败：{filename}\n错误信息：{str(e)}\n建议检查文件格式或重新上传。'
 
 
+# ============================================================
+# Agent + MCP 架构集成
+# ============================================================
+
+MCP_SERVER_URL = "http://127.0.0.1:9390"
+AGENT_ENABLED = False  # Feature flag，可设置为 False 回退到旧版 chat()
+
+
+def _should_use_agent(dia) -> bool:
+    """
+    判断是否使用 Agent + MCP 架构。
+
+    条件:
+    1. AGENT_ENABLED 开关开启
+    2. Dialog 绑定了知识库
+    3. MCP Server 健康检查通过
+    """
+    if not AGENT_ENABLED:
+        return False
+    if not dia.kb_ids:
+        return False
+    try:
+        import requests
+        resp = requests.get(f"{MCP_SERVER_URL}/health", timeout=2)
+        return resp.json().get("status") in ("ok", "degraded")
+    except Exception:
+        return False
+
+
+def _stream_with_agent(dia, msg, conv, message_id, req):
+    # dia：dialog表中对应的记录                                                                                                                                    
+    # msg：包含最后一条人工消息的所有历史消息                                                                                                                      
+    # conv：conversation表里面的记录                                                                                                                               
+    # message_id：人工对话当前的message_id，由前端生成                                                                                                             
+    # req：请求参数
+    """使用 Agent + MCP 架构进行流式对话"""
+    from rag.agent.client.loop import AgentLoop
+    from api.db import LLMType
+    from api.db.services.llm_service import LLMBundle
+    from api.db.services.knowledgebase_service import KnowledgebaseService
+    import json as json_module
+
+    # 提前获取所有参数
+    kbs = KnowledgebaseService.get_by_ids(dia.kb_ids)
+    tenant_ids = list(set([kb.tenant_id for kb in kbs])) # 确定kb的租户，这里正常来说就是只有一个。目的是确定es的查询范围
+    embd_id = kbs[0].embd_id if kbs else None
+    chat_mdl = LLMBundle(dia.tenant_id, LLMType.CHAT, dia.llm_id)
+    
+    question = msg[-1]["content"] if msg else ""
+    history = msg[:-1]
+    kb_ids = dia.kb_ids
+    rerank_id = dia.rerank_id
+
+    agent = AgentLoop(
+        mcp_url=MCP_SERVER_URL,
+        chat_mdl=chat_mdl,
+        max_retrieval_turns=3,
+    )
+
+    for event in agent.run(
+        question=question,
+        history=history,
+        kb_ids=kb_ids, # 确定单个es索引中查询哪些条目
+        tenant_ids=tenant_ids, # 确定查哪些es索引
+        dialog=dia,
+        embd_id=embd_id,
+        rerank_id=rerank_id,
+    ):
+        ans = structure_answer(conv, event, message_id, conv.id)
+        yield "data:" + json_module.dumps(
+            {"code": 0, "message": "", "data": ans},
+            ensure_ascii=False,
+        ) + "\n\n"
+
+
 @manager.route("/set", methods=["POST"])  # type: ignore # noqa: F821
 @login_required
 def set_conversation():
@@ -289,7 +364,6 @@ def completion():
     req = request.json
     msg = []
 
-    # 先获取到前端传递过来的message列表，此时的最后一条信息一定是用户的
     for m in req["messages"]:
         if m["role"] == "system":
             continue
@@ -299,34 +373,40 @@ def completion():
         # 过滤一下这个消息列表，mysql中只存储id、role、content这三个字段
         msg.append({"id": m.get("id", str(uuid.uuid4())),"role": m.get("role"), "content": m.get("content"),})
     
-    message_id = msg[-1].get("id") # 得到用户的最后一条消息的ID，是由前端来生成的
+    message_id = msg[-1].get("id")
     try:
-        # 第一步：获取conversation，并更新message、reference
+        # 第一步：获取conversation
         e, conv = ConversationService.get_by_id(req["conversation_id"])
         if not e:
             return get_data_error_result(message="Conversation not found!")
-        # 更新一下conv里面的message字段
+        # 第二步：更新用户的消息到message字段，并且初始化reference字段
         conv.message = deepcopy(msg)
         if not conv.reference:
             conv.reference = []
         conv.reference.append({"chunks": [], "doc_aggs": []}) # 添加一个占为符号，后面会进行修改的
-        # 第二步：获取dialog
+        # 第三步：获取助教dialog
         e, dia = DialogService.get_by_id(conv.dialog_id)
         if not e:
             return get_data_error_result(message="Dialog not found!")
         del req["conversation_id"]
         del req["messages"]
 
-        # 第三步：定义流失返回的函数
+        # 第四步：定义流式返回的函数（对应的conv的message、reference字段，是在对应函数内部来产生的）
         def stream():
             nonlocal dia, msg, req, conv
             try:
-                for ans in chat(dia, msg, True, **req):
-                    ans = structure_answer(conv, ans, message_id, conv.id)
-                    yield "data:" + json.dumps({"code": 0, "message": "", "data": ans}, ensure_ascii=False) + "\n\n"
-                # 这里进行更新的时候，我本质上只需要更新message字段和reference字段
+                # 判断是否使用 Agent + MCP 架构
+                use_agent = _should_use_agent(dia)
 
-                # 对话完毕之后，才更新的
+                if use_agent:
+                    for ans in _stream_with_agent(dia, msg, conv, message_id, req):
+                        yield ans
+                else:
+                    for ans in chat(dia, msg, True, **req):
+                        ans = structure_answer(conv, ans, message_id, conv.id)
+                        yield "data:" + json.dumps({"code": 0, "message": "", "data": ans}, ensure_ascii=False) + "\n\n"
+
+                # 第五步：与ai对话完毕之后，更新ai的消息
                 ConversationService.update_by_id(conv.id, conv.to_dict())
             except Exception as e:
                 traceback.print_exc()

@@ -116,6 +116,58 @@ def get_image_base64_from_minio(image_path):
         return None
 
 
+def _recognize_intent(chat_mdl, messages) -> str:
+    """
+    意图识别：判断用户最后一条消息是否需要检索知识库。
+
+    返回:
+        'knowledge_query' — 需要检索知识库来回答
+        'chitchat' — 闲聊、打招呼、感谢等日常对话
+        'meta_question' — 询问系统能力或身份
+    """
+    system_prompt = """你是一个意图分类器。分析对话中用户最后一条消息的类型，只输出一个标签。
+
+标签定义：
+- knowledge_query：需要检索文档/知识库来回答的问题，包括对概念的解释、对知识的提问、对流程的询问等
+- chitchat：日常闲聊、打招呼、感谢、同意、表示情绪等（如"你好""谢谢""好的""哈哈""OK"）
+- meta_question：询问系统能力或身份的问题（如"你能做什么""你是谁""你是什么模型""你会什么"）
+
+只输出一个标签名（如 knowledge_query），不要任何其他内容。"""
+
+    # 将历史对话和当前问题剥离开来
+    # history_msgs: 当前问题之前的对话上下文，用于理解指代和省略
+    # current_question: 用户最后一条消息，即待分类的目标问题
+    all_msgs = [m for m in messages if m["role"] != "system"]
+    history_msgs = all_msgs[:-1]  # 去掉最后一条（当前问题）
+    current_question = all_msgs[-1]["content"] if all_msgs else ""
+
+    # 显式组装：历史上下文 + 当前问题，避免 LLM 把分类任务当成对话回复
+    # 取最近 6 条历史消息（3 轮完整对话，user + assistant 各一轮），保证上下文完整
+    if history_msgs:
+        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history_msgs[-6:]])
+        user_msg = f"对话历史：\n{history_text}\n\n当前问题：{current_question}\n\n请对上述「当前问题」进行意图分类。"
+    else:
+        user_msg = f"当前问题：{current_question}\n\n请对上述「当前问题」进行意图分类。"
+
+    try:
+        result = chat_mdl.chat(system_prompt, [{"role": "user", "content": user_msg}], {"temperature": 0.0, "max_tokens": 32})
+        result = result.strip().lower()
+        logging.info(f"[INTENT] Raw result: '{result}'")
+
+        if "knowledge" in result:
+            return "knowledge_query"
+        elif "chitchat" in result or "chat" in result:
+            return "chitchat"
+        elif "meta" in result:
+            return "meta_question"
+        else:
+            logging.warning(f"[INTENT] Unrecognized label '{result}', defaulting to knowledge_query")
+            return "knowledge_query"
+    except Exception as e:
+        logging.error(f"[INTENT] Intent recognition failed: {e}, defaulting to knowledge_query")
+        return "knowledge_query"
+
+
 def chat_solo(dialog, messages, stream=True):
     # 初始化一个聊天模型，这个模型不仅仅有对话的能力，还有多模态的能力，我只需要把图片的base64传递到message里面即可。
     chat_mdl = LLMBundle(dialog.tenant_id, LLMType.CHAT, dialog.llm_id)
@@ -127,7 +179,7 @@ def chat_solo(dialog, messages, stream=True):
         for ans in chat_mdl.chat_streamly(system=system_prompt, history=msg, gen_conf=llm_setting):
             answer = ans
             delta_ans = ans[len(last_ans) :]
-            if num_tokens_from_string(delta_ans) < 16:
+            if num_tokens_from_string(delta_ans) < 4:
                 continue
             last_ans = answer
             yield {"answer": answer, "reference": {}}
@@ -151,9 +203,22 @@ def chat(dialog, messages, stream=True, **kwargs):
     # 第一步：获取到租户的聊天模型
     # ===================
     chat_mdl = LLMBundle(dialog.tenant_id, LLMType.CHAT, dialog.llm_id)
-    
+
     # ===================
-    # 第二步：获取到知识库配置的embedding模型。本质上来说只会有一个embedding模型，因为我把接口隐藏了
+    # 第二步：意图识别 — 判断用户问题是否需要检索知识库
+    # 闲聊/打招呼/询问系统能力等，直接走 LLM 对话，节省检索资源
+    # ===================
+    intent = _recognize_intent(chat_mdl, messages)
+    if intent != "knowledge_query":
+        logging.info(f"[CHAT] Intent is '{intent}', skipping retrieval, using chat_solo")
+        for ans in chat_solo(dialog, messages, stream):
+            yield ans
+        return
+
+    logging.info("[CHAT] Intent is 'knowledge_query', proceeding with retrieval")
+
+    # ===================
+    # 第三步：获取到知识库配置的embedding模型。本质上来说只会有一个embedding模型，因为我把接口隐藏了
     # dialog配备知识库，dialog配备llm、rerank，而配置embedding模型的是知识库，不同的知识库可以配置不同的embedding模型
     # 当然这里做了一个判断，一个dialog如果享有多个知识库，这些知识库配置的embedding模型必须是相同的
     # ===================
@@ -168,7 +233,7 @@ def chat(dialog, messages, stream=True, **kwargs):
         raise LookupError("Embedding model(%s) not found" % embedding_model_name)
     
     # ===================
-    # 第三步：初始化一个es的检索器
+    # 第四步：初始化一个es的检索器
     # ===================
     retriever = settings.retrievaler
 
@@ -178,14 +243,13 @@ def chat(dialog, messages, stream=True, **kwargs):
     logging.info(f"[CHAT DEBUG] LLM设置: {dialog.llm_setting}")
 
     # ===================
-    # 第四步：获取到用户的最近的问题
+    # 第五步：获取到用户的最近的问题
     # ===================
     questions = [m["content"] for m in messages if m["role"] == "user"][-3:]
-    # 直接得到用户的最后一个问题
     questions = questions[-1:]
 
     # ===================
-    # TODO:第五步：获取到一个rerank模型，虽然这一步还没有实现，可以保留
+    # 第六步：获取到一个rerank模型（可选）
     # ===================
     rerank_mdl = None
     if dialog.rerank_id:
@@ -195,7 +259,7 @@ def chat(dialog, messages, stream=True, **kwargs):
     prompt_config = dialog.prompt_config
 
     # ===================
-    # 第六步：通过retrieval检索器的召回，来召回对应的一些文档或者文档截图，返回类似的下面这样一个结果
+    # 第七步：通过retrieval检索器的召回，来召回对应的一些文档或者文档截图，返回类似的下面这样一个结果
     # kbinfos = {"total": 0, "chunks": []}
     # 然后再组装一下prompt
     # ===================
