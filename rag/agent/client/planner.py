@@ -58,7 +58,7 @@ PLANNER_SYSTEM_PROMPT = """
   "reasoning": "你的判断理由",
   "needs_retrieval": true/false,
   "steps": [
-    {"tool": "hybrid_retrieve", "arguments": {"query": "用户问题的精炼版本", "rerank_topk": 3}}
+    {"tool": "hybrid_retrieve", "arguments": {"query": "用户问题的精炼版本", "rerank_topk": 2}}
   ]
 }
 """
@@ -186,7 +186,7 @@ class Planner:
         """回退方案：始终使用混合检索"""
         return Plan(
             intent=IntentType.RETRIEVE,
-            steps=[PlanStep(tool="hybrid_retrieve", arguments={"query": question, "rerank_topk": 3})],
+            steps=[PlanStep(tool="hybrid_retrieve", arguments={"query": question, "rerank_topk": 2})],
             reasoning="默认检索（LLM 调用失败或未明确指定）",
             needs_retrieval=True,
         )

@@ -1,14 +1,11 @@
 """
-AgentLoop: ReAct 风格的 Agent 主循环。
+AgentLoop: True ReAct-style Agent.
 
-流程:
-    用户问题 → Planner 规划 → MCP 工具执行 → Observer 评估
-    → 不满足则 Replan（最多 3 轮）→ Generator 流式生成答案
+LLM 看到 question + history + tool results → 自行决定:
+    - 调用工具继续检索 → 拿到结果 → 再决策
+    - 直接生成回答 → 流式输出
 
-使用方式:
-    agent = AgentLoop(mcp_url="http://127.0.0.1:9390", chat_mdl=chat_mdl)
-    for event in agent.run(question="...", history=[...], kb_ids=[...], ...):
-        yield event
+没有固定轮数限制（安全阀 max_turns=8），LLM 自主控制何时停止检索。
 """
 
 import json
@@ -17,15 +14,30 @@ import time
 from typing import Any, Generator
 
 from rag.agent.client.mcp_client import MCPClient
-from rag.agent.client.planner import Planner, Plan, IntentType, PlanStep
-from rag.agent.client.observer import Observer, RetrievalObservation
-from rag.agent.client.memory import MemoryManager, Observation
+from rag.agent.client.memory import MemoryManager
 
 logger = logging.getLogger("ragflow.agent.loop")
 
+REACT_SYSTEM_PROMPT = """你是 RAGFlow 智能助教，可以通过工具检索课件和联网搜索来回答学生的问题。
+
+## 可用工具
+- **hybrid_retrieve**: 从课件知识库中混合检索（语义 + 关键词 + 图片），这是首选检索工具。参数: query(搜索词), rerank_topk(返回数量，默认2)
+- **get_adjacent_pages**: 获取某个页面的前后页，用于扩展上下文。参数: doc_id(文档ID), page_num(页码), direction(both/prev/next), offset(偏移量)
+- **web_search**: Tavily 联网搜索，获取互联网最新信息。参数: query(搜索词), max_results(默认5), search_depth(basic/advanced)
+
+## 决策原则
+1. 先分析问题：需要查资料吗？是课件内容还是时事新闻？
+2. 课件问题 → 用 hybrid_retrieve；需要更多上下文 → 用 get_adjacent_pages；时事新闻 → 用 web_search
+3. 检索后看结果，判断是否足够回答：
+   - 够用 → 直接回答，标注来源（文档名 + 页码）
+   - 不够 → 换个搜索词再试一次
+4. 简单问候、闲聊 → 直接回答，不用工具
+5. 最多检索 2 轮，不要为了完美而反复搜索
+"""
+
 
 class AgentLoop:
-    """ReAct Agent 主循环"""
+    """ReAct Agent: LLM 自主决策检索 vs. 回答"""
 
     def __init__(
         self,
@@ -34,18 +46,17 @@ class AgentLoop:
         redis_conn=None,
         conversation_id: str = "",
         user_id: str = "",
-        max_retrieval_turns: int = 3,
+        max_retrieval_turns: int = 2,  # kept for backward compat, not used in ReAct
     ):
         self.mcp_client = MCPClient(base_url=mcp_url)
         self.chat_mdl = chat_mdl
-        self.planner = Planner(chat_mdl)
-        self.observer = Observer()
         self.memory = MemoryManager(
             redis_conn=redis_conn,
             conversation_id=conversation_id,
             user_id=user_id,
         )
-        self.max_retrieval_turns = max_retrieval_turns
+        # ReAct 安全阀：最多允许 LLM 调用工具多少次
+        self.max_tool_calls = 8
 
     def run(
         self,
@@ -58,10 +69,10 @@ class AgentLoop:
         rerank_id: str | None = None,
     ) -> Generator[dict, None, None]:
         """
-        执行 Agent Loop，流式返回答案。
+        ReAct Agent 主循环：LLM 自主决策检索或回答，流式返回。
 
         Yields:
-            dict: {"answer": str, "reference": dict, "id": str, "session_id": str}
+            dict: {"answer": str, "reference": dict}
         """
         start_time = time.time()
 
@@ -73,167 +84,192 @@ class AgentLoop:
             rerank_id=rerank_id,
         )
 
-        # 2. 获取可用工具列表
+        # 2. 获取工具列表
         mcp_tools = self.mcp_client.list_tools()
         openai_tools = self.mcp_client.get_openai_tools(mcp_tools)
-        self.planner.set_tools(openai_tools)
 
         # 3. 初始化记忆
         self.memory.init_working_memory(question)
-        context = self.memory.load_full_context(history)
 
-        # 4. 规划
-        plan = self.planner.plan(question, context)
-        logger.info(f"规划结果: intent={plan.intent.value}, needs_retrieval={plan.needs_retrieval}, reasoning={plan.reasoning}")
+        # 4. 构建消息列表
+        messages: list[dict] = []
+
+        # 历史消息
+        for msg in history[-6:]:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role in ("user", "assistant"):
+                messages.append({"role": role, "content": content})
 
         retrieved_pages: list[dict] = []
 
         # 5. ReAct 循环
-        if plan.needs_retrieval:
-            for turn in range(self.max_retrieval_turns):
-                self.memory.working.agent_state = "executing"
-                logger.info(f"Agent Turn {turn + 1}/{self.max_retrieval_turns}")
+        for turn in range(self.max_tool_calls):
+            logger.info(f"ReAct Turn {turn + 1}")
 
-                # 5a. 执行检索
-                for step in plan.steps:
-                    logger.info(f"  执行工具: {step.tool}")
-                    result = self.mcp_client.call_tool(step.tool, step.arguments)
-                    self.memory.working.add_turn_result(result)
-                    self.memory.working.executed_tools.append(step.tool)
+            # 构建当前轮消息
+            current_messages = list(messages)
 
-                # 5b. 观察评估
-                self.memory.working.agent_state = "observing"
-                latest_result = self.memory.working.turn_results[-1] if self.memory.working.turn_results else {}
-                observation = self.observer.evaluate(latest_result)
-                self.memory.working.add_observation(Observation(
-                    total_chunks=observation.total_chunks,
-                    top_score=observation.top_score,
-                    is_sufficient=observation.is_sufficient,
-                    reason=observation.reason,
-                ))
-
-                if observation.is_sufficient:
-                    logger.info(f"  检索满足要求: {observation.reason}")
-                    retrieved_pages = list(self.memory.working.retrieved_pages)
-                    break
+            # 如果有检索结果，追加为 system 上下文
+            if retrieved_pages:
+                context = self._build_retrieval_context(retrieved_pages)
+                # 替换或添加系统提示
+                if current_messages and current_messages[0]["role"] == "system":
+                    current_messages[0]["content"] = REACT_SYSTEM_PROMPT + "\n\n" + context
                 else:
-                    logger.info(f"  检索不满足: {observation.reason} → {observation.suggestion}")
+                    current_messages.insert(0, {"role": "system", "content": REACT_SYSTEM_PROMPT + "\n\n" + context})
+            else:
+                if current_messages and current_messages[0]["role"] == "system":
+                    current_messages[0]["content"] = REACT_SYSTEM_PROMPT
+                else:
+                    current_messages.insert(0, {"role": "system", "content": REACT_SYSTEM_PROMPT})
 
-                # 5c. Replan
-                self.memory.working.agent_state = "planning"
-                previous_summary = self.memory.working.get_retrieved_summary()
-                replan = self._replan(question, previous_summary, observation)
-                plan = replan
+            # 调用 LLM（带工具）
+            try:
+                response = self.chat_mdl.chat_with_tools(
+                    "",  # system is already in messages
+                    current_messages,
+                    {"tools": openai_tools, "tool_choice": "auto", "temperature": 0.3},
+                )
+            except Exception as e:
+                logger.error(f"LLM 调用失败: {e}")
+                break
 
-            # 循环结束后仍不满足，使用已有的页面
-            if not retrieved_pages and self.memory.working.has_retrieved_pages():
+            tool_calls = response.get("tool_calls") if isinstance(response, dict) else None
+
+            if tool_calls:
+                # LLM 决定调用工具
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    tool_name = fn.get("name", "")
+                    args = fn.get("arguments", "{}")
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except json.JSONDecodeError:
+                            args = {}
+
+                    logger.info(f"  LLM 调用工具: {tool_name}({json.dumps(args, ensure_ascii=False)[:100]})")
+
+                    # 执行工具
+                    result = self.mcp_client.call_tool(tool_name, args)
+
+                    # 记录检索结果
+                    chunks = result.get("chunks", [])
+                    self.memory.working.add_retrieved_pages(chunks)
+                    self.memory.working.executed_tools.append(tool_name)
+                    self.memory.working.add_turn_result(result)
+
+                    # 把工具调用和结果加入消息
+                    messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": tc.get("id", f"call_{turn}"),
+                            "type": "function",
+                            "function": {"name": tool_name, "arguments": json.dumps(args, ensure_ascii=False)},
+                        }],
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call_{turn}"),
+                        "content": self._format_tool_result(tool_name, result),
+                    })
+
                 retrieved_pages = list(self.memory.working.retrieved_pages)
+                continue
 
-        # 6. 生成答案
+            # LLM 返回了文本回答（无 tool_calls）→ 退出循环，生成答案
+            break
+
+        # 6. 流式生成最终答案
         self.memory.working.agent_state = "generating"
         answer = ""
-        for chunk in self._generate(question, history, retrieved_pages):
-            answer = chunk  # chunk 是累积的完整答案
-            yield {
-                "answer": answer,
-                "reference": {},
-            }
+        retrieved_pages = list(self.memory.working.retrieved_pages)
+
+        for chunk in self._stream_answer(messages, retrieved_pages):
+            answer = chunk
+            yield {"answer": answer, "reference": {}}
 
         # 7. 构建最终响应
-        final_response = self._build_final_response(answer, retrieved_pages)
-        yield {
-            "answer": answer,
-            "reference": final_response.get("reference", {}),
-        }
+        final = self._build_final_response(answer, retrieved_pages)
+        yield {"answer": answer, "reference": final.get("reference", {})}
 
-        # 8. 保存短期记忆
         elapsed = time.time() - start_time
-        logger.info(f"Agent Loop 完成，耗时 {elapsed:.2f}s，检索 {len(retrieved_pages)} 页")
+        logger.info(f"ReAct Agent 完成，耗时 {elapsed:.2f}s，共调用 {len(self.memory.working.executed_tools)} 次工具，检索 {len(retrieved_pages)} 页")
 
     # ── 内部方法 ──────────────────────────────────────────────
 
-    def _replan(self, question: str, context: str, observation: RetrievalObservation) -> Plan:
-        """根据观察结果重新规划检索策略"""
-        current_turn = self.memory.working.current_turn
-        executed = self.memory.working.executed_tools
-
-        # 策略回退：hybrid → keyword（更精确）→ text vector（更语义化）
-        if current_turn == 1:
-            # 第二轮：尝试 keyword search
-            logger.info("  Replan → keyword_search")
-            return Plan(
-                intent=IntentType.RETRIEVE,
-                steps=[PlanStep(tool="keyword_search", arguments={"query": question, "top_k": 80})],
-                reasoning=f"hybrid_retrieve 结果不足（{observation.reason}），回退到关键词精确检索",
-                needs_retrieval=True,
+    def _build_retrieval_context(self, pages: list[dict]) -> str:
+        """将检索到的页面构建为上下文文本"""
+        if not pages:
+            return ""
+        parts = ["## 已检索到的课件内容\n"]
+        seen = set()
+        for i, p in enumerate(pages, 1):
+            pid = p.get("page_id", "")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            doc = p.get("docnm_kwd", "未知文档")
+            page_num = p.get("page_num_int", "?")
+            content = p.get("content_with_weight", "")[:400]
+            score = p.get("rerank_score") or p.get("rrf_score") or p.get("similarity") or 0.0
+            parts.append(
+                f"[来源{i}] {doc} 第{page_num}页 (相关度:{score:.2f})\n{content}\n"
             )
+        parts.append(f"\n共检索到 {len(parts) - 1} 个相关页面。如果内容足够，请直接回答；如果不够，可以继续检索。")
+        return "\n".join(parts)
 
-        if current_turn == 2:
-            # 第三轮：尝试纯 vector search（更宽松）
-            logger.info("  Replan → vector_search_text")
-            return Plan(
-                intent=IntentType.RETRIEVE,
-                steps=[PlanStep(tool="vector_search_text", arguments={"query": question, "top_k": 100})],
-                reasoning="多轮检索均不满足，放宽搜索范围尝试向量语义检索",
-                needs_retrieval=True,
-            )
+    def _format_tool_result(self, tool_name: str, result: dict) -> str:
+        """格式化工具返回结果，成为 LLM 可读的文本"""
+        chunks = result.get("chunks", [])
+        if not chunks:
+            return f"[{tool_name}] 未找到相关结果。"
 
-        # 超限，放弃
-        return Plan(
-            intent=IntentType.CHAT,
-            reasoning="已达最大检索轮次，使用已有结果生成答案",
-            needs_retrieval=False,
-        )
+        lines = [f"[{tool_name}] 返回 {len(chunks)} 个结果："]
+        for i, c in enumerate(chunks[:5], 1):
+            title = c.get("title") or c.get("docnm_kwd", "")
+            url = c.get("url", "")
+            content = (c.get("content") or c.get("content_with_weight", ""))[:300]
+            score = c.get("rerank_score") or c.get("rrf_score") or c.get("score") or c.get("similarity") or 0.0
+            page_num = c.get("page_num_int", "")
+            header = f"  [{i}] {title}"
+            if page_num:
+                header += f" (第{page_num}页)"
+            if url:
+                header += f"\n     {url}"
+            header += f"\n     相关性: {score:.2f}"
+            lines.append(header)
+            if content:
+                lines.append(f"     {content[:200]}")
+        return "\n".join(lines)
 
-    def _generate(
-        self,
-        question: str,
-        history: list[dict],
-        retrieved_pages: list[dict],
-    ) -> Generator[str, None, None]:
-        """使用 VLM 流式生成答案（支持多模态：文本 + 图片 base64）"""
-        # 构建上下文消息
+    def _stream_answer(self, messages: list[dict], retrieved_pages: list[dict]) -> Generator[str, None, None]:
+        """流式生成最终答案"""
         if retrieved_pages:
-            # 构建 RAG 上下文
-            pages_text = self.memory.working.to_context_string(max_pages=5)
-            system = (
-                "你是 RAGFlow 智能助教。请根据以下从课件中检索到的页面内容回答用户问题。\n"
-                "回答要求：\n"
-                "1. 基于检索内容作答，如有引用请标注来源（文档名 + 页码）\n"
-                "2. 如果检索内容不足以回答，请诚实说明\n"
-                "3. 回答应清晰、有条理，适合学生学习\n\n"
-                f"【检索到的课件内容】\n{pages_text}"
-            )
+            context = self._build_retrieval_context(retrieved_pages)
+            system = REACT_SYSTEM_PROMPT + "\n\n" + context + "\n\n请根据以上检索内容回答用户问题，标注来源。"
         else:
-            system = (
-                "你是 RAGFlow 智能助教。当前没有从课件中检索到相关内容，"
-                "请基于你的知识回答用户问题。如果是知识性问题，请说明检索结果不足。"
-            )
+            system = REACT_SYSTEM_PROMPT + "\n\n当前未检索到相关内容，请基于你的知识回答。如果是知识性问题，请说明信息不足。"
 
-        # 构建历史消息（只取最近几条）
-        recent_history = history[-6:] if history else []
-        # 如果消息超过一定数量，压缩早期消息
-        history_msgs = []
-        for msg in recent_history:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role in ("user", "assistant"):
-                history_msgs.append({"role": role, "content": content})
+        # 替换 system message
+        msgs = list(messages)
+        if msgs and msgs[0]["role"] == "system":
+            msgs[0] = {"role": "system", "content": system}
+        else:
+            msgs.insert(0, {"role": "system", "content": system})
 
-        # 流式生成
-        answer = ""
         try:
             gen_conf = {"temperature": 0.3, "max_tokens": 2048}
-            for chunk in self.chat_mdl.chat_streamly(system, history_msgs, gen_conf):
-                answer = chunk
+            for chunk in self.chat_mdl.chat_streamly("", msgs, gen_conf):
                 yield chunk
         except Exception as e:
             logger.error(f"生成答案失败: {e}")
-            yield answer + f"\n\n*[生成失败: {e}]*"
+            yield f"\n\n*[生成失败: {e}]*"
 
     def _build_final_response(self, answer: str, retrieved_pages: list[dict]) -> dict:
         """构建最终响应，包含引用信息"""
-        # 构建 chunks 引用
         chunks = []
         seen = set()
         for page in retrieved_pages:
@@ -241,7 +277,6 @@ class AgentLoop:
             if page_id in seen:
                 continue
             seen.add(page_id)
-
             score = page.get("rerank_score") or page.get("rrf_score") or page.get("similarity") or 0.0
             chunks.append({
                 "chunk_id": page_id,
@@ -253,7 +288,6 @@ class AgentLoop:
                 "score": round(float(score), 4),
             })
 
-        # 构建 doc_aggs 引用
         doc_aggs = []
         doc_ids_seen = set()
         for page in retrieved_pages:
@@ -268,8 +302,5 @@ class AgentLoop:
 
         return {
             "answer": answer,
-            "reference": {
-                "chunks": chunks,
-                "doc_aggs": doc_aggs,
-            },
+            "reference": {"chunks": chunks, "doc_aggs": doc_aggs},
         }

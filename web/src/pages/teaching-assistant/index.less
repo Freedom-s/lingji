@@ -1,54 +1,165 @@
-.teachingAssistant {
-  padding: 48px 0;
+/* ============================================
+   TeachingAssistantList — Enterprise Workspace
+   ============================================ */
+
+.page {
+  padding: 36px 0 96px;
   overflow: auto;
   width: 100%;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(148, 163, 184, 0.12), transparent 28%),
+    linear-gradient(180deg, #f3f6fb 0%, #eef3f9 100%);
 }
 
-.topWrapper {
+.pageDark {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 24%),
+    linear-gradient(180deg, #08111f 0%, #0b1322 100%);
+}
+
+.pageInner {
+  padding: 0 64px;
+}
+
+.workspaceSection {
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 24px 60px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(16px);
+  padding: 28px 28px 32px;
+}
+
+.workspaceSectionDark {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(7, 16, 29, 0.82);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px rgba(0, 0, 0, 0.32);
+}
+
+.sectionHeader {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 0 60px 72px;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 28px;
+  padding: 6px 6px 0;
+}
 
-  .title {
-    font-family: Inter;
-    font-size: 30px;
-    font-style: normal;
-    font-weight: 600;
-    line-height: 38px;
-    color: var(--ant-color-info);
-  }
-  .description {
-    font-family: Inter;
-    font-size: 16px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 24px;
-    margin-top: 8px;
-  }
+.sectionHeaderText {
+  min-width: 0;
+}
 
-  .topButton {
-    font-family: Inter;
+.sectionEyebrow {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8b6f47;
+}
+
+.sectionTitle {
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #10233f;
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+
+.sectionTitleDark {
+  color: #f3f7fb;
+}
+
+.sectionDesc {
+  max-width: 620px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #5f7087;
+  margin: 10px 0 0;
+  font-weight: 500;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  max-width: 360px;
+  width: 100%;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(247, 249, 252, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.searchBoxDark {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.searchIcon {
+  color: #7b8798;
+  font-size: 14px;
+}
+
+.searchInput {
+  height: 48px;
+  color: #10233f;
+
+  :global(.ant-input) {
     font-size: 14px;
-    font-style: normal;
-    font-weight: 600;
-    line-height: 20px;
-  }
-
-  .filterButton {
-    display: flex;
-    align-items: center;
-    .topButton();
+    background: transparent;
+    color: inherit;
   }
 }
 
-.cardContainer {
-  padding: 0 60px;
-  overflow: auto;
-  display: flex;
-  flex-wrap: wrap;
+.searchBoxDark .searchInput {
+  color: #e5edf5;
+}
+
+.searchBoxDark .searchInput :global(.ant-input::placeholder) {
+  color: #708197;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
   width: 100%;
+}
+
+.emptyState {
+  min-height: 360px;
+  border-radius: 24px;
+  border: 1px dashed rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.76);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.emptyStateDark {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.emptyEyebrow {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8fa0b6;
 }
 
 .empty {
@@ -56,5 +167,46 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 400px;
+}
+
+@media (max-width: 1200px) {
+  .pageInner {
+    padding: 0 40px;
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .searchBox {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 24px 0 72px;
+  }
+
+  .pageInner {
+    padding: 0 20px;
+  }
+
+  .workspaceSection {
+    padding: 22px 18px 24px;
+    border-radius: 22px;
+  }
+
+  .sectionTitle {
+    font-size: 24px;
+  }
+
+  .sectionDesc {
+    font-size: 13px;
+  }
+
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
 }

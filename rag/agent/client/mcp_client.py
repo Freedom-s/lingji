@@ -81,16 +81,10 @@ class MCPClient:
     # ── MCP 工具方法 ──────────────────────────────────────────
 
     def list_tools(self) -> list[dict]:
-        """获取 MCP Server 上的工具列表"""
-        try:
-            client = self._get_client()
-            tools = self._run_async(client.list_tools())
-            return [{"name": t.name, "description": t.description, "inputSchema": t.inputSchema} for t in tools]
-        except Exception as e:
-            logger.error(f"list_tools error: {e}")
-            # 回退：返回本地定义的 schemas
-            from rag.agent.mcp_protocol import MCP_TOOL_SCHEMAS
-            return [s["function"] for s in MCP_TOOL_SCHEMAS.values()]
+        """获取 MCP Server 上的工具列表（Schema 由 @mcp.tool() 自动生成）"""
+        client = self._get_client()
+        tools = self._run_async(client.list_tools())
+        return [{"name": t.name, "description": t.description, "inputSchema": t.inputSchema} for t in tools]
 
     def get_openai_tools(self, mcp_tools: list[dict] | None = None) -> list[dict]:
         """将 MCP 工具转换为 OpenAI function calling 格式"""

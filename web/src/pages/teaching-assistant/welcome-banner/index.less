@@ -1,0 +1,352 @@
+/* ============================================
+   WelcomeBanner — Enterprise Workspace Header
+   ============================================ */
+
+.banner {
+  margin: 0 0 28px;
+  border-radius: 30px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(247, 249, 252, 0.92)),
+    linear-gradient(180deg, #eef3f9 0%, #f7f9fc 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 24px 54px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.dark {
+  border-color: rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(135deg, rgba(14, 24, 40, 0.88), rgba(9, 18, 33, 0.94)),
+    linear-gradient(180deg, #0a1526 0%, #0b1728 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 54px rgba(0, 0, 0, 0.34);
+}
+
+.content {
+  position: relative;
+  padding: 34px 38px;
+}
+
+.mainPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.9fr);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.left {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8b6f47;
+}
+
+.title {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #112848;
+}
+
+.titleDark {
+  color: #f3f7fb;
+}
+
+.greeting {
+  margin-top: 14px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #596b82;
+
+  strong {
+    font-weight: 700;
+    color: #112848;
+  }
+}
+
+.dark .greeting strong {
+  color: #f3f7fb;
+}
+
+.subtitle {
+  max-width: 760px;
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #607188;
+}
+
+.courseSection {
+  margin-top: 24px;
+  padding: 24px 24px 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.courseSectionDark {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.courseHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.courseMeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.courseIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b6f47;
+  background: linear-gradient(180deg, rgba(201, 175, 126, 0.18), rgba(201, 175, 126, 0.08));
+  border: 1px solid rgba(139, 111, 71, 0.14);
+  flex-shrink: 0;
+}
+
+.courseInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.courseLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7c8ca1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.courseName {
+  margin-top: 6px;
+  font-size: 21px;
+  font-weight: 700;
+  color: #112848;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark .courseName {
+  color: #f3f7fb;
+}
+
+.progressMeta {
+  margin-top: 22px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressCaption {
+  font-size: 13px;
+  font-weight: 600;
+  color: #63758d;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+}
+
+.track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(138, 155, 178, 0.18);
+  overflow: hidden;
+}
+
+.dark .track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b6f47 0%, #c3a36b 100%);
+  transition: width 0.7s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.pct {
+  font-size: 14px;
+  font-weight: 700;
+  color: #8b6f47;
+  font-variant-numeric: tabular-nums;
+}
+
+.right {
+  display: flex;
+  align-items: stretch;
+}
+
+.statCards {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.statCard {
+  min-height: 146px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.dark .statCard {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.statIconWrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #8b6f47;
+  background: rgba(201, 175, 126, 0.14);
+  border: 1px solid rgba(139, 111, 71, 0.12);
+}
+
+.statIcon {
+  font-size: 18px;
+}
+
+.statLabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8090a5;
+}
+
+.statValue {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #112848;
+  white-space: nowrap;
+}
+
+.dark .statValue {
+  color: #f3f7fb;
+}
+
+.statHint {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #6f8096;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #10233f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: #173255;
+    box-shadow: 0 12px 24px rgba(16, 35, 63, 0.18);
+  }
+}
+
+.dark .cta {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #f3f7fb;
+  color: #10233f;
+
+  &:hover {
+    background: #ffffff;
+    box-shadow: 0 12px 24px rgba(255, 255, 255, 0.12);
+  }
+}
+
+@media (max-width: 1200px) {
+  .mainPanel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 24px 20px;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+
+  .greeting {
+    font-size: 16px;
+  }
+
+  .courseHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .courseName {
+    white-space: normal;
+  }
+
+  .statCard {
+    min-height: auto;
+  }
+
+  .cta {
+    width: 100%;
+    justify-content: center;
+  }
+}

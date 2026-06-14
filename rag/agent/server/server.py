@@ -16,7 +16,8 @@ import os
 from contextvars import ContextVar
 
 # 将项目根目录加入 sys.path，确保可以导入 api 模块
-_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# rag/agent/server/server.py → 项目根需要向上 3 层
+_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -101,49 +102,7 @@ def _init_executor():
         raise
 
 
-# ── 8 个 MCP 工具 ────────────────────────────────────────────
-
-@mcp.tool()
-def vector_search_image(query: str, top_k: int = 50) -> dict:
-    """基于图片向量进行语义检索。使用 image embedding 进行 dense vector 余弦相似度匹配。"""
-    return get_executor()._tool_vector_search_image(query, top_k)
-
-
-@mcp.tool()
-def vector_search_text(query: str, top_k: int = 50) -> dict:
-    """基于文本向量进行语义检索。使用 text embedding 进行 dense vector 余弦相似度匹配。"""
-    return get_executor()._tool_vector_search_text(query, top_k)
-
-
-@mcp.tool()
-def keyword_search(query: str, top_k: int = 50) -> dict:
-    """BM25 关键词精确检索，对中文进行 jieba 分词后在 content_ltks 字段匹配。"""
-    return get_executor()._tool_keyword_search(query, top_k)
-
-
-@mcp.tool()
-def rrf_fusion(result_sets: list[dict], rrf_k: int = 60, top_k: int = 5) -> dict:
-    """RRF 倒数排序融合，将多个检索结果集合并排序。"""
-    return get_executor()._tool_rrf_fusion(result_sets, rrf_k, top_k)
-
-
-@mcp.tool()
-def rerank_pages(query: str, candidate_pages: list[dict], top_k: int = 3, similarity_threshold: float = 0.5) -> dict:
-    """多模态重排序：使用 rerank 模型计算 query 与候选页面的相关性分数。"""
-    return get_executor()._tool_rerank_pages(query, candidate_pages, top_k, similarity_threshold)
-
-
-@mcp.tool()
-def get_adjacent_pages(doc_id: str, page_num: int, direction: str = "both", offset: int = 1) -> dict:
-    """获取指定页面的相邻页面（前/后 N 页）。"""
-    return get_executor()._tool_get_adjacent_pages(doc_id, page_num, direction, offset)
-
-
-@mcp.tool()
-def evaluate_page_relevance(page: dict, question: str) -> dict:
-    """使用 VLM 评估单个页面与问题的相关性。"""
-    return get_executor()._tool_evaluate_page_relevance(page, question)
-
+# ── 3 个 MCP 工具 ────────────────────────────────────────────
 
 @mcp.tool()
 def hybrid_retrieve(
@@ -172,6 +131,12 @@ def web_search(
     return get_executor()._tool_web_search(
         query, max_results, search_depth, include_domains, exclude_domains,
     )
+
+
+@mcp.tool()
+def get_adjacent_pages(doc_id: str, page_num: int, direction: str = "both", offset: int = 1) -> dict:
+    """获取指定页面的相邻页面（前/后 N 页），用于扩展上下文、查看前后文。"""
+    return get_executor()._tool_get_adjacent_pages(doc_id, page_num, direction, offset)
 
 
 # ── 自定义 HTTP 路由 ─────────────────────────────────────────

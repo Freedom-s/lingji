@@ -123,6 +123,12 @@ export default {
   getTempFile: (fileId: string) =>
     `${api_host}/conversation/get_temp_file/${fileId}`,
 
+  // learning stats
+  getDialogStats: (dialogId: string) =>
+    `${api_host}/learning_stats/dialog/${dialogId}`,
+  getAllDialogStats: `${api_host}/learning_stats/all`,
+  getLearningActivity: `${api_host}/learning_stats/activity`,
+
   // file manager
   listFile: `${api_host}/file/list`,
   uploadFile: `${api_host}/file/upload`,

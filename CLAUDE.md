@@ -321,3 +321,49 @@ Max concurrent tasks controlled by `MAX_CONCURRENT_TASKS` environment variable.
 - `WS`: Number of task executor workers
 - `LIGHTEN`: Enable lightweight mode (1=enabled)
 - `MINIO_VISIT_HOST`, `MINIO_PORT`: MinIO public endpoint
+
+---
+
+## gstack
+
+This project uses [gstack](https://github.com/garrytan/gstack) for web browsing, QA testing, design review, and deployment workflows. Always use the `/browse` skill from gstack for all web browsing — never use `mcp__claude-in-chrome__*` tools.
+
+### Available gstack skills
+
+| Skill | Description |
+|-------|-------------|
+| `/browse` | Web browsing via headless browser |
+| `/connect-chrome` | Connect to an existing Chrome instance |
+| `/qa` | Full QA testing workflow |
+| `/qa-only` | QA testing without additional context |
+| `/review` | Code review workflow |
+| `/design-review` | Design review workflow |
+| `/design-consultation` | Design consultation |
+| `/design-shotgun` | Rapid design exploration |
+| `/design-html` | Generate HTML designs |
+| `/office-hours` | Office hours workflow |
+| `/plan-ceo-review` | Plan for CEO review |
+| `/plan-eng-review` | Plan for engineering review |
+| `/plan-design-review` | Plan for design review |
+| `/plan-devex-review` | Plan for developer experience review |
+| `/devex-review` | Developer experience review |
+| `/ship` | Ship/deploy workflow |
+| `/land-and-deploy` | Land changes and deploy |
+| `/canary` | Canary deployment |
+| `/benchmark` | Benchmarking |
+| `/codex` | Codex workflow |
+| `/cso` | CSO (Chief Security Officer) review |
+| `/autoplan` | Automated planning |
+| `/retro` | Retrospective workflow |
+| `/investigate` | Investigation workflow |
+| `/document-release` | Document a release |
+| `/document-generate` | Generate documentation |
+| `/setup-browser-cookies` | Set up browser cookies |
+| `/setup-deploy` | Set up deployment |
+| `/setup-gbrain` | Set up gbrain integration |
+| `/gstack-upgrade` | Upgrade gstack |
+| `/learn` | Learning workflow |
+| `/careful` | Careful/cautious mode |
+| `/freeze` | Freeze changes |
+| `/guard` | Guard mode |
+| `/unfreeze` | Unfreeze changes |

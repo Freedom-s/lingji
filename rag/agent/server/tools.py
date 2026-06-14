@@ -1,14 +1,12 @@
 """
-MCPToolExecutor: 实际检索逻辑的执行器。
+MCPToolExecutor: 检索工具的实际实现。
 
-负责 9 个 MCP 检索工具的具体实现，被 mcp_server.py 的 @mcp.tool() 函数调用。
-依赖 rag.nlp.search.Dealer 进行 ES 查询，支持向量检索、关键词检索、
-RRF 融合、多模态重排序、相邻页面获取、VLM 页面相关性评估和 Tavily 联网搜索。
+对外暴露 3 个工具（hybrid_retrieve / web_search / get_adjacent_pages），
+内部包含 8 个方法：向量检索 ×2、关键词检索、RRF 融合、重排序、相邻页面、联网搜索、混合检索。
 """
 
 import json
 import logging
-import os
 import math
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -378,62 +376,7 @@ class MCPToolExecutor:
 
     # ── Tool 7: VLM 页面相关性评估 ─────────────────────────────
 
-    def _tool_evaluate_page_relevance(self, page: dict, question: str) -> dict:
-        if not self.chat_mdl:
-            return {"relevant": False, "score": 0.0, "reason": "chat 模型不可用"}
-
-        try:
-            from rag.nlp.page_context import PageEvaluation, page_evaluation_tool_schema, build_page_evaluation_prompt
-            from rag.nlp.search import convert_minio_url_to_base64
-
-            content = page.get("content_with_weight", "")
-            img_url = page.get("img_url", "")
-
-            # 获取图片 base64
-            img_base64 = ""
-            if img_url.startswith("minio://"):
-                img_base64 = convert_minio_url_to_base64(img_url) or ""
-
-            user_prompt = build_page_evaluation_prompt(question, img_base64) if img_base64 else content
-            tools = [page_evaluation_tool_schema()]
-
-            result = self.chat_mdl.chat_with_tools(
-                "你是一个课件页面相关性评估助手。",
-                [{"role": "user", "content": user_prompt}],
-                {"tools": tools, "tool_choice": "auto"},
-            )
-
-            # 解析结果
-            tool_calls = result.get("tool_calls") if isinstance(result, dict) else None
-            if tool_calls:
-                for tc in tool_calls:
-                    args = tc.get("function", {}).get("arguments", "")
-                    if isinstance(args, str):
-                        args = json.loads(args)
-                    return {
-                        "relevant": args.get("relevant", False),
-                        "score": args.get("score", 0.0),
-                        "reason": args.get("reason", ""),
-                    }
-            else:
-                # 尝试从 content 中解析
-                content_text = result.get("content", "") if isinstance(result, dict) else str(result)
-                try:
-                    parsed = json.loads(content_text)
-                    return {
-                        "relevant": parsed.get("relevant", False),
-                        "score": parsed.get("score", 0.0),
-                        "reason": parsed.get("reason", ""),
-                    }
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
-            return {"relevant": False, "score": 0.0, "reason": "无法解析评估结果"}
-        except Exception as e:
-            logger.error(f"evaluate_page_relevance error: {e}")
-            return {"relevant": False, "score": 0.0, "reason": str(e)}
-
-    # ── Tool 8: 一键混合检索 ──────────────────────────────────
+    # ── 一键混合检索 ──────────────────────────────────────────
 
     def _tool_hybrid_retrieve(
         self,
@@ -511,9 +454,7 @@ class MCPToolExecutor:
         Returns:
             {"total": int, "chunks": [{"title", "url", "content", "score", "type"}], "answer": str}
         """
-        api_key = os.getenv("TAVILY_API_KEY", "")
-        if not api_key:
-            return self._build_error("TAVILY_API_KEY 未配置，联网搜索不可用")
+        api_key = "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"
 
         try:
             import requests
