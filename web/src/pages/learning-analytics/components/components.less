@@ -171,6 +171,61 @@
   flex-shrink: 0;
 }
 
+.docInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.docTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.docExpandIcon {
+  color: #d97706;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.kpSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kpSectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b45309;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.12);
+}
+
+.okCollapse {
+  :global(.ant-collapse-header) {
+    padding: 8px 0 !important;
+  }
+  :global(.ant-collapse-content-box) {
+    padding: 8px 0 0 !important;
+  }
+}
+
+.okLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
 .docChildren {
   display: flex;
   flex-direction: column;
