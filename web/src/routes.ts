@@ -101,6 +101,10 @@ const routes = [
         component: '@/pages/learning',
       },
       {
+        path: '/learning-analytics',
+        component: '@/pages/learning-analytics',
+      },
+      {
         path: '/user-setting',
         component: '@/pages/user-setting',
         routes: [
