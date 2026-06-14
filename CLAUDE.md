@@ -109,6 +109,7 @@ npm run dev
 | `user_app.py` | `/v1/user/` | User info, tenant info |
 | `file_app.py` | `/v1/file/` | File manager |
 | `canvas_app.py` | `/v1/canvas/` | Canvas/flow editor |
+| `learning_stats_app.py` | `/v1/learning_stats/` | Learning stats (dialog progress, quiz results, streak) |
 | `system_app.py` | `/v1/system/` | System status, version |
 
 ### 前台 Frontend (`web/`)
@@ -177,13 +178,22 @@ npm run dev
 
 ### Shared Database
 
-Both `api/` and `management/server/` connect to the same `rag_flow` MySQL database. Full schema (22 tables) is documented in `docs/database_schema.md`.
+Both `api/` and `management/server/` connect to the same `rag_flow` MySQL database. Full schema (27 tables) is documented in `docs/database_schema.md`.
+
+Connection: `localhost:5455`, user `root`, password `infini_rag_flow`, database `rag_flow`.
 
 **Key tables for class-based access control:**
 - `class` — 班级
 - `user_class` — 用户-班级关联 (含 role: teacher/student)
 - `class_dialog` — 班级-助教关联
 - `user` — 用户 (is_superuser=1 表示老师)
+
+**Key tables for education/learning features (RAGFlow-Plus 新增):**
+- `document_generation` — 文档生成的课件内容 (quiz/mindmap/flashcards)，JSON 格式
+- `student_quiz_result` — 学生测验答题记录 (student_id, doc_id, question_index, student_answer, is_correct)
+- `knowledge_point_mastery` — 知识点掌握度追踪 (SM-2 间隔重复算法: correct_count, wrong_count, next_review_time, ease_factor)
+- `student_card_progress` — 闪卡学习进度 (card_index, status: remembered/forgotten/learning)
+- `student_note` — 学生在文档上的笔记 (doc_id, page_number, content)
 
 ### Storage Architecture
 
