@@ -3,6 +3,7 @@ import {
   getAssistantPrimaryActionLabel,
   getAssistantStatusLabel,
   getContinueLearningPath,
+  getCurrentCourseName,
   getEmptyStateDescription,
   getSafeDialogStats,
 } from './learning-state';
@@ -39,6 +40,12 @@ describe('teaching-assistant learning-state helpers', () => {
     expect(getContinueLearningPath('dialog-001')).toBe('/learning?dialogId=dialog-001');
     expect(getContinueLearningPath(null)).toBe('');
     expect(getContinueLearningPath(undefined)).toBe('');
+  });
+
+  it('returns a friendly current course name when no dialog is available', () => {
+    expect(getCurrentCourseName('大学物理助教')).toBe('大学物理助教');
+    expect(getCurrentCourseName('')).toBe('暂无推荐课程');
+    expect(getCurrentCourseName(undefined)).toBe('暂无推荐课程');
   });
 
   it('returns specific empty-state copy for loading, search, and unconfigured states', () => {
