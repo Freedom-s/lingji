@@ -10,6 +10,7 @@ import QuizModal from '@/pages/learning/components/QuizModal';
 import { useTheme } from '@/components/theme-provider';
 import { getIconSvg } from '../icons';
 import { type DialogStats } from '../hooks';
+import { getAssistantPrimaryActionLabel, getAssistantStatusLabel } from '../learning-state';
 import styles from './index.less';
 
 interface IProps {
@@ -51,7 +52,7 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
               {item.name}
             </h3>
             <span className={`${styles.statusBadge} ${hasProgress ? styles.statusActive : styles.statusIdle}`}>
-              {hasProgress ? '进行中' : '未开始'}
+              {getAssistantStatusLabel(stats)}
             </span>
           </div>
           {item.description && (
@@ -63,7 +64,7 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
       <div className={styles.metricSection}>
         <div className={styles.progressBlock}>
           <div className={styles.progressHead}>
-            <span className={styles.progressLabel}>题目掌握</span>
+            <span className={styles.progressLabel}>知识点掌握</span>
             <span className={styles.pct}>{stats.questionProgress}%</span>
           </div>
           <div className={`${styles.track} ${isDark ? styles.trackDark : ''}`}>
@@ -73,7 +74,7 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
 
         <div className={styles.progressBlock}>
           <div className={styles.progressHead}>
-            <span className={styles.progressLabel}>文档覆盖</span>
+            <span className={styles.progressLabel}>课件覆盖</span>
             <span className={styles.pct}>{stats.docProgress}%</span>
           </div>
           <div className={`${styles.track} ${isDark ? styles.trackDark : ''}`}>
@@ -85,16 +86,16 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
       <div className={styles.footer}>
         <div className={`${styles.statsGrid} ${isDark ? styles.statsGridDark : ''}`}>
           <div className={styles.statCell}>
-            <span className={styles.statNumber}>{stats.sessionCount}</span>
-            <span className={styles.statText}>学习会话</span>
+            <span className={styles.statNumber}>{stats.sessionCount} 次</span>
+            <span className={styles.statText}>学习</span>
           </div>
           <div className={styles.statCell}>
-            <span className={styles.statNumber}>{stats.questionCount}</span>
-            <span className={styles.statText}>提问次数</span>
+            <span className={styles.statNumber}>{stats.questionCount} 个</span>
+            <span className={styles.statText}>提问</span>
           </div>
           <div className={styles.statCell}>
-            <span className={styles.statNumber}>{stats.quizCount}</span>
-            <span className={styles.statText}>测验完成</span>
+            <span className={styles.statNumber}>{stats.quizCount} 次</span>
+            <span className={styles.statText}>测验</span>
           </div>
         </div>
         <div className={styles.ctaRow}>
@@ -104,7 +105,7 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
             onClick={handleStartChat}
           >
             <CommentOutlined />
-            <span>{hasProgress ? '继续学习' : '开始学习'}</span>
+            <span>{getAssistantPrimaryActionLabel(stats)}</span>
             <ArrowRightOutlined className={styles.arrow} />
           </button>
           <button
@@ -116,7 +117,7 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
             }}
           >
             <ThunderboltOutlined />
-            <span>发起测验</span>
+            <span>生成测验</span>
           </button>
         </div>
       </div>
