@@ -3,6 +3,7 @@ import {
   CommentOutlined,
   ThunderboltOutlined,
   ArrowRightOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate } from 'umi';
@@ -37,6 +38,11 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
     navigate(`/learning?dialogId=${item.id}`, {
       state: { from: 'teaching-assistant' },
     });
+  };
+
+  const handleViewAnalytics = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/learning-analytics?dialogId=${item.id}`);
   };
 
   return (
@@ -97,6 +103,12 @@ const TeachingAssistantCard = ({ item, stats, index }: IProps) => {
             <span className={styles.statNumber}>{stats.quizCount} 次</span>
             <span className={styles.statText}>测验</span>
           </div>
+        </div>
+        <div className={styles.analyticsRow}>
+          <button type="button" className={styles.analyticsBtn} onClick={handleViewAnalytics}>
+            <BarChartOutlined />
+            <span>查看学情分析</span>
+          </button>
         </div>
         <div className={styles.ctaRow}>
           <button
