@@ -4,10 +4,11 @@ import { Empty, Input, Spin } from 'antd';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'umi';
 import { useTheme } from '@/components/theme-provider';
+import LearningActionStrip from './learning-action-strip';
 import WelcomeBanner from './welcome-banner';
 import TeachingAssistantCard from './teaching-assistant-card';
 import { useAllDialogStats } from './hooks';
-import { getContinueLearningPath } from './learning-state';
+import { DEFAULT_DIALOG_STATS, getContinueLearningPath, getEmptyStateDescription } from './learning-state';
 import styles from './index.less';
 
 const TeachingAssistantList = () => {
@@ -19,11 +20,13 @@ const TeachingAssistantList = () => {
   const isDark = theme === 'dark';
 
   const filteredList = useMemo(() => {
-    if (!searchString) return assistantList;
+    const keyword = searchString.trim().toLowerCase();
+    if (!keyword) return assistantList;
     return assistantList.filter(
       (item) =>
-        item.name?.toLowerCase().includes(searchString.toLowerCase()) ||
-        item.description?.toLowerCase().includes(searchString.toLowerCase()),
+        item.name?.toLowerCase().includes(keyword) ||
+        item.description?.toLowerCase().includes(keyword) ||
+        item.kb_names?.some((name) => name.toLowerCase().includes(keyword)),
     );
   }, [assistantList, searchString]);
 
@@ -51,21 +54,23 @@ const TeachingAssistantList = () => {
           />
         )}
 
+        <LearningActionStrip currentDialog={currentDialog} stats={currentStats} onContinue={handleContinueLearning} />
+
         <div className={`${styles.workspaceSection} ${isDark ? styles.workspaceSectionDark : ''}`}>
           <div className={styles.sectionHeader}>
             <div className={styles.sectionHeaderText}>
-              <div className={styles.sectionEyebrow}>教学辅助工作台</div>
+              <div className={styles.sectionEyebrow}>AI 助教</div>
               <h2 className={`${styles.sectionTitle} ${isDark ? styles.sectionTitleDark : ''}`}>
-                我的教学助教
+                我的 AI 助教
               </h2>
               <p className={styles.sectionDesc}>
-                共 {filteredList.length} 位助教，覆盖课程学习、知识问答与个性化测验。
+                共 {assistantList.length} 位课程助教，选择课程助教开始学习、提问或生成练习。
               </p>
             </div>
             <div className={`${styles.searchBox} ${isDark ? styles.searchBoxDark : ''}`}>
               <SearchOutlined className={styles.searchIcon} />
               <Input
-                placeholder="搜索助教名称或课程说明"
+                placeholder="搜索课程、助教或知识点"
                 value={searchString}
                 allowClear
                 bordered={false}
@@ -87,7 +92,7 @@ const TeachingAssistantList = () => {
                     <TeachingAssistantCard
                       item={item}
                       index={index}
-                      stats={stats ?? { questionProgress: 0, docProgress: 0, sessionCount: 0, questionCount: 0, quizCount: 0 }}
+                      stats={stats ?? DEFAULT_DIALOG_STATS}
                     />
                   </div>
                 );
@@ -95,12 +100,10 @@ const TeachingAssistantList = () => {
             </div>
           ) : (
             <div className={`${styles.emptyState} ${isDark ? styles.emptyStateDark : ''}`}>
-              <div className={styles.emptyEyebrow}>助教列表</div>
+              <div className={styles.emptyEyebrow}>课程助教</div>
               <Empty
                 className={styles.empty}
-                description={
-                  loading ? '正在加载教学助教...' : searchString ? '未找到符合条件的教学助教' : '当前还没有可用的教学助教'
-                }
+                description={getEmptyStateDescription({ loading, searchString })}
               />
             </div>
           )}
