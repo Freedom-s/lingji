@@ -24,9 +24,21 @@ def _get_dialog_kb_ids(dialog_id):
             (Dialog.id == dialog_id) &
             (Dialog.status == StatusEnum.VALID.value)
         ).first()
-        if not dialog:
+        if not dialog or not dialog.kb_ids:
             return []
-        return dialog.kb_ids if dialog.kb_ids else []
+        kb_ids = dialog.kb_ids
+        # kb_ids 可能存为 JSON 数组字符串 '["id1","id2"]' 或逗号分隔字符串
+        if isinstance(kb_ids, str):
+            kb_ids = kb_ids.strip()
+            if kb_ids.startswith('['):
+                import json
+                try:
+                    kb_ids = json.loads(kb_ids)
+                except (json.JSONDecodeError, TypeError):
+                    kb_ids = [k.strip() for k in kb_ids.strip('[]').split(',') if k.strip().strip('"')]
+            else:
+                kb_ids = [k.strip() for k in kb_ids.split(',') if k.strip()]
+        return kb_ids if isinstance(kb_ids, list) else [kb_ids]
     except Exception:
         return []
 
@@ -349,24 +361,37 @@ def _get_node_label_map(doc_ids):
 
 
 def _get_knowledge_points(doc_ids, user_id):
-    """知识点掌握度列表 — 每个节点返回 node_id, label, correct_count, wrong_count,
-    mastery (0-100%), level (mastered/learning/needs_review)"""
+    """知识点掌握度列表 — 每个节点返回 node_id, label, doc_id, doc_name,
+    correct_count, wrong_count, mastery (0-100%), level (mastered/learning/needs_review)"""
     results = []
     try:
         if not doc_ids:
             return results
         node_labels = _get_node_label_map(doc_ids)
-        placeholders = ", ".join(["%s"] * len(doc_ids))
+        # 构建 doc_id → doc_name 映射
+        doc_names = {}
+        try:
+            docs = Document.select(Document.id, Document.name).where(
+                Document.id.in_(doc_ids)
+            )
+            for d in docs:
+                doc_names[d.id] = d.name
+        except Exception:
+            pass
+
+        placeholders = ','.join(['%s'] * len(doc_ids))
         cursor = DB.execute_sql(
             f"""
-            SELECT node_id, correct_count, wrong_count, ease_factor, review_count
-            FROM knowledge_point_mastery
-            WHERE student_id = %s AND doc_id IN ({placeholders})
+            SELECT kpm.node_id, kpm.doc_id, kpm.correct_count, kpm.wrong_count,
+                   kpm.ease_factor, kpm.review_count
+            FROM knowledge_point_mastery kpm
+            WHERE kpm.student_id = %s AND kpm.doc_id IN ({placeholders})
+            ORDER BY kpm.doc_id, kpm.node_id
             """,
             (user_id, *doc_ids)
         )
         for row in cursor.fetchall():
-            node_id, correct, wrong, ease_factor, review_count = row
+            node_id, doc_id, correct, wrong, ease_factor, review_count = row
             correct = correct or 0
             wrong = wrong or 0
 
@@ -385,6 +410,8 @@ def _get_knowledge_points(doc_ids, user_id):
             results.append({
                 "node_id": node_id,
                 "label": node_labels.get(node_id, node_id),
+                "doc_id": doc_id,
+                "doc_name": doc_names.get(doc_id, doc_id[:12]),
                 "correct_count": correct,
                 "wrong_count": wrong,
                 "mastery": mastery,

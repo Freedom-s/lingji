@@ -51,42 +51,75 @@ const KnowledgeList = ({ points }: KnowledgeListProps) => {
     );
   }
 
-  const items = points.map((point) => {
-    const config = LEVEL_CONFIG[point.level];
-    const total = point.correct_count + point.wrong_count;
-    const rate = total > 0 ? Math.round((point.correct_count / total) * 100) : point.mastery;
+  // 按文档分组
+  const docGroups = new Map<string, { docName: string; points: KnowledgePoint[] }>();
+  for (const p of points) {
+    const key = p.doc_id || '__unknown__';
+    if (!docGroups.has(key)) {
+      docGroups.set(key, { docName: p.doc_name || key.slice(0, 12), points: [] });
+    }
+    docGroups.get(key)!.points.push(p);
+  }
+
+  const panelItems = Array.from(docGroups.entries()).map(([, group]) => {
+    const mastered = group.points.filter((p) => p.level === 'mastered').length;
+    const total = group.points.length;
 
     return {
-      key: point.node_id,
+      key: group.points[0]?.doc_id || group.docName,
       label: (
-        <div className={styles.knowledgeHeader}>
-          <span className={`${styles.knowledgeIcon} ${config.className}`}>
-            {config.icon}
+        <div className={styles.docGroupHeader}>
+          <BookOutlined className={styles.docIcon} />
+          <span className={`${styles.docName} ${isDark ? styles.docNameDark : ''}`}>
+            {group.docName}
           </span>
-          <span className={`${styles.knowledgeLabel} ${isDark ? styles.knowledgeLabelDark : ''}`}>
-            {point.label}
+          <span className={styles.docStats}>
+            {mastered}/{total} 已掌握
           </span>
         </div>
       ),
       children: (
-        <div>
-          <div className={styles.knowledgeCounts}>
-            <span className={styles.countBadge}>
-              正确 <span className={`${styles.countNum} ${styles.countNumGreen}`}>{point.correct_count}</span>
-            </span>
-            <span className={styles.countBadge}>
-              错误 <span className={`${styles.countNum} ${styles.countNumRed}`}>{point.wrong_count}</span>
-            </span>
-            <span className={styles.countBadge}>
-              掌握度 {point.mastery}%
-            </span>
-          </div>
-          <Progress
-            percent={rate}
-            size="small"
-            strokeColor={rate >= 80 ? '#16a34a' : rate >= 50 ? '#2563eb' : '#d97706'}
-            trailColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(148,163,184,0.12)'}
-          />
+        <div className={styles.docChildren}>
+          {group.points.map((point) => {
+            const config = LEVEL_CONFIG[point.level];
+            const totalAttempts = point.correct_count + point.wrong_count;
+            const rate = totalAttempts > 0
+              ? Math.round((point.correct_count / totalAttempts) * 100)
+              : point.mastery;
+
+            return (
+              <div key={point.node_id} className={styles.kpRow}>
+                <div className={styles.kpInfo}>
+                  <span className={`${styles.knowledgeIcon} ${config.className}`}>
+                    {config.icon}
+                  </span>
+                  <div className={styles.kpText}>
+                    <span className={`${styles.knowledgeLabel} ${isDark ? styles.knowledgeLabelDark : ''}`}>
+                      {point.label}
+                    </span>
+                    <div className={styles.knowledgeCounts}>
+                      <span className={styles.countBadge}>
+                        正确 <span className={`${styles.countNum} ${styles.countNumGreen}`}>{point.correct_count}</span>
+                      </span>
+                      <span className={styles.countBadge}>
+                        错误 <span className={`${styles.countNum} ${styles.countNumRed}`}>{point.wrong_count}</span>
+                      </span>
+                      <span className={styles.countBadge}>
+                        掌握度 {point.mastery}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Progress
+                  percent={rate}
+                  size="small"
+                  strokeColor={rate >= 80 ? '#16a34a' : rate >= 50 ? '#2563eb' : '#d97706'}
+                  trailColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(148,163,184,0.12)'}
+                  style={{ width: 120, flexShrink: 0 }}
+                />
+              </div>
+            );
+          })}
         </div>
       ),
     };
@@ -98,10 +131,11 @@ const KnowledgeList = ({ points }: KnowledgeListProps) => {
         知识点掌握
       </h2>
       <Collapse
-        items={items}
+        items={panelItems}
         expandIconPosition="end"
         className={styles.collapsePanel}
         style={{ background: 'transparent' }}
+        defaultActiveKey={panelItems.map((p) => p.key)}
       />
     </div>
   );

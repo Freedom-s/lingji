@@ -13,6 +13,8 @@ export interface RadarData {
 export interface KnowledgePoint {
   node_id: string;
   label: string;
+  doc_id: string;
+  doc_name: string;
   correct_count: number;
   wrong_count: number;
   mastery: number;
