@@ -51,11 +51,21 @@ export interface LearningAnalyticsResponse {
   active_calendar: CalendarDay[];
 }
 
+export interface EvaluationResponse {
+  evaluation: string;
+  dialog_name: string;
+}
+
 const learningAnalyticsService = {
   getAnalytics: (dialogId: string): Promise<LearningAnalyticsResponse> =>
     request
       .get(api.getLearningAnalytics(dialogId))
       .then((res: any) => res?.data?.data ?? ({} as LearningAnalyticsResponse)),
+
+  getEvaluation: (dialogId: string): Promise<EvaluationResponse> =>
+    request
+      .get(api.getLearningEvaluation(dialogId))
+      .then((res: any) => res?.data?.data ?? { evaluation: '', dialog_name: '' }),
 };
 
 export default learningAnalyticsService;

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'umi';
 import { useTheme } from '@/components/theme-provider';
 import learningAnalyticsService, { type LearningAnalyticsResponse } from '@/services/learning-analytics-service';
+import EvaluationCard from './components/EvaluationCard';
 import RadarSection from './components/RadarSection';
 import KnowledgeList from './components/KnowledgeList';
 import WeakPointPanel from './components/WeakPointPanel';
@@ -78,6 +79,7 @@ const LearningAnalyticsPage = () => {
             <KnowledgeList points={data.knowledge_points} />
             <WeakPointPanel points={data.weak_points} dialogId={dialogId} />
             <ActivitySection activity={data.recent_activity} calendar={data.active_calendar} />
+            <EvaluationCard dialogId={dialogId} />
           </>
         )}
       </div>

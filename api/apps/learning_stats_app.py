@@ -16,6 +16,8 @@ from api.db import StatusEnum
 from api.db.services.user_class_service import UserClassService
 from api.db.services.class_dialog_service import ClassDialogService
 from api.utils.api_utils import server_error_response, get_data_error_result, get_json_result
+from api.db.services.llm_service import LLMBundle
+from api.db import LLMType
 
 
 def _get_dialog_kb_ids(dialog_id):
@@ -667,5 +669,106 @@ def learning_analytics():
             "active_calendar": _get_active_calendar(user_id),
         }
         return get_json_result(data=data)
+    except Exception as e:
+        return server_error_response(e)
+
+
+def _build_evaluation_prompt(radar, knowledge_points, weak_points, recent_activity, dialog_name):
+    """构建发给 LLM 的学情评价 prompt"""
+    dim_labels = {
+        "quiz_performance": "测验表现", "knowledge_mastery": "知识点掌握",
+        "qa_participation": "问答参与", "courseware_coverage": "课件覆盖",
+        "flashcard_memory": "闪卡记忆", "learning_consistency": "学习持续力",
+    }
+    dim_lines = []
+    for key, label in dim_labels.items():
+        val = radar.get(key, 0) if radar else 0
+        dim_lines.append(f"  {label}: {val} 分")
+    dim_summary = "\n".join(dim_lines)
+
+    weak_str = "无"
+    if weak_points:
+        items = [f"{wp.get('label', wp.get('node_id', ''))}（错误 {wp.get('wrong_count', 0)} 次）"
+                 for wp in weak_points[:5]]
+        weak_str = "、".join(items)
+
+    doc_map = {}
+    if knowledge_points:
+        for kp in knowledge_points:
+            dn = kp.get("doc_name", "未知文档")
+            if dn not in doc_map:
+                doc_map[dn] = {"total": 0, "mastered": 0}
+            doc_map[dn]["total"] += 1
+            if kp.get("level") == "mastered":
+                doc_map[dn]["mastered"] += 1
+    doc_lines = [f"  - {dn}: {s['mastered']}/{s['total']} 已掌握" for dn, s in doc_map.items()]
+    doc_summary = "\n".join(doc_lines) if doc_lines else "无文档数据"
+
+    activity_str = "无"
+    if recent_activity:
+        items = [f"{a.get('date', '')} {a.get('detail', '')}" for a in recent_activity[:5]]
+        activity_str = "\n".join(items)
+
+    return f"""你是一位专业的教育 AI 评价师，负责为学生生成个性化学习评价与建议。
+
+【课程名称】{dialog_name}
+
+【六维学习画像（满分 100）】
+{dim_summary}
+
+【文档覆盖情况】
+{doc_summary}
+
+【薄弱知识点】
+{weak_str}
+
+【最近学习动态】
+{activity_str}
+
+请基于以上数据，用中文写一段 150-250 字的综合学情评价。要求：
+1. 先肯定学生的优点（至少 1 项）
+2. 指出最需要改进的 1-2 个方面
+3. 给出具体可操作的学习建议
+4. 语气温暖鼓励，像一位关心学生的导师
+5. 不要使用 Markdown 格式，直接输出纯文本段落"""
+
+
+@manager.route("/evaluation", methods=["GET"])
+@login_required
+def learning_evaluation():
+    try:
+        dialog_id = request.args.get("dialog_id", "").strip()
+        if not dialog_id:
+            return get_data_error_result(message="dialog_id is required")
+
+        dialog = Dialog.select().where(
+            (Dialog.id == dialog_id) & (Dialog.status == StatusEnum.VALID.value)
+        ).first()
+        if not dialog:
+            return get_data_error_result(message="dialog not found")
+
+        kb_ids = _get_dialog_kb_ids(dialog_id)
+        doc_ids = _get_doc_ids_for_kbs(kb_ids)
+
+        radar = _get_radar_data(doc_ids, current_user.id, dialog_id)
+        knowledge_points = _get_knowledge_points(doc_ids, current_user.id)
+        weak_points = _get_weak_points(doc_ids, current_user.id)
+        recent_activity = _get_recent_activity(dialog_id, current_user.id)
+
+        prompt = _build_evaluation_prompt(
+            radar, knowledge_points, weak_points, recent_activity, dialog.name
+        )
+
+        chat_mdl = LLMBundle(dialog.tenant_id, LLMType.CHAT, dialog.llm_id)
+        evaluation = chat_mdl.chat(
+            "你是一位专业的教育 AI 评价师。",
+            [{"role": "user", "content": prompt}],
+            {"temperature": 0.7, "max_tokens": 800},
+        )
+
+        return get_json_result(data={
+            "evaluation": evaluation,
+            "dialog_name": dialog.name,
+        })
     except Exception as e:
         return server_error_response(e)

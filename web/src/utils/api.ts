@@ -132,6 +132,8 @@ export default {
   // learning analytics
   getLearningAnalytics: (dialogId: string) =>
     `${api_host}/learning_stats/analytics?dialog_id=${dialogId}`,
+  getLearningEvaluation: (dialogId: string) =>
+    `${api_host}/learning_stats/evaluation?dialog_id=${dialogId}`,
 
   // file manager
   listFile: `${api_host}/file/list`,
