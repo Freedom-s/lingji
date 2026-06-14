@@ -229,6 +229,284 @@ def _get_user_dialogs(user):
         )
 
 
+def _get_radar_data(doc_ids, user_id, dialog_id):
+    """六维雷达图数据 — quiz_performance, knowledge_mastery, qa_participation,
+    courseware_coverage, flashcard_memory, learning_consistency（0-100）"""
+    try:
+        # 1. 测验成绩 — 复用已有
+        quiz_performance = _get_question_progress(doc_ids, user_id)
+
+        # 2. 知识点掌握率 — ease_factor >= 2.5 且 correct_count >= 2
+        knowledge_mastery = 0
+        try:
+            if doc_ids:
+                placeholders = ", ".join(["%s"] * len(doc_ids))
+                row = DB.execute_sql(
+                    f"""
+                    SELECT
+                        SUM(CASE WHEN ease_factor >= 2.5 AND correct_count >= 2 THEN 1 ELSE 0 END) AS mastered,
+                        COUNT(*) AS total
+                    FROM knowledge_point_mastery
+                    WHERE student_id = %s AND doc_id IN ({placeholders})
+                    """,
+                    (user_id, *doc_ids)
+                ).fetchone()
+                if row and row[1] > 0:
+                    knowledge_mastery = round((row[0] or 0) / row[1] * 100)
+        except Exception:
+            pass
+
+        # 3. 问答参与度 — 提问数 / 10 * 100，上限 100
+        qa_participation = 0
+        try:
+            qc = _get_question_count(dialog_id, user_id)
+            qa_participation = min(round(qc / 10 * 100), 100)
+        except Exception:
+            pass
+
+        # 4. 课件覆盖率 — 复用已有
+        courseware_coverage = _get_doc_progress(doc_ids, user_id)
+
+        # 5. 闪卡记忆率 — remembered / total
+        flashcard_memory = 0
+        try:
+            if doc_ids:
+                placeholders = ", ".join(["%s"] * len(doc_ids))
+                row = DB.execute_sql(
+                    f"""
+                    SELECT
+                        SUM(CASE WHEN status = 'remembered' THEN 1 ELSE 0 END) AS remembered,
+                        COUNT(*) AS total
+                    FROM student_card_progress
+                    WHERE student_id = %s AND doc_id IN ({placeholders})
+                    """,
+                    (user_id, *doc_ids)
+                ).fetchone()
+                if row and row[1] > 0:
+                    flashcard_memory = round((row[0] or 0) / row[1] * 100)
+        except Exception:
+            pass
+
+        # 6. 学习持续性 — streak / 30 * 100，上限 100
+        learning_consistency = 0
+        try:
+            streak = _calculate_streak(user_id)
+            learning_consistency = min(round(streak / 30 * 100), 100)
+        except Exception:
+            pass
+
+        return {
+            "quiz_performance": quiz_performance,
+            "knowledge_mastery": knowledge_mastery,
+            "qa_participation": qa_participation,
+            "courseware_coverage": courseware_coverage,
+            "flashcard_memory": flashcard_memory,
+            "learning_consistency": learning_consistency,
+        }
+    except Exception:
+        return {
+            "quiz_performance": 0,
+            "knowledge_mastery": 0,
+            "qa_participation": 0,
+            "courseware_coverage": 0,
+            "flashcard_memory": 0,
+            "learning_consistency": 0,
+        }
+
+
+def _get_knowledge_points(doc_ids, user_id):
+    """知识点掌握度列表 — 每个节点返回 node_id, label, correct_count, wrong_count,
+    mastery (0-100%), level (mastered/learning/needs_review)"""
+    results = []
+    try:
+        if not doc_ids:
+            return results
+        placeholders = ", ".join(["%s"] * len(doc_ids))
+        cursor = DB.execute_sql(
+            f"""
+            SELECT node_id, correct_count, wrong_count, ease_factor, review_count
+            FROM knowledge_point_mastery
+            WHERE student_id = %s AND doc_id IN ({placeholders})
+            """,
+            (user_id, *doc_ids)
+        )
+        for row in cursor.fetchall():
+            node_id, correct, wrong, ease_factor, review_count = row
+            correct = correct or 0
+            wrong = wrong or 0
+
+            total_attempts = correct + wrong
+            mastery = round(correct / total_attempts * 100) if total_attempts > 0 else 0
+
+            if ease_factor >= 2.5 and correct >= 2:
+                level = "mastered"
+            elif review_count and review_count >= 1:
+                level = "learning"
+            elif wrong > correct:
+                level = "needs_review"
+            else:
+                level = "learning"
+
+            results.append({
+                "node_id": node_id,
+                "label": node_id,
+                "correct_count": correct,
+                "wrong_count": wrong,
+                "mastery": mastery,
+                "level": level,
+            })
+    except Exception:
+        pass
+    return results
+
+
+def _get_weak_points(doc_ids, user_id):
+    """薄弱知识点 Top-5 — wrong_count > 0，按 wrong_count DESC、correct_count ASC 排序"""
+    results = []
+    try:
+        if not doc_ids:
+            return results
+        placeholders = ", ".join(["%s"] * len(doc_ids))
+        cursor = DB.execute_sql(
+            f"""
+            SELECT node_id, doc_id, correct_count, wrong_count,
+                   COALESCE(update_date, create_date) AS last_wrong_date
+            FROM knowledge_point_mastery
+            WHERE student_id = %s
+              AND doc_id IN ({placeholders})
+              AND wrong_count > 0
+            ORDER BY wrong_count DESC, correct_count ASC
+            LIMIT 5
+            """,
+            (user_id, *doc_ids)
+        )
+        for row in cursor.fetchall():
+            node_id, doc_id, correct, wrong, last_wrong_date = row
+            results.append({
+                "node_id": node_id,
+                "label": node_id,
+                "doc_id": doc_id,
+                "wrong_count": wrong or 0,
+                "correct_count": correct or 0,
+                "last_wrong_date": str(last_wrong_date) if last_wrong_date else "",
+            })
+    except Exception:
+        pass
+    return results
+
+
+def _get_recent_activity(dialog_id, user_id):
+    """最近 14 天学习动态 — 合并 quiz / qa / flashcard 时间线，按日期倒序，最多 20 条"""
+    results = []
+    cutoff = (date.today() - timedelta(days=14)).isoformat()
+    try:
+        # 测验记录
+        if dialog_id:
+            kb_ids = _get_dialog_kb_ids(dialog_id)
+            doc_ids = _get_doc_ids_for_kbs(kb_ids)
+            if doc_ids:
+                placeholders = ", ".join(["%s"] * len(doc_ids))
+                cursor = DB.execute_sql(
+                    f"""
+                    SELECT DATE(sqr.create_date) AS dt,
+                           SUM(CASE WHEN sqr.is_correct = 1 THEN 1 ELSE 0 END) AS correct,
+                           COUNT(*) AS total
+                    FROM student_quiz_result sqr
+                    WHERE sqr.student_id = %s
+                      AND sqr.doc_id IN ({placeholders})
+                      AND sqr.create_date >= %s
+                    GROUP BY DATE(sqr.create_date)
+                    ORDER BY dt DESC
+                    """,
+                    (user_id, *doc_ids, cutoff)
+                )
+                for row in cursor.fetchall():
+                    dt, correct, total = row
+                    pct = round(correct / total * 100) if total > 0 else 0
+                    results.append({
+                        "date": str(dt),
+                        "type": "quiz",
+                        "detail": f"完成测验 {total} 题，正确 {correct} 题",
+                        "score": pct,
+                    })
+
+        # 问答记录
+        cursor = DB.execute_sql(
+            """
+            SELECT DATE(create_date) AS dt, COUNT(*) AS cnt
+            FROM conversation
+            WHERE user_id = %s AND dialog_id = %s AND create_date >= %s
+            GROUP BY DATE(create_date)
+            ORDER BY dt DESC
+            """,
+            (user_id, dialog_id, cutoff)
+        )
+        for row in cursor.fetchall():
+            dt, cnt = row
+            results.append({
+                "date": str(dt),
+                "type": "qa",
+                "detail": f"提问 {cnt} 次，参与课程问答",
+                "count": cnt,
+            })
+
+        # 闪卡记录
+        if dialog_id:
+            kb_ids = _get_dialog_kb_ids(dialog_id)
+            doc_ids = _get_doc_ids_for_kbs(kb_ids)
+            if doc_ids:
+                placeholders = ", ".join(["%s"] * len(doc_ids))
+                cursor = DB.execute_sql(
+                    f"""
+                    SELECT DATE(create_date) AS dt, COUNT(*) AS cnt
+                    FROM student_card_progress
+                    WHERE student_id = %s
+                      AND doc_id IN ({placeholders})
+                      AND create_date >= %s
+                    GROUP BY DATE(create_date)
+                    ORDER BY dt DESC
+                    """,
+                    (user_id, *doc_ids, cutoff)
+                )
+                for row in cursor.fetchall():
+                    dt, cnt = row
+                    results.append({
+                        "date": str(dt),
+                        "type": "flashcard",
+                        "detail": f"复习闪卡 {cnt} 张",
+                        "count": cnt,
+                    })
+
+        # 按日期倒序，取前 20
+        results.sort(key=lambda x: x["date"], reverse=True)
+        results = results[:20]
+    except Exception:
+        pass
+    return results
+
+
+def _get_active_calendar(user_id):
+    """最近 90 天活跃日历 — 按天统计 conversation 次数"""
+    results = []
+    try:
+        cursor = DB.execute_sql(
+            """
+            SELECT DATE(create_date) AS dt, COUNT(*) AS cnt
+            FROM conversation
+            WHERE user_id = %s
+              AND create_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+            GROUP BY DATE(create_date)
+            ORDER BY dt ASC
+            """,
+            (user_id,)
+        )
+        for row in cursor.fetchall():
+            results.append({"date": str(row[0]), "count": int(row[1])})
+    except Exception:
+        pass
+    return results
+
+
 # ============================================================
 # Routes
 # ============================================================
@@ -300,6 +578,30 @@ def all_dialog_stats():
             "dialogs": dialog_stats,
             "streak": _calculate_streak(user_id),
             "today_sessions": _get_today_sessions(user_id),
+        }
+        return get_json_result(data=data)
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route("/analytics", methods=["GET"])
+@login_required
+def learning_analytics():
+    try:
+        user_id = current_user.id
+        dialog_id = request.args.get("dialog_id", "").strip()
+        if not dialog_id:
+            return get_data_error_result(message="dialog_id is required")
+
+        kb_ids = _get_dialog_kb_ids(dialog_id)
+        doc_ids = _get_doc_ids_for_kbs(kb_ids)
+
+        data = {
+            "radar": _get_radar_data(doc_ids, user_id, dialog_id),
+            "knowledge_points": _get_knowledge_points(doc_ids, user_id),
+            "weak_points": _get_weak_points(doc_ids, user_id),
+            "recent_activity": _get_recent_activity(dialog_id, user_id),
+            "active_calendar": _get_active_calendar(user_id),
         }
         return get_json_result(data=data)
     except Exception as e:
