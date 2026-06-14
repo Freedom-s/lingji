@@ -44,6 +44,7 @@ describe('teaching-assistant learning-state helpers', () => {
 
   it('returns a friendly current course name when no dialog is available', () => {
     expect(getCurrentCourseName('大学物理助教')).toBe('大学物理助教');
+    expect(getCurrentCourseName('  课程  ')).toBe('课程');
     expect(getCurrentCourseName('')).toBe('暂无推荐课程');
     expect(getCurrentCourseName(undefined)).toBe('暂无推荐课程');
   });

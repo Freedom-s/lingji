@@ -1,17 +1,20 @@
 import { useFetchChatAppList } from '@/hooks/chat-hooks';
 import { SearchOutlined } from '@ant-design/icons';
 import { Empty, Input, Spin } from 'antd';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'umi';
 import { useTheme } from '@/components/theme-provider';
 import WelcomeBanner from './welcome-banner';
 import TeachingAssistantCard from './teaching-assistant-card';
 import { useAllDialogStats } from './hooks';
+import { getContinueLearningPath } from './learning-state';
 import styles from './index.less';
 
 const TeachingAssistantList = () => {
   const { data: assistantList, loading: dialogsLoading } = useFetchChatAppList();
   const { statsMap, activity, loading: statsLoading } = useAllDialogStats();
   const [searchString, setSearchString] = useState('');
+  const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -29,6 +32,13 @@ const TeachingAssistantList = () => {
   const loading = dialogsLoading || statsLoading;
   const hasContent = filteredList.length > 0;
 
+  const handleContinueLearning = useCallback(() => {
+    const path = getContinueLearningPath(currentDialog?.id);
+    if (path) {
+      navigate(path, { state: { from: 'teaching-assistant' } });
+    }
+  }, [currentDialog?.id, navigate]);
+
   return (
     <Spin spinning={loading} wrapperClassName={`${styles.page} ${isDark ? styles.pageDark : ''}`}>
       <div className={styles.pageInner}>
@@ -37,6 +47,7 @@ const TeachingAssistantList = () => {
             currentDialog={currentDialog}
             stats={currentStats}
             activity={activity}
+            onContinue={handleContinueLearning}
           />
         )}
 

@@ -25,7 +25,8 @@ export function getContinueLearningPath(dialogId?: string | null): string {
 }
 
 export function getCurrentCourseName(name?: string | null): string {
-  return name?.trim() ? name : '暂无推荐课程';
+  const trimmedName = name?.trim();
+  return trimmedName ? trimmedName : '暂无推荐课程';
 }
 
 export function getEmptyStateDescription({
