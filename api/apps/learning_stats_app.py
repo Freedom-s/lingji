@@ -314,6 +314,40 @@ def _get_radar_data(doc_ids, user_id, dialog_id):
         }
 
 
+def _get_node_label_map(doc_ids):
+    """从 document_generation 的 mindmap 中提取 node_id → label 映射"""
+    node_labels = {}
+    try:
+        import json
+        mindmaps = DocumentGeneration.select().where(
+            (DocumentGeneration.doc_id.in_(doc_ids)) &
+            (DocumentGeneration.generation_type == 'mindmap')
+        )
+        for mm in mindmaps:
+            if not mm.content:
+                continue
+            try:
+                content = json.loads(mm.content) if isinstance(mm.content, str) else mm.content
+            except (json.JSONDecodeError, TypeError):
+                continue
+            # mindmap 结构: {"root": {"id": "...", "label": "...", "children": [...]}}
+            stack = [content.get('root')]
+            while stack:
+                node = stack.pop()
+                if not node or not isinstance(node, dict):
+                    continue
+                nid = node.get('id')
+                nlabel = node.get('label')
+                if nid and nlabel:
+                    node_labels[nid] = nlabel
+                children = node.get('children', [])
+                if children and isinstance(children, list):
+                    stack.extend(children)
+    except Exception:
+        pass
+    return node_labels
+
+
 def _get_knowledge_points(doc_ids, user_id):
     """知识点掌握度列表 — 每个节点返回 node_id, label, correct_count, wrong_count,
     mastery (0-100%), level (mastered/learning/needs_review)"""
@@ -321,6 +355,7 @@ def _get_knowledge_points(doc_ids, user_id):
     try:
         if not doc_ids:
             return results
+        node_labels = _get_node_label_map(doc_ids)
         placeholders = ", ".join(["%s"] * len(doc_ids))
         cursor = DB.execute_sql(
             f"""
@@ -349,7 +384,7 @@ def _get_knowledge_points(doc_ids, user_id):
 
             results.append({
                 "node_id": node_id,
-                "label": node_id,
+                "label": node_labels.get(node_id, node_id),
                 "correct_count": correct,
                 "wrong_count": wrong,
                 "mastery": mastery,
@@ -366,6 +401,7 @@ def _get_weak_points(doc_ids, user_id):
     try:
         if not doc_ids:
             return results
+        node_labels = _get_node_label_map(doc_ids)
         placeholders = ", ".join(["%s"] * len(doc_ids))
         cursor = DB.execute_sql(
             f"""
@@ -384,7 +420,7 @@ def _get_weak_points(doc_ids, user_id):
             node_id, doc_id, correct, wrong, last_wrong_date = row
             results.append({
                 "node_id": node_id,
-                "label": node_id,
+                "label": node_labels.get(node_id, node_id),
                 "doc_id": doc_id,
                 "wrong_count": wrong or 0,
                 "correct_count": correct or 0,
