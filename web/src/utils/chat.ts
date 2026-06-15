@@ -88,6 +88,34 @@ export function replaceThinkToSection(text: string = '') {
   return text;
 }
 
+export function replaceToolCallToSection(text: string = '') {
+  if (!text || typeof text !== 'string') {
+    return text || '';
+  }
+
+  // 1. 替换已闭合的 <tool_call name="xxx">...</tool_call>
+  const completeResult = text.replace(
+    /<tool_call name="([^"]*)">([\s\S]*?)<\/tool_call>/g,
+    (_, name: string, content: string) =>
+      `<details class="think tool-call"><summary>🔧 调用工具: ${name}</summary><pre>${content}</pre></details>`,
+  );
+
+  // 如果已经处理了闭合标签，直接返回
+  if (completeResult !== text) return completeResult;
+
+  // 2. 处理未闭合的 <tool_call>（流式输出中，</tool_call> 还未到）
+  const match = text.match(/<tool_call name="([^"]*)">([\s\S]*?)$/);
+  if (match) {
+    return text.replace(
+      /<tool_call name="([^"]*)">([\s\S]*?)$/,
+      (_, name: string, content: string) =>
+        `<details class="think tool-call" open><summary>⏳ 正在调用: ${name}</summary><pre>${content}</pre></details>`,
+    );
+  }
+
+  return text;
+}
+
 export function setInitialChatVariableEnabledFieldValue(
   field: ChatVariableEnabledField,
 ) {

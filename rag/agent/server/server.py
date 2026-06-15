@@ -23,6 +23,7 @@ if _project_root not in sys.path:
 
 from fastmcp import FastMCP
 from rag.agent.server.tools import MCPToolExecutor
+from starlette.responses import JSONResponse
 
 logger = logging.getLogger("ragflow.agent.mcp_server")
 
@@ -32,7 +33,7 @@ mcp = FastMCP(
     "ragflow-retrieval",
     instructions=(
         "RAGFlow-Plus 知识库检索服务，提供页面级多模态检索能力。"
-        "支持向量语义检索、关键词精确检索、RRF 融合、多模态重排序等 8 个工具。"
+        "支持向量语义检索、关键词精确检索、RRF 融合、多模态重排序、文档列表、完整页面、知识结构等 12 个内部方法，对外暴露 6 个工具。"
     ),
 )
 
@@ -57,10 +58,12 @@ def _init_executor():
 
     try:
         from rag.nlp.search import Dealer
+        from rag.utils.es_conn import ESConnection
         from api.db.services.llm_service import LLMBundle
         from api.db import LLMType
 
-        dealer = Dealer()
+        doc_store = ESConnection()
+        dealer = Dealer(doc_store)
 
         # 尝试初始化 LLM 模型（embd/rerank/chat 可选）
         embd_mdl = None
@@ -102,7 +105,7 @@ def _init_executor():
         raise
 
 
-# ── 3 个 MCP 工具 ────────────────────────────────────────────
+# ── 6 个 MCP 工具 ────────────────────────────────────────────
 
 @mcp.tool()
 def hybrid_retrieve(
@@ -139,10 +142,28 @@ def get_adjacent_pages(doc_id: str, page_num: int, direction: str = "both", offs
     return get_executor()._tool_get_adjacent_pages(doc_id, page_num, direction, offset)
 
 
+@mcp.tool()
+def list_documents() -> dict:
+    """列出知识库中所有文档及其页数范围，用于了解知识库中有哪些课件、每个课件的页数。在需要回答'有哪些课件'或需要确定检索范围时优先调用。"""
+    return get_executor()._tool_list_documents()
+
+
+@mcp.tool()
+def get_full_page(doc_id: str, page_num: int) -> dict:
+    """获取某一页的完整内容（全文 + 图片），不做截断。当 hybrid_retrieve 返回的片段不够详细时，用此工具获取页面完整信息。参数: doc_id(文档ID), page_num(页码)"""
+    return get_executor()._tool_get_full_page(doc_id, page_num)
+
+
+@mcp.tool()
+def get_knowledge_structure(doc_id: str) -> dict:
+    """获取课件的知识结构（思维导图 + 知识点层级），用于了解课件的知识框架、章节组织。当需要回答'XX课件包含哪些知识点'或'XX章节讲什么'时调用。参数: doc_id(文档ID)"""
+    return get_executor()._tool_get_knowledge_structure(doc_id)
+
+
 # ── 自定义 HTTP 路由 ─────────────────────────────────────────
 
 @mcp.custom_route(path="/health", methods=["GET"])
-async def health(request) -> dict:
+async def health(request) -> JSONResponse:
     """健康检查端点"""
     try:
         from rag.nlp.search import Dealer
@@ -150,15 +171,15 @@ async def health(request) -> dict:
     except Exception:
         dealer_status = "disconnected"
 
-    return {
+    return JSONResponse({
         "status": "ok",
         "dealer": dealer_status,
         "framework": "FastMCP",
-    }
+    })
 
 
 @mcp.custom_route(path="/initialize", methods=["POST"])
-async def initialize(request) -> dict:
+async def initialize(request) -> JSONResponse:
     """初始化上下文：设置 tenant_ids、kb_ids，创建 LLM 模型实例"""
     try:
         body = await request.json()
@@ -191,8 +212,10 @@ async def initialize(request) -> dict:
         # 重新初始化 executor，使用新的 LLM 配置
         global _tool_executor
         from rag.nlp.search import Dealer
+        from rag.utils.es_conn import ESConnection
 
-        dealer = Dealer()
+        doc_store = ESConnection()
+        dealer = Dealer(doc_store)
         embd_mdl = LLMBundle(tenant_id_val, LLMType.EMBEDDING, embd_id) if embd_id else None
         rerank_mdl = LLMBundle(tenant_id_val, LLMType.RERANK, rerank_id) if rerank_id else None
         chat_mdl = LLMBundle(tenant_id_val, LLMType.CHAT, chat_id) if chat_id else None
@@ -205,11 +228,11 @@ async def initialize(request) -> dict:
         )
         _tool_executor.set_context(tenant_ids, kb_ids)
 
-        return {
+        return JSONResponse({
             "status": "ok",
             "tenant_ids": tenant_ids,
             "kb_ids": kb_ids,
-        }
+        })
     except Exception as e:
         logger.error(f"initialize error: {e}")
-        return {"status": "error", "message": str(e)}
+        return JSONResponse({"status": "error", "message": str(e)})

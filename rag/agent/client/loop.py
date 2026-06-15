@@ -18,22 +18,7 @@ from rag.agent.client.memory import MemoryManager
 
 logger = logging.getLogger("ragflow.agent.loop")
 
-REACT_SYSTEM_PROMPT = """你是 RAGFlow 智能助教，可以通过工具检索课件和联网搜索来回答学生的问题。
-
-## 可用工具
-- **hybrid_retrieve**: 从课件知识库中混合检索（语义 + 关键词 + 图片），这是首选检索工具。参数: query(搜索词), rerank_topk(返回数量，默认2)
-- **get_adjacent_pages**: 获取某个页面的前后页，用于扩展上下文。参数: doc_id(文档ID), page_num(页码), direction(both/prev/next), offset(偏移量)
-- **web_search**: Tavily 联网搜索，获取互联网最新信息。参数: query(搜索词), max_results(默认5), search_depth(basic/advanced)
-
-## 决策原则
-1. 先分析问题：需要查资料吗？是课件内容还是时事新闻？
-2. 课件问题 → 用 hybrid_retrieve；需要更多上下文 → 用 get_adjacent_pages；时事新闻 → 用 web_search
-3. 检索后看结果，判断是否足够回答：
-   - 够用 → 直接回答，标注来源（文档名 + 页码）
-   - 不够 → 换个搜索词再试一次
-4. 简单问候、闲聊 → 直接回答，不用工具
-5. 最多检索 2 轮，不要为了完美而反复搜索
-"""
+REACT_SYSTEM_PROMPT = """你是 RAGFlow 智能助教。当学生问课程相关问题时，必须调用工具检索。简单问候闲聊可直接回答。工具列表中包含可用的检索工具。"""
 
 
 class AgentLoop:
@@ -101,7 +86,11 @@ class AgentLoop:
             if role in ("user", "assistant"):
                 messages.append({"role": role, "content": content})
 
+        # 加入当前用户问题（之前漏掉了！）
+        messages.append({"role": "user", "content": question})
+
         retrieved_pages: list[dict] = []
+        tool_call_log: str = ""  # 累积工具调用日志，prepend 到最终答案
 
         # 5. ReAct 循环
         for turn in range(self.max_tool_calls):
@@ -136,6 +125,7 @@ class AgentLoop:
                 break
 
             tool_calls = response.get("tool_calls") if isinstance(response, dict) else None
+            logger.info(f"  LLM response: content={str(response.get('content',''))[:100]}, tool_calls={bool(tool_calls)}, reasoning={str(response.get('reasoning_content',''))[:100]}")
 
             if tool_calls:
                 # LLM 决定调用工具
@@ -151,14 +141,24 @@ class AgentLoop:
 
                     logger.info(f"  LLM 调用工具: {tool_name}({json.dumps(args, ensure_ascii=False)[:100]})")
 
+                    # 向前端发送工具调用开始事件（可视化推理过程）
+                    tool_call_log += f"\n<tool_call name=\"{tool_name}\">\n"
+                    yield {"answer": tool_call_log, "reference": {}}
+
                     # 执行工具
                     result = self.mcp_client.call_tool(tool_name, args)
+                    logger.info(f"  Tool result for {tool_name}: total={result.get('total', '?')}, documents={result.get('documents', 'N/A')}, chunks={len(result.get('chunks', []))}, error={result.get('error', 'N/A')}")
 
                     # 记录检索结果
                     chunks = result.get("chunks", [])
                     self.memory.working.add_retrieved_pages(chunks)
                     self.memory.working.executed_tools.append(tool_name)
                     self.memory.working.add_turn_result(result)
+
+                    # 向前端发送工具调用结果（可视化推理过程）
+                    formatted = self._format_tool_result(tool_name, result)
+                    tool_call_log += f"{formatted}\n</tool_call>\n"
+                    yield {"answer": tool_call_log, "reference": {}}
 
                     # 把工具调用和结果加入消息
                     messages.append({
@@ -188,10 +188,11 @@ class AgentLoop:
         retrieved_pages = list(self.memory.working.retrieved_pages)
 
         for chunk in self._stream_answer(messages, retrieved_pages):
-            answer = chunk
+            answer = tool_call_log + "\n" + chunk if tool_call_log else chunk
             yield {"answer": answer, "reference": {}}
 
-        # 7. 构建最终响应
+        # 7. 构建最终响应（规范化引用标记 + 转换 MinIO URL）
+        answer = self._normalize_references(answer)
         final = self._build_final_response(answer, retrieved_pages)
         yield {"answer": answer, "reference": final.get("reference", {})}
 
@@ -222,34 +223,72 @@ class AgentLoop:
         return "\n".join(parts)
 
     def _format_tool_result(self, tool_name: str, result: dict) -> str:
-        """格式化工具返回结果，成为 LLM 可读的文本"""
-        chunks = result.get("chunks", [])
-        if not chunks:
-            return f"[{tool_name}] 未找到相关结果。"
+        """格式化工具返回结果，成为 LLM 可读的文本。
 
-        lines = [f"[{tool_name}] 返回 {len(chunks)} 个结果："]
-        for i, c in enumerate(chunks[:5], 1):
-            title = c.get("title") or c.get("docnm_kwd", "")
-            url = c.get("url", "")
-            content = (c.get("content") or c.get("content_with_weight", ""))[:300]
-            score = c.get("rerank_score") or c.get("rrf_score") or c.get("score") or c.get("similarity") or 0.0
-            page_num = c.get("page_num_int", "")
-            header = f"  [{i}] {title}"
-            if page_num:
-                header += f" (第{page_num}页)"
-            if url:
-                header += f"\n     {url}"
-            header += f"\n     相关性: {score:.2f}"
-            lines.append(header)
-            if content:
-                lines.append(f"     {content[:200]}")
-        return "\n".join(lines)
+        解耦设计：如果 result 中有 'summary' 字段，直接使用（由 tool 自行格式化）。
+        否则按已知格式解析。新增 tool 只需在返回结果中包含 'summary' 字段，无需改此函数。
+        """
+        # 优先使用 tool 自带的人类可读摘要（解耦）
+        summary = result.get("summary")
+        if summary:
+            return f"[{tool_name}]\n{summary}"
+
+        # 通用 chunks 格式（hybrid_retrieve / web_search / get_adjacent_pages）
+        chunks = result.get("chunks", [])
+        if chunks:
+            lines = [f"[{tool_name}] 返回 {len(chunks)} 个结果："]
+            for i, c in enumerate(chunks[:5], 1):
+                title = c.get("title") or c.get("docnm_kwd", "")
+                url = c.get("url", "")
+                content = (c.get("content") or c.get("content_with_weight", ""))[:300]
+                score = c.get("rerank_score") or c.get("rrf_score") or c.get("score") or c.get("similarity") or 0.0
+                page_num = c.get("page_num_int", "")
+                header = f"  [{i}] {title}"
+                if page_num:
+                    header += f" (第{page_num}页)"
+                if url:
+                    header += f"\n     {url}"
+                header += f"\n     相关性: {score:.2f}"
+                lines.append(header)
+                if content:
+                    lines.append(f"     {content[:200]}")
+            return "\n".join(lines)
+
+        # documents 格式（list_documents）
+        documents = result.get("documents")
+        if documents:
+            lines = [f"[{tool_name}] 共 {len(documents)} 个文档："]
+            for i, d in enumerate(documents, 1):
+                doc_id = d.get("doc_id", "")
+                doc_name = d.get("doc_name", "")
+                page_count = d.get("page_count", 0)
+                first = d.get("first_page", 1)
+                last = d.get("last_page", page_count)
+                lines.append(f"  [{i}] {doc_name} (doc_id={doc_id}, {page_count}页, p{first}-{last})")
+            return "\n".join(lines)
+
+        # mindmap 格式（get_knowledge_structure）
+        if "mindmap" in result and result.get("found"):
+            mindmap = result.get("mindmap", {})
+            lines = [f"[{tool_name}] 知识结构："]
+            if isinstance(mindmap, dict) and "root" in mindmap:
+                lines.append(json.dumps(mindmap["root"], ensure_ascii=False)[:2000])
+            lines.append(f"  闪卡: {result.get('flashcards_count', 0)} 测验: {result.get('quiz_count', 0)}")
+            return "\n".join(lines)
+
+        # full_content 格式（get_full_page）
+        if "full_content" in result and result.get("found"):
+            content = result.get("full_content", "")[:1000]
+            return f"[{tool_name}] p{result.get('page_num_int', '?')} {result.get('docnm_kwd', '')}:\n{content}"
+
+        # 完全未知格式：JSON 序列化前 500 字符，仍可工作
+        return f"[{tool_name}]\n{json.dumps(result, ensure_ascii=False)[:500]}"
 
     def _stream_answer(self, messages: list[dict], retrieved_pages: list[dict]) -> Generator[str, None, None]:
         """流式生成最终答案"""
         if retrieved_pages:
             context = self._build_retrieval_context(retrieved_pages)
-            system = REACT_SYSTEM_PROMPT + "\n\n" + context + "\n\n请根据以上检索内容回答用户问题，标注来源。"
+            system = REACT_SYSTEM_PROMPT + "\n\n" + context + "\n\n请根据以上检索内容回答用户问题。引用来源时使用 ~~0== ~~1== 格式（对应上述[来源N]）。"
         else:
             system = REACT_SYSTEM_PROMPT + "\n\n当前未检索到相关内容，请基于你的知识回答。如果是知识性问题，请说明信息不足。"
 
@@ -268,6 +307,36 @@ class AgentLoop:
             logger.error(f"生成答案失败: {e}")
             yield f"\n\n*[生成失败: {e}]*"
 
+    @staticmethod
+    def _normalize_references(text: str) -> str:
+        """将 LLM 生成的 '来源N' / '[来源N]' 文本转为前端可识别的 ~~N== 标记"""
+        import re
+        # [来源N] → ~~N-1==
+        text = re.sub(r'\[来源(\d+)\]', lambda m: f'~~{int(m.group(1))-1}==', text)
+        # （来源N）→ (~~N-1==)
+        text = re.sub(r'（来源(\d+)）', lambda m: f'(~~{int(m.group(1))-1}==)', text)
+        return text
+
+    @staticmethod
+    def _convert_minio_url(img_url: str) -> str:
+        """将 minio://bucket/path 转为 HTTP URL，使前端可直接渲染图片"""
+        if not img_url or not img_url.startswith("minio://"):
+            return img_url or ""
+        try:
+            import os
+            path = img_url[8:]  # 移除 "minio://"
+            parts = path.split("/", 1)
+            if len(parts) != 2:
+                return img_url
+            bucket, obj_path = parts
+            host = os.getenv("MINIO_VISIT_HOST", "localhost")
+            if "://" not in host:
+                host = "http://" + host
+            port = os.getenv("MINIO_PORT", "9000")
+            return f"{host}:{port}/{bucket}/{obj_path}"
+        except Exception:
+            return img_url
+
     def _build_final_response(self, answer: str, retrieved_pages: list[dict]) -> dict:
         """构建最终响应，包含引用信息"""
         chunks = []
@@ -280,12 +349,12 @@ class AgentLoop:
             score = page.get("rerank_score") or page.get("rrf_score") or page.get("similarity") or 0.0
             chunks.append({
                 "chunk_id": page_id,
-                "content": page.get("content_with_weight", "")[:300],
+                "content_with_weight": page.get("content_with_weight", "")[:300],
                 "doc_id": page.get("doc_id", ""),
                 "docnm_kwd": page.get("docnm_kwd", ""),
-                "img_url": page.get("img_url", ""),
+                "img_url": self._convert_minio_url(page.get("img_url", "")),
                 "page_num_int": page.get("page_num_int", 0),
-                "score": round(float(score), 4),
+                "similarity": round(float(score), 4),
             })
 
         doc_aggs = []

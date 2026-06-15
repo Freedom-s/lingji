@@ -168,6 +168,31 @@
         border-bottom: 1px dashed #e0e0e0;
       }
     }
+
+    // 工具调用折叠卡 — 蓝色边框与思考过程区分
+    &:global(.tool-call) {
+      background: #f0f7ff;
+      border-color: #b3d8ff;
+
+      summary {
+        color: #1677ff;
+        &:hover { color: #0958d9; }
+      }
+
+      pre {
+        margin: 0;
+        padding: 8px;
+        background: #fff;
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 300px;
+        overflow-y: auto;
+        color: #333;
+      }
+    }
   }
 
   // 附件内容相关样式

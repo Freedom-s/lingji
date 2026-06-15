@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import 'katex/dist/katex.min.css'; // `rehype-katex` does not import the CSS for you
 
-import { preprocessLaTeX, replaceThinkToSection } from '@/utils/chat';
+import { preprocessLaTeX, replaceThinkToSection, replaceToolCallToSection } from '@/utils/chat';
 import { replaceTextByOldReg } from '../utils';
 
 import { pipe } from 'lodash/fp';
@@ -92,7 +92,7 @@ const MarkdownContent = ({
     const nextText = replaceTextByOldReg(text);
     // 处理附件内容
     const processedText = processAttachmentContent(nextText);
-    return pipe(replaceThinkToSection, preprocessLaTeX)(processedText);
+    return pipe(replaceThinkToSection, replaceToolCallToSection, preprocessLaTeX)(processedText);
   }, [content, t, loading, loadingDotCount]);
 
   useEffect(() => {

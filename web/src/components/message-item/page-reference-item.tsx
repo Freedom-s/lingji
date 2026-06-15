@@ -2,6 +2,8 @@ import { IReference, IReferenceChunk } from '@/interfaces/database/chat';
 import { Button, Card, Flex, Image, Space, Tag, Typography } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { memo, useCallback, useState } from 'react';
+import ChunkImage from '@/components/chunk_image';
+import NewDocumentLink from '@/components/new-document-link';
 import styles from './index.less';
 
 const { Text } = Typography;
@@ -75,20 +77,20 @@ const PageReferenceItem = ({
                 {/* 页面图片预览 */}
                 {imgUrl && (
                   <div className={styles.pageImageWrapper}>
-                    <img
-                      src={imgUrl}
-                      alt={`Page ${pageNum}`}
-                      width={80}
-                      style={{
-                        objectFit: 'cover',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(imgUrl, '_blank');
-                      }}
-                    />
+                    {imgUrl.startsWith('http') ? (
+                      <img
+                        src={imgUrl}
+                        alt={`Page ${pageNum}`}
+                        width={80}
+                        style={{ objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); window.open(imgUrl, '_blank'); }}
+                      />
+                    ) : (
+                      <ChunkImage
+                        id={imgUrl.startsWith('minio://') ? imgUrl.slice(8) : imgUrl}
+                        className={styles.pageThumbnail}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -149,7 +151,19 @@ const PageReferenceItem = ({
         {docAggs.length > 0 && (
           <div>
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              涉及文档: {docAggs.map((doc) => doc.doc_name).join(', ')}
+              涉及文档:{' '}
+              {docAggs.map((doc, idx) => (
+                <span key={doc.doc_id}>
+                  {idx > 0 && ', '}
+                  <NewDocumentLink
+                    documentId={doc.doc_id}
+                    documentName={doc.doc_name}
+                    color="rgb(15, 79, 170)"
+                  >
+                    {doc.doc_name}
+                  </NewDocumentLink>
+                </span>
+              ))}
             </Text>
           </div>
         )}

@@ -500,3 +500,213 @@ class MCPToolExecutor:
         except Exception as e:
             logger.error(f"web_search error: {e}")
             return self._build_error(str(e))
+
+    # ── Tool 10: 列出知识库文档 ────────────────────────────────
+
+    def _tool_list_documents(self) -> dict:
+        """列出知识库中所有文档及其页数范围"""
+        if not self.dealer:
+            return self._build_error("ES Dealer 不可用")
+
+        tenant_ids = self._ensure_string_list(self.tenant_ids, [])
+        kb_ids = self._ensure_string_list(self.kb_ids, [])
+        logger.info(f"list_documents called: tenant_ids={tenant_ids}, kb_ids={kb_ids}")
+
+        try:
+            from rag.utils.doc_store_conn import OrderByExpr
+            from rag.nlp.search import index_name
+
+            src = ["doc_id", "docnm_kwd", "page_num_int"]
+            sres = self.dealer.dataStore.search(
+                src, [], {}, [], OrderByExpr(),
+                0, 2000,
+                [index_name(tid) for tid in tenant_ids],
+                kb_ids,
+            )
+
+            ids = self.dealer.dataStore.getChunkIds(sres)
+            fields = self.dealer.dataStore.getFields(sres, src)
+
+            # Python 聚合: doc_id → {name, pages}
+            doc_map: dict = {}
+            for cid in ids:
+                chunk = fields.get(cid)
+                if not chunk:
+                    continue
+                doc_id = str(chunk.get("doc_id", ""))
+                if not doc_id:
+                    continue
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = {
+                        "doc_id": doc_id,
+                        "doc_name": str(chunk.get("docnm_kwd", "")),
+                        "pages": set(),
+                    }
+                pn = chunk.get("page_num_int")
+                if pn is not None:
+                    doc_map[doc_id]["pages"].add(int(pn))
+
+            documents = []
+            for d in doc_map.values():
+                pages = sorted(d["pages"])
+                documents.append({
+                    "doc_id": d["doc_id"],
+                    "doc_name": d["doc_name"],
+                    "page_count": len(pages),
+                    "first_page": pages[0] if pages else 0,
+                    "last_page": pages[-1] if pages else 0,
+                })
+
+            documents.sort(key=lambda x: x["doc_name"])
+            logger.info(f"list_documents: {len(documents)} docs")
+            return {"total": len(documents), "documents": documents}
+        except Exception as e:
+            logger.error(f"list_documents error: {e}")
+            return self._build_error(str(e))
+
+    def _tool_list_documents_fallback(self, tenant_ids: list[str], kb_ids: list[str]) -> dict:
+        """回退方案：用 search 全量拉取后在 Python 中聚合"""
+        try:
+            from rag.utils.doc_store_conn import OrderByExpr
+            from rag.nlp.search import index_name
+
+            src = ["doc_id", "docnm_kwd", "page_num_int"]
+            sres = self.dealer.dataStore.search(
+                src, {}, [], OrderByExpr(),
+                0, 1000,  # 取足够多的页面
+                [index_name(tid) for tid in tenant_ids],
+                kb_ids,
+            )
+
+            ids = self.dealer.dataStore.getChunkIds(sres)
+            fields = self.dealer.dataStore.getFields(sres, src)
+
+            # Python 聚合: doc_id → {name, pages set}
+            doc_map: dict[str, dict] = {}
+            for chunk_id in ids:
+                chunk = fields.get(chunk_id, {})
+                doc_id = chunk.get("doc_id", "")
+                if not doc_id:
+                    continue
+                if doc_id not in doc_map:
+                    doc_map[doc_id] = {
+                        "doc_id": doc_id,
+                        "doc_name": chunk.get("docnm_kwd", ""),
+                        "pages": set(),
+                    }
+                pn = chunk.get("page_num_int")
+                if pn is not None:
+                    doc_map[doc_id]["pages"].add(pn)
+
+            documents = []
+            for d in doc_map.values():
+                pages = sorted(d["pages"])
+                documents.append({
+                    "doc_id": d["doc_id"],
+                    "doc_name": d["doc_name"],
+                    "page_count": len(pages),
+                    "first_page": pages[0] if pages else 0,
+                    "last_page": pages[-1] if pages else 0,
+                })
+
+            documents.sort(key=lambda x: x["doc_name"])
+            return {"total": len(documents), "documents": documents}
+        except Exception as e:
+            logger.error(f"list_documents_fallback error: {e}")
+            return self._build_error(str(e))
+
+    # ── Tool 11: 获取页面完整内容 ──────────────────────────────
+
+    def _tool_get_full_page(self, doc_id: str, page_num: int) -> dict:
+        """获取某一页的完整 OCR 内容，不做截断"""
+        if not self.dealer:
+            return self._build_error("ES Dealer 不可用")
+
+        try:
+            from rag.utils.doc_store_conn import OrderByExpr
+            from rag.nlp.search import index_name
+
+            tenant_ids = self._ensure_string_list(self.tenant_ids, [])
+            kb_ids = self._ensure_string_list(self.kb_ids, [])
+
+            src = ["page_id", "doc_id", "docnm_kwd", "kb_id", "page_num_int",
+                   "img_url", "content_with_weight"]
+
+            condition = {"doc_id": doc_id, "page_num_int": [page_num]}
+
+            sres = self.dealer.dataStore.search(
+                src, [], condition, [], OrderByExpr(),
+                0, 1,
+                [index_name(tid) for tid in tenant_ids],
+                kb_ids,
+            )
+
+            ids = self.dealer.dataStore.getChunkIds(sres)
+            if not ids:
+                return self._build_error(f"未找到文档 {doc_id} 第 {page_num} 页")
+
+            fields = self.dealer.dataStore.getFields(sres, src)
+            chunk_id = ids[0]
+            chunk = fields.get(chunk_id, {})
+
+            return {
+                "found": True,
+                "page_id": chunk.get("page_id", chunk_id),
+                "doc_id": chunk.get("doc_id", ""),
+                "docnm_kwd": chunk.get("docnm_kwd", ""),
+                "kb_id": chunk.get("kb_id", ""),
+                "page_num_int": chunk.get("page_num_int", 0),
+                "full_content": chunk.get("content_with_weight", ""),
+                "img_url": chunk.get("img_url", ""),
+            }
+        except Exception as e:
+            logger.error(f"get_full_page error: {e}")
+            return self._build_error(str(e))
+
+    # ── Tool 12: 获取知识结构（思维导图） ───────────────────────
+
+    def _tool_get_knowledge_structure(self, doc_id: str) -> dict:
+        """获取文档的知识结构（思维导图 + 闪卡/测验数量）"""
+        try:
+            from api.db.db_models import DocumentGeneration
+
+            rows = list(
+                DocumentGeneration.select().where(
+                    DocumentGeneration.doc_id == doc_id
+                )
+            )
+
+            if not rows:
+                return {"found": False, "doc_id": doc_id}
+
+            result: dict = {
+                "found": True,
+                "doc_id": doc_id,
+                "mindmap": None,
+                "flashcards_count": 0,
+                "quiz_count": 0,
+            }
+
+            for row in rows:
+                if row.generation_type == "mindmap":
+                    try:
+                        result["mindmap"] = json.loads(row.content)
+                    except (json.JSONDecodeError, TypeError):
+                        result["mindmap"] = {"raw": row.content}
+                elif row.generation_type == "flashcards":
+                    try:
+                        cards = json.loads(row.content)
+                        result["flashcards_count"] = len(cards) if isinstance(cards, list) else 0
+                    except (json.JSONDecodeError, TypeError):
+                        result["flashcards_count"] = 0
+                elif row.generation_type == "quiz":
+                    try:
+                        quiz = json.loads(row.content)
+                        result["quiz_count"] = len(quiz) if isinstance(quiz, list) else 0
+                    except (json.JSONDecodeError, TypeError):
+                        result["quiz_count"] = 0
+
+            return result
+        except Exception as e:
+            logger.error(f"get_knowledge_structure error: {e}")
+            return self._build_error(str(e))
