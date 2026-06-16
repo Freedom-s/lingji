@@ -178,9 +178,7 @@ const MessageItem = ({
             {isAssistant && isPageMode && (
               <PageReferenceItem
                 reference={reference}
-                clickDocumentButton={(docId, chunk) =>
-                  clickDocumentButton?.(docId, chunk, reference?.chunks ?? [])
-                }
+                clickDocumentButton={clickDocumentButton}
               />
             )}
             
