@@ -3,7 +3,6 @@ import { Button, Card, Flex, Image, Space, Tag, Typography } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { memo, useCallback, useState } from 'react';
 import ChunkImage from '@/components/chunk_image';
-import NewDocumentLink from '@/components/new-document-link';
 import styles from './index.less';
 
 const { Text } = Typography;
@@ -152,18 +151,26 @@ const PageReferenceItem = ({
           <div>
             <Text type="secondary" style={{ fontSize: '12px' }}>
               涉及文档:{' '}
-              {docAggs.map((doc, idx) => (
-                <span key={doc.doc_id}>
-                  {idx > 0 && ', '}
-                  <NewDocumentLink
-                    documentId={doc.doc_id}
-                    documentName={doc.doc_name}
-                    color="rgb(15, 79, 170)"
-                  >
-                    {doc.doc_name}
-                  </NewDocumentLink>
-                </span>
-              ))}
+              {docAggs.map((doc, idx) => {
+                // 筛选该文档的所有页面
+                const docChunks = chunks.filter((c) => c.doc_id === doc.doc_id);
+                return (
+                  <span key={doc.doc_id}>
+                    {idx > 0 && ', '}
+                    <a
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (clickDocumentButton && docChunks.length > 0) {
+                          clickDocumentButton(doc.doc_id, docChunks[0], docChunks);
+                        }
+                      }}
+                      style={{ color: 'rgb(15, 79, 170)', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      {doc.doc_name}
+                    </a>
+                  </span>
+                );
+              })}
             </Text>
           </div>
         )}
