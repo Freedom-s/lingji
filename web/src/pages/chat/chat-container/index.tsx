@@ -44,7 +44,7 @@ const ChatContainer = ({ controller, fontSize = 10 }: IProps) => {
     stopOutputMessage,
   } = useSendNextMessage(controller);
 
-  const { visible, hideModal, documentId, selectedChunk, clickDocumentButton } =
+  const { visible, hideModal, documentId, selectedChunk, clickDocumentButton, chunks } =
     useClickDrawer();
   const disabled = useGetSendButtonDisabled();
   const sendDisabled = useSendButtonDisabled(value);
@@ -117,7 +117,7 @@ const ChatContainer = ({ controller, fontSize = 10 }: IProps) => {
         hideModal={hideModal}
         documentId={documentId}
         chunk={selectedChunk}
-        chunks={conversation?.reference?.chunks ?? []}
+        chunks={chunks.length > 0 ? chunks : (conversation?.reference?.chunks ?? [])}
       ></ChunkImageModal>
     </>
   );
