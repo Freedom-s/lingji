@@ -208,7 +208,6 @@ const PageReferenceItem = ({
                     style={{
                       color: loadingDoc === doc.doc_id ? '#999' : 'rgb(15, 79, 170)',
                       cursor: loadingDoc === doc.doc_id ? 'wait' : 'pointer',
-                      textDecoration: 'underline',
                     }}
                   >
                     {doc.doc_name}
