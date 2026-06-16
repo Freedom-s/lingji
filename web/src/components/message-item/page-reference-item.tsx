@@ -1,8 +1,10 @@
 import { IReference, IReferenceChunk } from '@/interfaces/database/chat';
-import { Button, Card, Flex, Image, Space, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Image, Space, Tag, Typography, message } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { memo, useCallback, useState } from 'react';
 import ChunkImage from '@/components/chunk_image';
+import { getAuthorization } from '@/utils/authorization-util';
+import api from '@/utils/api';
 import styles from './index.less';
 
 const { Text } = Typography;
@@ -48,6 +50,50 @@ const PageReferenceItem = ({
       [chunkId]: !prev[chunkId],
     }));
   };
+
+  // 获取文档所有页面并打开模态框
+  const [loadingDoc, setLoadingDoc] = useState<string>('');
+  const handleDocumentClick = useCallback(
+    async (docId: string, docName: string) => {
+      if (!clickDocumentButton) return;
+      setLoadingDoc(docId);
+      try {
+        const res = await fetch(api.chunk_list, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: getAuthorization(),
+          },
+          body: JSON.stringify({ doc_id: docId, page: 1, size: 1000 }),
+        });
+        const data = await res.json();
+        if (data?.code !== 0) {
+          message.error(data?.message || '获取文档页面失败');
+          return;
+        }
+        const allChunks: IReferenceChunk[] = (data.data?.chunks || []).map((c: any) => ({
+          page_id: c.page_id || c.id || '',
+          doc_id: c.doc_id || docId,
+          docnm_kwd: c.docnm_kwd || docName,
+          kb_id: c.kb_id || '',
+          page_num_int: c.page_num_int,
+          img_url: c.img_url || '',
+          content_with_weight: c.content_with_weight || '',
+          similarity: c.similarity || 0,
+        }));
+        if (allChunks.length > 0) {
+          clickDocumentButton(docId, allChunks[0], allChunks);
+        } else {
+          message.info('该文档暂无页面数据');
+        }
+      } catch {
+        message.error('获取文档页面失败');
+      } finally {
+        setLoadingDoc('');
+      }
+    },
+    [clickDocumentButton],
+  );
 
   return (
     <div className={styles.pageReferenceContainer}>
@@ -151,26 +197,25 @@ const PageReferenceItem = ({
           <div>
             <Text type="secondary" style={{ fontSize: '12px' }}>
               涉及文档:{' '}
-              {docAggs.map((doc, idx) => {
-                // 筛选该文档的所有页面
-                const docChunks = chunks.filter((c) => c.doc_id === doc.doc_id);
-                return (
-                  <span key={doc.doc_id}>
-                    {idx > 0 && ', '}
-                    <a
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (clickDocumentButton && docChunks.length > 0) {
-                          clickDocumentButton(doc.doc_id, docChunks[0], docChunks);
-                        }
-                      }}
-                      style={{ color: 'rgb(15, 79, 170)', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      {doc.doc_name}
-                    </a>
-                  </span>
-                );
-              })}
+              {docAggs.map((doc, idx) => (
+                <span key={doc.doc_id}>
+                  {idx > 0 && ', '}
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDocumentClick(doc.doc_id, doc.doc_name);
+                    }}
+                    style={{
+                      color: loadingDoc === doc.doc_id ? '#999' : 'rgb(15, 79, 170)',
+                      cursor: loadingDoc === doc.doc_id ? 'wait' : 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    {doc.doc_name}
+                    {loadingDoc === doc.doc_id ? ' (加载中...)' : ''}
+                  </a>
+                </span>
+              ))}
             </Text>
           </div>
         )}
