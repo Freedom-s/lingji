@@ -1,40 +1,53 @@
-"""
-AgentLoop: True ReAct-style Agent.
-
-LLM 看到 question + history + tool results → 自行决定:
-    - 调用工具继续检索 → 拿到结果 → 再决策
-    - 直接生成回答 → 流式输出
-
-没有固定轮数限制（安全阀 max_turns=8），LLM 自主控制何时停止检索。
-"""
-
 import json
 import logging
 import time
 from typing import Any, Generator
 
 from rag.agent.client.mcp_client import MCPClient
-from rag.agent.client.memory import MemoryManager
 
 logger = logging.getLogger("ragflow.agent.loop")
 
-REACT_SYSTEM_PROMPT = """你是 灵机 智能助教。当学生问课程相关问题时，先用工具检索课件内容，检索到足够信息后立即回答，不要再继续翻页。简单问候闲聊直接回答，不调工具。"""
+REACT_SYSTEM_PROMPT = """你是一个名为“灵机”的智能教学助手。你的目标是耐心、专业、准确地解答学生关于课程的问题。
 
+【你的工作流与决策机制】
+1. **意图判断**：如果学生只是简单问候、表达情绪或闲聊（如“你好”、“谢谢”、“太难了”），请直接用亲切的语气回复，**绝对不要**调用检索工具。
+2. **知识检索**：如果学生询问具体的课程概念、知识点、作业要求或相关拓展，你**必须**优先使用工具进行检索。
+3. **信息评估**：每次检索后，仔细阅读返回的结果。如果信息已经足够回答问题，请停止检索并开始生成答案；如果信息不足或只涵盖了部分问题，请提取新的关键词继续使用工具检索，直到获取完整信息。
+4. **诚实原则**：如果你经过多次检索仍未找到相关内容，请坦诚地告诉学生“在当前课件/知识库中未能找到相关信息”，并根据你的通用知识给出合理的推测或建议，但必须明确区分“课件内容”和“通用知识”。
 
+【回答规范】
+- **客观准确**：严格基于检索到的内容作答，不要编造（幻觉）知识库中不存在的特定课程规定或数据。
+- **结构清晰**：使用分段、列表等 Markdown 语法让回答易于阅读。
+"""
+# - **必须引用**：当你使用了检索结果中的信息时，**必须**在对应句子的末尾进行引用，引用格式必须严格为 `[来源N]`（例如：`机器学习是...[来源1]。` 或 `根据课件...[来源1][来源2]`）。N代表你参考的搜索结果编号。
 class AgentLoop:
     """ReAct Agent: LLM 自主决策检索 vs. 回答"""
 
-    def __init__(self, mcp_url: str, chat_mdl, redis_conn=None, conversation_id: str = "", user_id: str = ""):
+    def __init__(self, mcp_url: str, chat_mdl):
         self.mcp_client = MCPClient(base_url=mcp_url)
-        self.chat_mdl = chat_mdl
-        # TODO：记忆这里暂时没有实现，后续需要进行补充
-        self.memory = MemoryManager(
-            redis_conn=redis_conn,
-            conversation_id=conversation_id,
-            user_id=user_id,
-        )
-        # ReAct 安全阀：最多允许 LLM 调用工具多少次
+        self.chat_mdl = chat_mdl # 这个client是主要负责react范式的，所以他持有这个chat模型
         self.max_tool_calls = 10
+
+    @staticmethod
+    def _inject_context(tool_name: str, args: dict, kb_ids: list[str],
+                        tenant_ids: list[str], tenant_id: str,
+                        embd_id: str | None, rerank_id: str | None):
+        """自动注入系统上下文参数。LLM 不传这些参数，AgentLoop 补上。"""
+        needs_all = tool_name in ("hybrid_retrieve",)
+        needs_es = tool_name in ("get_full_page", "get_adjacent_pages")
+        needs_kb = tool_name in ("list_documents",)
+
+        if needs_all:
+            args.setdefault("tenant_ids", tenant_ids)
+            args.setdefault("kb_ids", kb_ids)
+            args.setdefault("tenant_id", tenant_id)
+            args.setdefault("embd_id", embd_id or "")
+            args.setdefault("rerank_id", rerank_id or "")
+        elif needs_es:
+            args.setdefault("tenant_ids", tenant_ids)
+            args.setdefault("kb_ids", kb_ids)
+        elif needs_kb:
+            args.setdefault("kb_ids", kb_ids)
 
     def run(
         self,
@@ -54,22 +67,14 @@ class AgentLoop:
         """
         start_time = time.time()
 
-        # 1. 初始化 MCP 上下文
-        self.mcp_client.initialize(
-            tenant_ids=tenant_ids,
-            kb_ids=kb_ids,
-            embd_id=embd_id,
-            rerank_id=rerank_id,
-        )
+        _tenant_id = tenant_ids[0] if tenant_ids else ""
 
         # 2. 获取工具列表
         mcp_tools = self.mcp_client.list_tools()
+        mcp_tools = [t for t in mcp_tools if t.get("name") != "set_context"]
         openai_tools = self.mcp_client.get_openai_tools(mcp_tools)
 
-        # 3. 初始化记忆
-        self.memory.init_working_memory(question)
-
-        # 4. 构建消息列表
+        # 2. 构建消息列表
         messages: list[dict] = []
 
         # 历史消息
@@ -79,13 +84,15 @@ class AgentLoop:
             if role in ("user", "assistant"):
                 messages.append({"role": role, "content": content})
 
-        # 加入当前用户问题（之前漏掉了！）
+        # 加入当前用户问题
         messages.append({"role": "user", "content": question})
 
         retrieved_pages: list[dict] = []
-        tool_call_log: str = ""  # 累积工具调用日志，prepend 到最终答案
+        seen_page_ids: set = set()
+        executed_tools: list[str] = []
+        tool_call_log: str = ""
 
-        # 5. ReAct 循环
+        # 3. ReAct 循环
         for turn in range(self.max_tool_calls):
             logger.info(f"========== ReAct Turn {turn + 1}/{self.max_tool_calls} ==========")
 
@@ -151,6 +158,10 @@ class AgentLoop:
                     tool_call_log += f"\n<tool_call name=\"{tool_name}\">\n"
                     yield {"answer": tool_call_log, "reference": {}}
 
+                    # 注入系统上下文参数（LLM 不传的参数，AgentLoop 自动补上）
+                    self._inject_context(tool_name, args, kb_ids, tenant_ids,
+                                         _tenant_id, embd_id, rerank_id)
+
                     # 执行工具
                     result = self.mcp_client.call_tool(tool_name, args)
 
@@ -160,9 +171,12 @@ class AgentLoop:
 
                     # 记录检索结果
                     chunks = result.get("chunks", [])
-                    self.memory.working.add_retrieved_pages(chunks)
-                    self.memory.working.executed_tools.append(tool_name)
-                    self.memory.working.add_turn_result(result)
+                    for p in chunks:
+                        pid = p.get("page_id", "")
+                        if pid and pid not in seen_page_ids:
+                            seen_page_ids.add(pid)
+                            retrieved_pages.append(p)
+                    executed_tools.append(tool_name)
 
                     # 向前端发送工具调用结果（可视化推理过程）
                     formatted = self._format_tool_result(tool_name, result)
@@ -185,7 +199,6 @@ class AgentLoop:
                         "content": self._format_tool_result(tool_name, result),
                     })
 
-                retrieved_pages = list(self.memory.working.retrieved_pages)
                 continue
 
             # LLM 返回了文本回答（无 tool_calls）→ 退出循环，生成答案
@@ -193,9 +206,7 @@ class AgentLoop:
             break
 
         # 6. 流式生成最终答案
-        self.memory.working.agent_state = "generating"
         answer = ""
-        retrieved_pages = list(self.memory.working.retrieved_pages)
 
         for chunk in self._stream_answer(messages, retrieved_pages):
             answer = tool_call_log + "\n" + chunk if tool_call_log else chunk
@@ -207,7 +218,7 @@ class AgentLoop:
         yield {"answer": answer, "reference": final.get("reference", {})}
 
         elapsed = time.time() - start_time
-        logger.info(f"ReAct Agent 完成，耗时 {elapsed:.2f}s，共调用 {len(self.memory.working.executed_tools)} 次工具，检索 {len(retrieved_pages)} 页")
+        logger.info(f"ReAct Agent 完成，耗时 {elapsed:.2f}s，共调用 {len(executed_tools)} 次工具，检索 {len(retrieved_pages)} 页")
 
     # ── 内部方法 ──────────────────────────────────────────────
 
@@ -224,7 +235,7 @@ class AgentLoop:
             seen.add(pid)
             doc = p.get("docnm_kwd", "未知文档")
             page_num = p.get("page_num_int", "?")
-            content = p.get("content_with_weight", "")
+            content = p.get("full_content", "")
             score = p.get("rerank_score") or p.get("rrf_score") or p.get("similarity") or 0.0
             parts.append(
                 f"[来源{i}] {doc} 第{page_num}页 (相关度:{score:.2f})\n{content}\n"
@@ -250,7 +261,7 @@ class AgentLoop:
             for i, c in enumerate(chunks[:5], 1):
                 title = c.get("title") or c.get("docnm_kwd", "")
                 url = c.get("url", "")
-                content = (c.get("content") or c.get("content_with_weight", ""))
+                content = (c.get("content") or c.get("full_content", ""))
                 score = c.get("rerank_score") or c.get("rrf_score") or c.get("score") or c.get("similarity") or 0.0
                 page_num = c.get("page_num_int", "")
                 header = f"  [{i}] {title}"
@@ -269,25 +280,24 @@ class AgentLoop:
         if documents:
             lines = [f"[{tool_name}] 共 {len(documents)} 个文档："]
             for i, d in enumerate(documents, 1):
-                doc_id = d.get("doc_id", "")
-                doc_name = d.get("doc_name", "")
-                page_count = d.get("page_count", 0)
-                first = d.get("first_page", 1)
-                last = d.get("last_page", page_count)
-                lines.append(f"  [{i}] {doc_name} (doc_id={doc_id}, {page_count}页, p{first}-{last})")
+                lines.append(
+                    f"  [{i}] {d.get('doc_name', '')} ({d.get('page_count', 0)}页,"
+                    f" doc_id={d.get('doc_id', '')}, kb={d.get('kb_name', '')})"
+                )
             return "\n".join(lines)
 
         # mindmap 格式（get_knowledge_structure）
-        if "mindmap" in result and result.get("found"):
-            mindmap = result.get("mindmap", {})
+        if "mindmap" in result:
+            mindmap = result.get("mindmap")
+            if mindmap is None:
+                return f"[{tool_name}] 未找到 {result.get('doc_id', '')} 的知识结构"
             lines = [f"[{tool_name}] 知识结构："]
             if isinstance(mindmap, dict) and "root" in mindmap:
                 lines.append(json.dumps(mindmap["root"], ensure_ascii=False)[:2000])
-            lines.append(f"  闪卡: {result.get('flashcards_count', 0)} 测验: {result.get('quiz_count', 0)}")
             return "\n".join(lines)
 
         # full_content 格式（get_full_page）
-        if "full_content" in result and result.get("found"):
+        if "full_content" in result:
             content = result.get("full_content", "")[:1000]
             return f"[{tool_name}] p{result.get('page_num_int', '?')} {result.get('docnm_kwd', '')}:\n{content}"
 
