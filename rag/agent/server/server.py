@@ -1,22 +1,22 @@
 """
-FastMCP Server: 在端口 9390 上提供 8 个检索工具的 SSE 服务。
+FastMCP Server: 在端口 9390 上提供 6 个检索工具的 SSE 服务。
 
 启动方式:
-    python -m rag.agent.mcp_server_run
+    python -m rag.agent.server.run
 
-自定义路由:
-    GET  /health      — 健康检查
-    POST /initialize  — 初始化上下文（tenant_ids, kb_ids, LLM models）
+架构:
+    - 无会话状态: 所有上下文参数由 LLM 调用时显式传递
+    - 模型缓存: 嵌入/重排序模型实例按 tenant_id:model_id 缓存
+    - ES 连接: Dealer 单例
 """
 
-import json
 import logging
 import sys
 import os
-from contextvars import ContextVar
+from typing import Annotated
 
-# 将项目根目录加入 sys.path，确保可以导入 api 模块
-# rag/agent/server/server.py → 项目根需要向上 3 层
+from pydantic import Field
+
 _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -27,8 +27,6 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger("ragflow.agent.mcp_server")
 
-# ── FastMCP 实例 ─────────────────────────────────────────────
-
 mcp = FastMCP(
     "ragflow-retrieval",
     instructions=(
@@ -37,202 +35,120 @@ mcp = FastMCP(
     ),
 )
 
-# ── 全局状态 ─────────────────────────────────────────────────
+# ── 模型缓存 ─────────────────────────────────────────────
+from rag.nlp.search import Dealer
+from rag.utils.es_conn import ESConnection
 
-_tool_executor: MCPToolExecutor | None = None
-
-_current_tenant_ids: ContextVar[list[str]] = ContextVar("tenant_ids", default=[])
-_current_kb_ids: ContextVar[list[str]] = ContextVar("kb_ids", default=[])
-
-
-def get_executor() -> MCPToolExecutor:
-    global _tool_executor
-    if _tool_executor is None:
-        _init_executor()
-    return _tool_executor  # type: ignore
+_dealer = Dealer(ESConnection())
+_embd_cache: dict[str, object] = {}
+_rerank_cache: dict[str, object] = {}
 
 
-def _init_executor():
-    """延迟初始化 MCPToolExecutor，连接 ES 和 LLM"""
-    global _tool_executor
-
-    try:
-        from rag.nlp.search import Dealer
-        from rag.utils.es_conn import ESConnection
+def _get_embd_mdl(tenant_id: str, embd_id: str):
+    if not tenant_id or not embd_id:
+        return None
+    key = f"{tenant_id}:{embd_id}"
+    if key not in _embd_cache:
         from api.db.services.llm_service import LLMBundle
         from api.db import LLMType
-
-        doc_store = ESConnection()
-        dealer = Dealer(doc_store)
-
-        # 尝试初始化 LLM 模型（embd/rerank/chat 可选）
-        embd_mdl = None
-        rerank_mdl = None
-        chat_mdl = None
-
-        try:
-            from api import settings
-            embd_mdl = LLMBundle(settings.PLATFORM_TENANT_ID, LLMType.EMBEDDING)
-        except Exception as e:
-            logger.warning(f"embd_mdl 初始化失败: {e}")
-
-        try:
-            rerank_mdl = LLMBundle(
-                getattr(settings, "PLATFORM_TENANT_ID", ""),
-                LLMType.RERANK,
-            )
-        except Exception as e:
-            logger.warning(f"rerank_mdl 初始化失败: {e}")
-
-        try:
-            chat_mdl = LLMBundle(
-                getattr(settings, "PLATFORM_TENANT_ID", ""),
-                LLMType.CHAT,
-            )
-        except Exception as e:
-            logger.warning(f"chat_mdl 初始化失败: {e}")
-
-        _tool_executor = MCPToolExecutor(
-            dealer=dealer,
-            embd_mdl=embd_mdl,
-            rerank_mdl=rerank_mdl,
-            chat_mdl=chat_mdl,
-        )
-        logger.info("MCPToolExecutor 初始化成功")
-
-    except Exception as e:
-        logger.error(f"MCPToolExecutor 初始化失败: {e}")
-        raise
+        _embd_cache[key] = LLMBundle(tenant_id, LLMType.EMBEDDING, embd_id)
+    return _embd_cache[key]
 
 
-# ── 6 个 MCP 工具 ────────────────────────────────────────────
+def _get_rerank_mdl(tenant_id: str, rerank_id: str):
+    if not tenant_id or not rerank_id:
+        return None
+    key = f"{tenant_id}:{rerank_id}"
+    if key not in _rerank_cache:
+        from api.db.services.llm_service import LLMBundle
+        from api.db import LLMType
+        _rerank_cache[key] = LLMBundle(tenant_id, LLMType.RERANK, rerank_id)
+    return _rerank_cache[key]
+
+
+def _executor(tenant_id: str = "", embd_id: str = "", rerank_id: str = "") -> MCPToolExecutor:
+    return MCPToolExecutor(
+        dealer=_dealer,
+        embd_mdl=_get_embd_mdl(tenant_id, embd_id),
+        rerank_mdl=_get_rerank_mdl(tenant_id, rerank_id),
+    )
+
+
+# ── 6 个 MCP 工具（无 set_context，系统参数由 LLM 调用时传递） ──
 
 @mcp.tool()
 def hybrid_retrieve(
-    query: str,
-    image_topk: int = 50,
-    text_topk: int = 50,
-    keyword_topk: int = 50,
-    rrf_topk: int = 5,
-    rerank_topk: int = 3,
+    query: Annotated[str, Field(description="检索内容，应传入用户问题的核心内容")],
+    rerank_topk: Annotated[int, Field(default=3, description="最终返回结果数量", ge=1, le=5)],
+    tenant_ids: list[str] | None = None,
+    kb_ids: list[str] | None = None,
+    tenant_id: str = "",
+    embd_id: str = "",
+    rerank_id: str = "",
 ) -> dict:
-    """一键混合检索：三路并行检索 → RRF 融合 → 重排序。推荐的首选检索工具。"""
-    return get_executor()._tool_hybrid_retrieve(
-        query, image_topk, text_topk, keyword_topk, rrf_topk, rerank_topk,
+    """一键混合检索：三路并行检索（文本向量+图片向量+关键词） → RRF 融合 → 重排序。推荐的首选检索工具。"""
+    return _executor(tenant_id, embd_id, rerank_id)._tool_hybrid_retrieve(
+        query=query, rerank_topk=rerank_topk,
+        tenant_ids=tenant_ids or [], kb_ids=kb_ids or [],
     )
 
 
 @mcp.tool()
 def web_search(
-    query: str,
-    max_results: int = 5,
-    search_depth: str = "basic",
-    include_domains: list[str] | None = None,
-    exclude_domains: list[str] | None = None,
+    query: Annotated[str, Field(description="传入对应的搜索问题")],
+    max_results: Annotated[int, Field(default=5, description="返回结果数量。", ge=1, le=10)],
 ) -> dict:
-    """使用 Tavily API 进行联网搜索，获取互联网上的最新信息。适用于知识库未覆盖的时新话题。"""
-    return get_executor()._tool_web_search(
-        query, max_results, search_depth, include_domains, exclude_domains,
+    """联网搜索。使用 Tavily API 检索互联网最新信息。"""
+    return _executor()._tool_web_search(query, max_results)
+
+
+@mcp.tool()
+def get_adjacent_pages(
+    doc_id: Annotated[str, Field(description="文档 ID")],
+    page_num: Annotated[int, Field(description="当前页码")],
+    direction: Annotated[str, Field(default="both", description="翻页方向: both(上下), prev(前), next(后)")] = "both",
+    offset: Annotated[int, Field(default=1, description="偏移页数，默认取前后各 1 页")] = 1,
+    tenant_ids: list[str] | None = None,
+    kb_ids: list[str] | None = None,
+) -> dict:
+    """获取指定页面的相邻页面（前/后 N 页），用于扩展上下文、查看前后文。"""
+    return _executor()._tool_get_adjacent_pages(
+        doc_id, page_num, direction, offset,
+        tenant_ids=tenant_ids or [], kb_ids=kb_ids or [],
     )
 
 
 @mcp.tool()
-def get_adjacent_pages(doc_id: str, page_num: int, direction: str = "both", offset: int = 1) -> dict:
-    """获取指定页面的相邻页面（前/后 N 页），用于扩展上下文、查看前后文。"""
-    return get_executor()._tool_get_adjacent_pages(doc_id, page_num, direction, offset)
+def list_documents(
+    kb_ids: list[str] | None = None,
+) -> dict:
+    """列出当前助教所关联知识库中的所有文档。在需要了解有哪些课件、确定检索范围时优先调用。"""
+    return _executor()._tool_list_documents(kb_ids=kb_ids or [])
 
 
 @mcp.tool()
-def list_documents() -> dict:
-    """列出知识库中所有文档及其页数范围，用于了解知识库中有哪些课件、每个课件的页数。在需要回答'有哪些课件'或需要确定检索范围时优先调用。"""
-    return get_executor()._tool_list_documents()
+def get_full_page(
+    doc_id: Annotated[str, Field(description="文档 ID")],
+    page_num: Annotated[int, Field(description="页码")],
+    tenant_ids: list[str] | None = None,
+    kb_ids: list[str] | None = None,
+) -> dict:
+    """获取某一页的完整内容（全文 + 图片），不做截断。"""
+    return _executor()._tool_get_full_page(
+        doc_id, page_num, tenant_ids=tenant_ids or [], kb_ids=kb_ids or [],
+    )
 
 
 @mcp.tool()
-def get_full_page(doc_id: str, page_num: int) -> dict:
-    """获取某一页的完整内容（全文 + 图片），不做截断。当 hybrid_retrieve 返回的片段不够详细时，用此工具获取页面完整信息。参数: doc_id(文档ID), page_num(页码)"""
-    return get_executor()._tool_get_full_page(doc_id, page_num)
+def get_knowledge_structure(
+    doc_id: Annotated[str, Field(description="文档 ID")],
+) -> dict:
+    """获取课件的知识结构（思维导图 + 知识点层级），用于了解课件的知识框架、章节组织。"""
+    return _executor()._tool_get_knowledge_structure(doc_id)
 
 
-@mcp.tool()
-def get_knowledge_structure(doc_id: str) -> dict:
-    """获取课件的知识结构（思维导图 + 知识点层级），用于了解课件的知识框架、章节组织。当需要回答'XX课件包含哪些知识点'或'XX章节讲什么'时调用。参数: doc_id(文档ID)"""
-    return get_executor()._tool_get_knowledge_structure(doc_id)
-
-
-# ── 自定义 HTTP 路由 ─────────────────────────────────────────
+# ── 健康检查 ─────────────────────────────────────────────
 
 @mcp.custom_route(path="/health", methods=["GET"])
 async def health(request) -> JSONResponse:
-    """健康检查端点"""
-    try:
-        from rag.nlp.search import Dealer
-        dealer_status = "connected"
-    except Exception:
-        dealer_status = "disconnected"
-
-    return JSONResponse({
-        "status": "ok",
-        "dealer": dealer_status,
-        "framework": "FastMCP",
-    })
-
-
-@mcp.custom_route(path="/initialize", methods=["POST"])
-async def initialize(request) -> JSONResponse:
-    """初始化上下文：设置 tenant_ids、kb_ids，创建 LLM 模型实例"""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    tenant_ids = body.get("tenant_ids", [])
-    kb_ids = body.get("kb_ids", [])
-    embd_id = body.get("embd_id")
-    rerank_id = body.get("rerank_id")
-    chat_id = body.get("chat_id")
-
-    if isinstance(tenant_ids, str):
-        tenant_ids = [tenant_ids]
-    if isinstance(kb_ids, str):
-        kb_ids = [kb_ids]
-
-    _current_tenant_ids.set(tenant_ids)
-    _current_kb_ids.set(kb_ids)
-
-    try:
-        from api.db.services.llm_service import LLMBundle
-        from api.db import LLMType
-
-        if getattr(body, "tenant_id", None):
-            tenant_id_val = body["tenant_id"]
-        else:
-            tenant_id_val = tenant_ids[0] if tenant_ids else ""
-
-        # 重新初始化 executor，使用新的 LLM 配置
-        global _tool_executor
-        from rag.nlp.search import Dealer
-        from rag.utils.es_conn import ESConnection
-
-        doc_store = ESConnection()
-        dealer = Dealer(doc_store)
-        embd_mdl = LLMBundle(tenant_id_val, LLMType.EMBEDDING, embd_id) if embd_id else None
-        rerank_mdl = LLMBundle(tenant_id_val, LLMType.RERANK, rerank_id) if rerank_id else None
-        chat_mdl = LLMBundle(tenant_id_val, LLMType.CHAT, chat_id) if chat_id else None
-
-        _tool_executor = MCPToolExecutor(
-            dealer=dealer,
-            embd_mdl=embd_mdl,
-            rerank_mdl=rerank_mdl,
-            chat_mdl=chat_mdl,
-        )
-        _tool_executor.set_context(tenant_ids, kb_ids)
-
-        return JSONResponse({
-            "status": "ok",
-            "tenant_ids": tenant_ids,
-            "kb_ids": kb_ids,
-        })
-    except Exception as e:
-        logger.error(f"initialize error: {e}")
-        return JSONResponse({"status": "error", "message": str(e)})
+    return JSONResponse({"status": "ok", "framework": "FastMCP"})
