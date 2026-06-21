@@ -143,7 +143,7 @@ def extract_file_content(file_content_bytes, filename, content_type):
 # ============================================================
 
 MCP_SERVER_URL = "http://127.0.0.1:9390"
-AGENT_ENABLED = False  # Feature flag，可设置为 False 回退到旧版 chat()
+AGENT_ENABLED = True  # Feature flag，可设置为 False 回退到旧版 chat()
 
 
 def _should_use_agent(dia) -> bool:
@@ -161,7 +161,7 @@ def _should_use_agent(dia) -> bool:
         return False
     try:
         import requests
-        resp = requests.get(f"{MCP_SERVER_URL}/health", timeout=2,
+        resp = requests.get(f"{MCP_SERVER_URL}/health", timeout=10,
                            proxies={"http": None, "https": None})  # 绕过系统代理
         result = resp.json().get("status") in ("ok", "degraded")
         print(f"[AGENT] MCP health check: {resp.json()}, use_agent={result}")
@@ -195,11 +195,7 @@ def _stream_with_agent(dia, msg, conv, message_id, req):
     kb_ids = dia.kb_ids
     rerank_id = dia.rerank_id
 
-    agent = AgentLoop(
-        mcp_url=MCP_SERVER_URL,
-        chat_mdl=chat_mdl,
-        max_retrieval_turns=3,
-    )
+    agent = AgentLoop(mcp_url=MCP_SERVER_URL, chat_mdl=chat_mdl)
 
     for event in agent.run(
         question=question,

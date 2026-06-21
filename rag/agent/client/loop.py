@@ -18,30 +18,23 @@ from rag.agent.client.memory import MemoryManager
 
 logger = logging.getLogger("ragflow.agent.loop")
 
-REACT_SYSTEM_PROMPT = """你是 RAGFlow 智能助教。当学生问课程相关问题时，必须调用工具检索。简单问候闲聊可直接回答。工具列表中包含可用的检索工具。"""
+REACT_SYSTEM_PROMPT = """你是 灵机 智能助教。当学生问课程相关问题时，先用工具检索课件内容，检索到足够信息后立即回答，不要再继续翻页。简单问候闲聊直接回答，不调工具。"""
 
 
 class AgentLoop:
     """ReAct Agent: LLM 自主决策检索 vs. 回答"""
 
-    def __init__(
-        self,
-        mcp_url: str,
-        chat_mdl,
-        redis_conn=None,
-        conversation_id: str = "",
-        user_id: str = "",
-        max_retrieval_turns: int = 2,  # kept for backward compat, not used in ReAct
-    ):
+    def __init__(self, mcp_url: str, chat_mdl, redis_conn=None, conversation_id: str = "", user_id: str = ""):
         self.mcp_client = MCPClient(base_url=mcp_url)
         self.chat_mdl = chat_mdl
+        # TODO：记忆这里暂时没有实现，后续需要进行补充
         self.memory = MemoryManager(
             redis_conn=redis_conn,
             conversation_id=conversation_id,
             user_id=user_id,
         )
         # ReAct 安全阀：最多允许 LLM 调用工具多少次
-        self.max_tool_calls = 8
+        self.max_tool_calls = 10
 
     def run(
         self,
@@ -94,7 +87,7 @@ class AgentLoop:
 
         # 5. ReAct 循环
         for turn in range(self.max_tool_calls):
-            logger.info(f"ReAct Turn {turn + 1}")
+            logger.info(f"========== ReAct Turn {turn + 1}/{self.max_tool_calls} ==========")
 
             # 构建当前轮消息
             current_messages = list(messages)
@@ -113,6 +106,13 @@ class AgentLoop:
                 else:
                     current_messages.insert(0, {"role": "system", "content": REACT_SYSTEM_PROMPT})
 
+            # ── 日志：发送给 LLM 的消息 ──
+            logger.info(f"[AGENT_TRACE] Turn {turn+1} → LLM 输入:")
+            logger.info(f"  tools: {[t['function']['name'] for t in openai_tools]}")
+            for i, m in enumerate(current_messages):
+                content_preview = str(m.get('content', ''))[:200]
+                logger.info(f"  msg[{i}] role={m['role']} content_len={len(str(m.get('content','')))} preview={content_preview}")
+
             # 调用 LLM（带工具）
             try:
                 response = self.chat_mdl.chat_with_tools(
@@ -124,8 +124,12 @@ class AgentLoop:
                 logger.error(f"LLM 调用失败: {e}")
                 break
 
+            # ── 日志：LLM 返回结果 ──
             tool_calls = response.get("tool_calls") if isinstance(response, dict) else None
-            logger.info(f"  LLM response: content={str(response.get('content',''))[:100]}, tool_calls={bool(tool_calls)}, reasoning={str(response.get('reasoning_content',''))[:100]}")
+            logger.info(f"[AGENT_TRACE] Turn {turn+1} ← LLM 返回:")
+            logger.info(f"  content: {str(response.get('content',''))[:300]}")
+            logger.info(f"  reasoning_content: {str(response.get('reasoning_content',''))[:300]}")
+            logger.info(f"  tool_calls: {json.dumps(tool_calls, ensure_ascii=False)[:500] if tool_calls else 'None'}")
 
             if tool_calls:
                 # LLM 决定调用工具
@@ -139,7 +143,9 @@ class AgentLoop:
                         except json.JSONDecodeError:
                             args = {}
 
-                    logger.info(f"  LLM 调用工具: {tool_name}({json.dumps(args, ensure_ascii=False)[:100]})")
+                    # ── 日志：工具调用详情 ──
+                    logger.info(f"[AGENT_TRACE] Turn {turn+1} → 调用工具: {tool_name}")
+                    logger.info(f"  args: {json.dumps(args, ensure_ascii=False)}")
 
                     # 向前端发送工具调用开始事件（可视化推理过程）
                     tool_call_log += f"\n<tool_call name=\"{tool_name}\">\n"
@@ -147,7 +153,10 @@ class AgentLoop:
 
                     # 执行工具
                     result = self.mcp_client.call_tool(tool_name, args)
-                    logger.info(f"  Tool result for {tool_name}: total={result.get('total', '?')}, documents={result.get('documents', 'N/A')}, chunks={len(result.get('chunks', []))}, error={result.get('error', 'N/A')}")
+
+                    # ── 日志：工具返回结果 ──
+                    logger.info(f"[AGENT_TRACE] Turn {turn+1} ← 工具结果: {tool_name}")
+                    logger.info(f"  result: {json.dumps(result, ensure_ascii=False, default=str)[:2000]}")
 
                     # 记录检索结果
                     chunks = result.get("chunks", [])
@@ -180,6 +189,7 @@ class AgentLoop:
                 continue
 
             # LLM 返回了文本回答（无 tool_calls）→ 退出循环，生成答案
+            logger.info(f"[AGENT_TRACE] Turn {turn+1} LLM 决定直接回答，退出 ReAct 循环")
             break
 
         # 6. 流式生成最终答案
@@ -214,7 +224,7 @@ class AgentLoop:
             seen.add(pid)
             doc = p.get("docnm_kwd", "未知文档")
             page_num = p.get("page_num_int", "?")
-            content = p.get("content_with_weight", "")[:400]
+            content = p.get("content_with_weight", "")
             score = p.get("rerank_score") or p.get("rrf_score") or p.get("similarity") or 0.0
             parts.append(
                 f"[来源{i}] {doc} 第{page_num}页 (相关度:{score:.2f})\n{content}\n"
@@ -240,7 +250,7 @@ class AgentLoop:
             for i, c in enumerate(chunks[:5], 1):
                 title = c.get("title") or c.get("docnm_kwd", "")
                 url = c.get("url", "")
-                content = (c.get("content") or c.get("content_with_weight", ""))[:300]
+                content = (c.get("content") or c.get("content_with_weight", ""))
                 score = c.get("rerank_score") or c.get("rrf_score") or c.get("score") or c.get("similarity") or 0.0
                 page_num = c.get("page_num_int", "")
                 header = f"  [{i}] {title}"
@@ -251,7 +261,7 @@ class AgentLoop:
                 header += f"\n     相关性: {score:.2f}"
                 lines.append(header)
                 if content:
-                    lines.append(f"     {content[:200]}")
+                    lines.append(f"     {content}")
             return "\n".join(lines)
 
         # documents 格式（list_documents）
@@ -349,7 +359,7 @@ class AgentLoop:
             score = page.get("rerank_score") or page.get("rrf_score") or page.get("similarity") or 0.0
             chunks.append({
                 "chunk_id": page_id,
-                "content_with_weight": page.get("content_with_weight", "")[:300],
+                "content_with_weight": page.get("content_with_weight", ""),
                 "doc_id": page.get("doc_id", ""),
                 "docnm_kwd": page.get("docnm_kwd", ""),
                 "img_url": self._convert_minio_url(page.get("img_url", "")),

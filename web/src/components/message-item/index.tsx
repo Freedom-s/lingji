@@ -143,17 +143,7 @@ const MessageItem = ({
                     showLoudspeaker={showLoudspeaker}
                   ></AssistantGroupButton>
                 )
-              ) : (
-                <UserGroupButton
-                  content={item.content}
-                  messageId={item.id}
-                  removeMessageById={removeMessageById}
-                  regenerateMessage={
-                    regenerateMessage && handleRegenerateMessage
-                  }
-                  sendLoading={sendLoading}
-                ></UserGroupButton>
-              )}
+              ) : null}
 
               {/* <b>{isAssistant ? '' : nickname}</b> */}
             </Space>

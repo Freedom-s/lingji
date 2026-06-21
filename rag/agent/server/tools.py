@@ -486,7 +486,7 @@ class MCPToolExecutor:
                     "type": "page",
                     "title": r.get("title", ""),
                     "url": r.get("url", ""),
-                    "content": (r.get("content", "") or "")[:500],
+                    "content": (r.get("content", "") or ""),
                     "score": r.get("score", 0.0),
                 })
 

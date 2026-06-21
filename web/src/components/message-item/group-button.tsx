@@ -37,9 +37,6 @@ export const AssistantGroupButton = ({
   return (
     <>
       <Radio.Group size="small">
-        <Radio.Button value="a">
-          <CopyToClipboard text={content}></CopyToClipboard>
-        </Radio.Button>
         {prompt && (
           <Radio.Button value="e" onClick={showPromptModal}>
             <PromptIcon style={{ fontSize: '16px' }} />
