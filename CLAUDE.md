@@ -180,7 +180,31 @@ npm run dev
 
 Both `api/` and `management/server/` connect to the same `rag_flow` MySQL database. Full schema (27 tables) is documented in `docs/database_schema.md`.
 
-Connection: `localhost:5455`, user `root`, password `infini_rag_flow`, database `rag_flow`.
+配置来源为 `docker/.env`：
+
+| 服务 | Host | Port | User | Password | Database |
+|------|------|------|------|----------|----------|
+| MySQL | 127.0.0.1 (Docker内: mysql) | 5455 | root | infini_rag_flow | rag_flow |
+| Elasticsearch | 127.0.0.1 (Docker内: es01) | 1200 | elastic | infini_rag_flow | — |
+
+**连接命令：**
+
+MySQL（本地未安装 mysql 客户端，通过 Docker 容器执行）：
+```bash
+docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow -e "<SQL>"
+```
+
+Elasticsearch：
+```bash
+# 列出所有索引
+curl -s -u elastic:infini_rag_flow 'http://localhost:1200/_cat/indices?v'
+# 查看索引 mapping
+curl -s -u elastic:infini_rag_flow 'http://localhost:1200/<index>/_mapping'
+# 搜索文档
+curl -s -u elastic:infini_rag_flow 'http://localhost:1200/<index>/_search?size=5'
+```
+
+> **原则：当任务需要了解数据时，必须实际连接数据库查看表结构和数据，不要凭空猜测。**
 
 **Key tables for class-based access control:**
 - `class` — 班级
@@ -197,10 +221,17 @@ Connection: `localhost:5455`, user `root`, password `infini_rag_flow`, database 
 
 ### Storage Architecture
 
-- **Document Store**: Elasticsearch (default) or Infinity (`DOC_ENGINE` env var)
-- **Object Storage**: MinIO (default), with S3, Azure, and Alibaba OSS support
-- **Database**: MySQL (default) or PostgreSQL (peewee ORM for api/, mysql.connector for management/)
-- **Cache/Queue**: Redis for task queues and LLM caching
+| 服务 | Host | Port | User | Password |
+|------|------|------|------|----------|
+| **Document Store** (ES) | 127.0.0.1 (Docker内: es01) | 1200 | elastic | infini_rag_flow |
+| **Object Storage** (MinIO) | 127.0.0.1 (Docker内: minio) | API: 9000, Console: 9001 | rag_flow | infini_rag_flow |
+| **Database** (MySQL) | 127.0.0.1 (Docker内: mysql) | 5455 | root | infini_rag_flow |
+| **Cache/Queue** (Redis) | 127.0.0.1 (Docker内: redis) | 6379 | — | infini_rag_flow |
+
+- Document Store 可选 Infinity (`DOC_ENGINE` env var)
+- Object Storage 可选 S3, Azure, Alibaba OSS
+- Database 可选 PostgreSQL
+- MySQL: `api/` 用 Peewee ORM, `management/server/` 用 mysql.connector 原生 SQL
 
 ### LLM Integration
 
@@ -333,47 +364,3 @@ Max concurrent tasks controlled by `MAX_CONCURRENT_TASKS` environment variable.
 - `MINIO_VISIT_HOST`, `MINIO_PORT`: MinIO public endpoint
 
 ---
-
-## gstack
-
-This project uses [gstack](https://github.com/garrytan/gstack) for web browsing, QA testing, design review, and deployment workflows. Always use the `/browse` skill from gstack for all web browsing — never use `mcp__claude-in-chrome__*` tools.
-
-### Available gstack skills
-
-| Skill | Description |
-|-------|-------------|
-| `/browse` | Web browsing via headless browser |
-| `/connect-chrome` | Connect to an existing Chrome instance |
-| `/qa` | Full QA testing workflow |
-| `/qa-only` | QA testing without additional context |
-| `/review` | Code review workflow |
-| `/design-review` | Design review workflow |
-| `/design-consultation` | Design consultation |
-| `/design-shotgun` | Rapid design exploration |
-| `/design-html` | Generate HTML designs |
-| `/office-hours` | Office hours workflow |
-| `/plan-ceo-review` | Plan for CEO review |
-| `/plan-eng-review` | Plan for engineering review |
-| `/plan-design-review` | Plan for design review |
-| `/plan-devex-review` | Plan for developer experience review |
-| `/devex-review` | Developer experience review |
-| `/ship` | Ship/deploy workflow |
-| `/land-and-deploy` | Land changes and deploy |
-| `/canary` | Canary deployment |
-| `/benchmark` | Benchmarking |
-| `/codex` | Codex workflow |
-| `/cso` | CSO (Chief Security Officer) review |
-| `/autoplan` | Automated planning |
-| `/retro` | Retrospective workflow |
-| `/investigate` | Investigation workflow |
-| `/document-release` | Document a release |
-| `/document-generate` | Generate documentation |
-| `/setup-browser-cookies` | Set up browser cookies |
-| `/setup-deploy` | Set up deployment |
-| `/setup-gbrain` | Set up gbrain integration |
-| `/gstack-upgrade` | Upgrade gstack |
-| `/learn` | Learning workflow |
-| `/careful` | Careful/cautious mode |
-| `/freeze` | Freeze changes |
-| `/guard` | Guard mode |
-| `/unfreeze` | Unfreeze changes |
