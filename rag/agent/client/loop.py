@@ -369,7 +369,7 @@ class AgentLoop:
             score = page.get("rerank_score") or page.get("rrf_score") or page.get("similarity") or 0.0
             chunks.append({
                 "chunk_id": page_id,
-                "content_with_weight": page.get("content_with_weight", ""),
+                "content_with_weight": page.get("full_content", ""),
                 "doc_id": page.get("doc_id", ""),
                 "docnm_kwd": page.get("docnm_kwd", ""),
                 "img_url": self._convert_minio_url(page.get("img_url", "")),

@@ -4,24 +4,12 @@ Agent + MCP Architecture for RAGFlow-Plus
 MCP (Model Context Protocol) Server running on port 9390.
 Provides page-level multi-modal retrieval tools for Agent-driven RAG.
 
-Architecture:
-    User Question -> Planner -> MCP Server -> MCPToolExecutor -> ES
-                                                      |
-                                              Observer evaluates quality
-                                                      |
-                                              Reflector replans if needed
-                                                      |
-                                              Generator streams answer
-
 Components:
-    - MCPToolExecutor: executes 8 retrieval tools against ES
-    - MCPServer (FastMCP): exposes tools via SSE on port 9390
-    - MCPClient: wraps fastmcp.Client for sync agent usage
-    - AgentLoop: ReAct-style agent loop (plan -> execute -> observe -> generate)
-    - Planner: LLM function calling to decide retrieval strategy
-    - Observer: evaluates retrieval quality
-    - MemoryManager: 3-tier memory (working / short-term / long-term)
+    - MCPToolExecutor: 12 个内部检索方法，对外暴露 6 个工具
+    - MCPServer (FastMCP): 通过 SSE 在端口 9390 暴露工具
+    - MCPClient: FastMCP 客户端封装，供 AgentLoop 调用
+    - AgentLoop: ReAct 风格 Agent，LLM 自主决策检索 vs 回答
 
 Start MCP Server:
-    python -m rag.agent.mcp_server_run
+    python -m rag.agent.server.run
 """
