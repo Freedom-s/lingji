@@ -1,6 +1,129 @@
+/* ============================================
+   UserSetting Sidebar — 设置侧边栏
+   ============================================ */
+
 .sideBarWrapper {
-  padding-top: 32px;
-  .version {
-    color: rgb(17, 206, 17);
+  flex-shrink: 0;
+  width: 280px;
+  padding: 32px 0 0 0;
+  border-right: 1px solid rgba(226, 232, 240, 0.7);
+  background: rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(10px);
+}
+
+.sideBarWrapperDark {
+  border-right-color: rgba(148, 163, 184, 0.1);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+/* Sidebar header */
+.sidebarHeader {
+  padding: 0 24px 24px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.sidebarHeaderDark {
+  border-bottom-color: rgba(148, 163, 184, 0.1);
+}
+
+.sidebarEyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #14b8a6;
+  margin-bottom: 8px;
+}
+
+.sidebarTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.sidebarTitleDark {
+  color: #f8fafc;
+}
+
+/* ── Menu ── */
+
+.menu {
+  background: transparent !important;
+  border-inline-end: none !important;
+  padding: 0 12px;
+
+  :global {
+    .ant-menu-item {
+      height: 48px;
+      line-height: 48px;
+      margin: 2px 0;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #475569;
+      padding-left: 16px !important;
+      transition: all 0.18s ease;
+
+      &:hover {
+        color: #2563eb !important;
+        background: rgba(37, 99, 235, 0.06) !important;
+      }
+    }
+
+    .ant-menu-item-selected {
+      color: #2563eb !important;
+      background: rgba(37, 99, 235, 0.08) !important;
+
+      &::after {
+        border-inline-end-color: transparent !important;
+      }
+    }
+
+    .ant-menu-item .anticon {
+      font-size: 18px;
+    }
+
+    .ant-menu-item:last-child {
+      color: #ef4444;
+
+      &:hover {
+        color: #dc2626 !important;
+        background: rgba(239, 68, 68, 0.06) !important;
+      }
+    }
   }
+}
+
+.menuDark {
+  :global {
+    .ant-menu-item {
+      color: #94a3b8;
+
+      &:hover {
+        color: #93bbfd !important;
+        background: rgba(96, 165, 250, 0.08) !important;
+      }
+    }
+
+    .ant-menu-item-selected {
+      color: #93bbfd !important;
+      background: rgba(96, 165, 250, 0.1) !important;
+    }
+
+    .ant-menu-item:last-child {
+      color: #f87171;
+
+      &:hover {
+        color: #ef4444 !important;
+        background: rgba(248, 113, 113, 0.08) !important;
+      }
+    }
+  }
+}
+
+.version {
+  color: rgb(17, 206, 17);
 }

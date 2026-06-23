@@ -2,8 +2,10 @@ import {
   useFetchUserInfo,
   useListTenantUser,
 } from '@/hooks/user-setting-hooks';
-import { Button, Card, Flex, Space } from 'antd';
+import { Button, Card, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/components/theme-provider';
+import classNames from 'classnames';
 
 import { TeamOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import AddingUserModal from './add-user-modal';
@@ -12,11 +14,11 @@ import styles from './index.less';
 import TenantTable from './tenant-table';
 import UserTable from './user-table';
 
-const iconStyle = { fontSize: 20, color: '#1677ff' };
-
 const UserSettingTeam = () => {
   const { data: userInfo } = useFetchUserInfo();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   useListTenantUser();
   const {
     addingTenantModalVisible,
@@ -27,43 +29,60 @@ const UserSettingTeam = () => {
 
   return (
     <div className={styles.teamWrapper}>
-      <Card className={styles.teamCard}>
-        <Flex align="center" justify={'space-between'}>
-          <span>
+      {/* Workspace Card */}
+      <Card
+        className={classNames(styles.workspaceCard, { [styles.workspaceCardDark]: isDark })}
+        bordered={false}
+      >
+        <div className={styles.workspaceRow}>
+          <span className={classNames(styles.workspaceName, { [styles.workspaceNameDark]: isDark })}>
             {userInfo.nickname} {t('setting.workspace')}
           </span>
-          <Button type="primary" onClick={showAddingTenantModal}>
-            <UserAddOutlined />
+          <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            onClick={showAddingTenantModal}
+            className={styles.inviteButton}
+          >
             {t('setting.invite')}
           </Button>
-        </Flex>
+        </div>
       </Card>
+
+      {/* Team Members Card */}
       <Card
+        className={classNames(styles.sectionCard, { [styles.sectionCardDark]: isDark })}
         title={
           <Space>
-            <UserOutlined style={iconStyle} /> {t('setting.teamMembers')}
+            <UserOutlined className={classNames(styles.sectionIcon, { [styles.sectionIconDark]: isDark })} />
+            {t('setting.teamMembers')}
           </Space>
         }
         bordered={false}
       >
-        <UserTable></UserTable>
+        <UserTable />
       </Card>
+
+      {/* Joined Teams Card */}
       <Card
+        className={classNames(styles.sectionCard, { [styles.sectionCardDark]: isDark })}
         title={
           <Space>
-            <TeamOutlined style={iconStyle} /> {t('setting.joinedTeams')}
+            <TeamOutlined className={classNames(styles.sectionIcon, { [styles.sectionIconDark]: isDark })} />
+            {t('setting.joinedTeams')}
           </Space>
         }
         bordered={false}
       >
-        <TenantTable></TenantTable>
+        <TenantTable />
       </Card>
+
       {addingTenantModalVisible && (
         <AddingUserModal
           visible
           hideModal={hideAddingTenantModal}
           onOk={handleAddUserOk}
-        ></AddingUserModal>
+        />
       )}
     </div>
   );

@@ -60,7 +60,7 @@ export default {
       review: '來自 500 多條評論',
     },
     header: {
-      knowledgeBase: '知識庫',
+      knowledgeBase: '教學資料',
       chat: '聊天',
       register: '註冊',
       signin: '登入',

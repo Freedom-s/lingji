@@ -283,9 +283,21 @@ const CoursewarePanel = ({
             type="text"
             size="large"
           />
-          <Text className={styles.pageIndicator}>
-            第 {currentPage} / {totalPages} 页
-          </Text>
+          <Select
+            className={styles.pageSelector}
+            value={currentPage}
+            onChange={(value) => onPageChange(value)}
+            options={Array.from({ length: totalPages }, (_, i) => ({
+              label: `第 ${i + 1} 页`,
+              value: i + 1,
+            }))}
+            showSearch
+            filterOption={(input, option) =>
+              String(option?.value).includes(input)
+            }
+            size="small"
+            popupMatchSelectWidth={false}
+          />
           <Button
             icon={<RightOutlined />}
             onClick={handleNextPage}

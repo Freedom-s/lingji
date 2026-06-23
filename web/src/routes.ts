@@ -43,7 +43,7 @@ const routes = [
     layout: false,
     wrappers: ['@/wrappers/auth'],
     routes: [
-      { path: '/', redirect: '/login' },
+      { path: '/', redirect: '/teaching-assistant' },
       {
         path: '/knowledge',
         component: '@/pages/knowledge',

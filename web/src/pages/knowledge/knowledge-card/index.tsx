@@ -5,50 +5,25 @@ import {
   CalendarOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
-import { Badge, Card, Space } from 'antd';
+import { Card } from 'antd';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'umi';
 
-// import OperateDropdown from '@/components/operate-dropdown';
 import { useTheme } from '@/components/theme-provider';
-// import { useDeleteKnowledge } from '@/hooks/knowledge-hooks';
-import { useFetchUserInfo } from '@/hooks/user-setting-hooks';
 import kbIcon from '@/assets/svg/kb.svg';
 import styles from './index.less';
 
-interface AvatarImageProps {
-  src: string;
-  size: number;
-}
-
-const AvatarImage = ({ src, size }: AvatarImageProps) => (
-  <img
-    src={src}
-    alt=""
-    style={{
-      width: size,
-      height: size,
-      borderRadius: '12px',
-      objectFit: 'cover',
-    }}
-  />
-);
-
 interface IProps {
   item: IKnowledge;
+  index?: number;
 }
 
-const KnowledgeCard = ({ item }: IProps) => {
+const KnowledgeCard = ({ item, index = 0 }: IProps) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { data: userInfo } = useFetchUserInfo();
   const { theme } = useTheme();
-  // const { deleteKnowledge } = useDeleteKnowledge();
-
-  // const removeKnowledge = async () => {
-  //   return deleteKnowledge(item.id);
-  // };
+  const isDark = theme === 'dark';
 
   const handleCardClick = () => {
     navigate(`/knowledge/${KnowledgeRouteKey.Dataset}?id=${item.id}`, {
@@ -56,74 +31,54 @@ const KnowledgeCard = ({ item }: IProps) => {
     });
   };
 
+  const isTeam = item.permission === 'team';
+
   return (
-    <Badge.Ribbon
-      text={item?.nickname}
-      color={userInfo?.nickname === item?.nickname ? '#1677ff' : 'pink'}
-      className={classNames(styles.ribbon, {
-        [styles.hideRibbon]: item.permission !== 'team',
-      })}
+    <Card
+      className={classNames(styles.card, { [styles.dark]: isDark })}
+      onClick={handleCardClick}
+      style={{ '--reveal-delay': `${index * 0.06}s` } as React.CSSProperties}
     >
-      <Card className={styles.card} onClick={handleCardClick}>
-        <div className={styles.container}>
-          <div className={styles.content}>
-            <AvatarImage size={64} src={item.avatar || kbIcon} />
-            {/* <OperateDropdown deleteItem={removeKnowledge}></OperateDropdown> */}
-          </div>
-          <div className={styles.titleWrapper}>
-            <span
-              className={theme === 'dark' ? styles.titledark : styles.title}
-            >
-              {item.name}
-            </span>
-            <p
-              className={
-                theme === 'dark' ? styles.descriptiondark : styles.description
-              }
-            >
-              {item.description || '暂无描述'}
-            </p>
-          </div>
-          <div className={styles.footer}>
-            <div className={styles.footerTop}>
-              <div className={styles.bottomLeft}>
-                <FileTextOutlined className={styles.leftIcon} />
-                <span className={styles.rightText}>
-                  <Space>
-                    {item.doc_num}
-                    {t('knowledgeList.doc')}
-                  </Space>
-                </span>
-              </div>
-            </div>
-            <div className={styles.bottom}>
-              <div className={styles.bottomLeft}>
-                <CalendarOutlined className={styles.leftIcon} />
-                <span className={styles.rightText}>
-                  {formatDate(item.update_time)}
-                </span>
-              </div>
-              {/* <Avatar.Group size={25}>
-                <Avatar src="https://api.dicebear.com/7.x/miniavs/svg?seed=1" />
-                <a href="https://ant.design">
-                  <Avatar style={{ backgroundColor: '#f56a00' }}>K</Avatar>
-                </a>
-                <Tooltip title="Ant User" placement="top">
-                  <Avatar
-                    style={{ backgroundColor: '#87d068' }}
-                    icon={<UserOutlined />}
-                  />
-                </Tooltip>
-                <Avatar
-                  style={{ backgroundColor: '#1677ff' }}
-                  icon={<AntDesignOutlined />}
-                />
-              </Avatar.Group> */}
-            </div>
-          </div>
+      {/* Top Row: Icon + Permission Badge */}
+      <div className={styles.topRow}>
+        <div className={styles.iconWrap}>
+          <img src={item.avatar || kbIcon} alt="" />
         </div>
-      </Card>
-    </Badge.Ribbon>
+        {isTeam && (
+          <span className={classNames(styles.permissionBadge, styles.permissionTeam)}>
+            {t('knowledgeList.team', { defaultValue: '团队' })}
+          </span>
+        )}
+        {!isTeam && (
+          <span className={classNames(styles.permissionBadge, styles.permissionPersonal)}>
+            {t('knowledgeList.personal', { defaultValue: '个人' })}
+          </span>
+        )}
+      </div>
+
+      {/* Title & Description */}
+      <div className={styles.titleWrapper}>
+        <h3 className={classNames(styles.name, { [styles.nameDark]: isDark })}>
+          {item.name}
+        </h3>
+        <p className={styles.desc}>
+          {item.description || t('knowledgeList.noDescription', { defaultValue: '暂无描述' })}
+        </p>
+      </div>
+
+      {/* Footer Stats */}
+      <div className={styles.footer}>
+        <span className={styles.statPill}>
+          <FileTextOutlined className={styles.statIcon} />
+          <span className={styles.statValue}>{item.doc_num}</span>
+          <span>{t('knowledgeList.doc')}</span>
+        </span>
+        <span className={styles.statPill}>
+          <CalendarOutlined className={styles.statIcon} />
+          <span>{formatDate(item.update_time)}</span>
+        </span>
+      </div>
+    </Card>
   );
 };
 

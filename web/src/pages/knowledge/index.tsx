@@ -1,12 +1,13 @@
 import { useInfiniteFetchKnowledgeList } from '@/hooks/knowledge-hooks';
 import { useFetchUserInfo } from '@/hooks/user-setting-hooks';
 import { SearchOutlined } from '@ant-design/icons';
-import { Divider, Empty, Flex, Input, Skeleton, Space, Spin } from 'antd';
+import { Empty, Input, Skeleton, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { useSaveKnowledge } from './hooks';
 import KnowledgeCard from './knowledge-card';
 import KnowledgeCreatingModal from './knowledge-creating-modal';
+import { useTheme } from '@/components/theme-provider';
 
 import { useMemo } from 'react';
 import styles from './index.less';
@@ -14,6 +15,8 @@ import styles from './index.less';
 const KnowledgeList = () => {
   const { data: userInfo } = useFetchUserInfo();
   const { t } = useTranslation('translation', { keyPrefix: 'knowledgeList' });
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const {
     visible,
     hideModal,
@@ -40,61 +43,72 @@ const KnowledgeList = () => {
   }, [data?.pages]);
 
   return (
-    <Flex className={styles.knowledge} vertical flex={1} id="scrollableDiv">
-      <div className={styles.topWrapper}>
-        <div>
-          <span className={styles.title}>
-            {t('welcome')}, {userInfo.nickname}
-          </span>
-          <p className={styles.description}>{t('description')}</p>
-        </div>
-        <Space size={'large'}>
-          <Input
-            placeholder={t('searchKnowledgePlaceholder')}
-            value={searchString}
-            style={{ width: 220 }}
-            allowClear
-            onChange={handleInputChange}
-            prefix={<SearchOutlined />}
-          />
-        </Space>
-      </div>
+    <div className={`${styles.page} ${isDark ? styles.pageDark : ''}`} id="scrollableDiv">
       <Spin spinning={loading}>
-        <InfiniteScroll
-          dataLength={nextList?.length ?? 0}
-          next={fetchNextPage}
-          hasMore={hasNextPage}
-          loader={<Skeleton avatar paragraph={{ rows: 1 }} active />}
-          endMessage={!!total && <Divider plain>{t('noMoreData')} 🤐</Divider>}
-          scrollableTarget="scrollableDiv"
-        >
-          <Flex
-            gap={'large'}
-            wrap="wrap"
-            className={styles.knowledgeCardContainer}
+        <div className={styles.pageInner}>
+          {/* Section Header */}
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionHeaderText}>
+              <div className={styles.sectionEyebrow}>{t('knowledgeBase', { defaultValue: '知识库' })}</div>
+              <h2 className={`${styles.sectionTitle} ${isDark ? styles.sectionTitleDark : ''}`}>
+                {t('welcome')}, {userInfo.nickname}
+              </h2>
+              <p className={styles.sectionDesc}>{t('description')}</p>
+            </div>
+            <div className={`${styles.searchBox} ${isDark ? styles.searchBoxDark : ''}`}>
+              <SearchOutlined className={styles.searchIcon} />
+              <Input
+                placeholder={t('searchKnowledgePlaceholder')}
+                value={searchString}
+                onChange={handleInputChange}
+                bordered={false}
+                style={{ height: 48 }}
+              />
+            </div>
+          </div>
+
+          {/* Card Grid with Infinite Scroll */}
+          <InfiniteScroll
+            dataLength={nextList?.length ?? 0}
+            next={fetchNextPage}
+            hasMore={hasNextPage}
+            loader={<Skeleton avatar paragraph={{ rows: 1 }} active />}
+            endMessage={null}
+            scrollableTarget="scrollableDiv"
+            className={styles.scrollContainer}
           >
             {nextList?.length > 0 ? (
-              nextList.map((item: any, index: number) => {
-                return (
-                  <KnowledgeCard
-                    item={item}
-                    key={`${item?.name}-${index}`}
-                  ></KnowledgeCard>
-                );
-              })
+              <div className={styles.cardGrid}>
+                {nextList.map((item: any, index: number) => {
+                  return (
+                    <KnowledgeCard
+                      item={item}
+                      key={`${item?.name}-${index}`}
+                      index={index}
+                    />
+                  );
+                })}
+              </div>
             ) : (
-              <Empty className={styles.knowledgeEmpty}></Empty>
+              !loading && (
+                <div className={`${styles.emptyState} ${isDark ? styles.emptyStateDark : ''}`}>
+                  <div className={styles.emptyEyebrow}>
+                    {t('noKnowledge', { defaultValue: '空空如也' })}
+                  </div>
+                  <Empty description={t('noKnowledgeDesc', { defaultValue: '还没有知识库，去创建一个吧' })} />
+                </div>
+              )
             )}
-          </Flex>
-        </InfiniteScroll>
+          </InfiniteScroll>
+        </div>
+        <KnowledgeCreatingModal
+          loading={creatingLoading}
+          visible={visible}
+          hideModal={hideModal}
+          onOk={onCreateOk}
+        />
       </Spin>
-      <KnowledgeCreatingModal
-        loading={creatingLoading}
-        visible={visible}
-        hideModal={hideModal}
-        onOk={onCreateOk}
-      ></KnowledgeCreatingModal>
-    </Flex>
+    </div>
   );
 };
 

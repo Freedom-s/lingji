@@ -2,14 +2,37 @@
   display: flex;
   align-items: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  padding: 4px 12px 4px 16px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: all 0.2s ease;
+  user-select: none;
 
   &:hover {
-    opacity: 0.7;
+    background: rgba(37, 99, 235, 0.04);
+    border-color: rgba(37, 99, 235, 0.12);
   }
 }
 
 .nickname {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  color: #1e293b;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dark mode */
+:global([data-theme='dark']) {
+  .nickname {
+    color: #e2e8f0;
+  }
+
+  .userWrapper:hover {
+    background: rgba(96, 165, 250, 0.08);
+    border-color: rgba(96, 165, 250, 0.16);
+  }
 }

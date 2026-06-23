@@ -25,7 +25,10 @@ from api.utils import (
 from api.db import UserTenantRole, FileType
 from api import settings
 from api.db.services.user_service import UserService, TenantService, UserTenantService
+from api.db.services.user_class_service import UserClassService
+from api.db.services.class_dialog_service import ClassDialogService
 from api.db.services.file_service import FileService
+from api.db.db_models import Class
 from api.utils.api_utils import get_json_result, construct_response
 
 
@@ -661,5 +664,66 @@ def set_tenant_info():
         tid = req.pop("tenant_id")
         TenantService.update_by_id(tid, req)
         return get_json_result(data=True)
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route("/my_class", methods=["GET"])  # noqa: F821
+@login_required
+def my_class():
+    """
+    Get current user's class information with members.
+    ---
+    tags:
+      - User
+    security:
+      - ApiKeyAuth: []
+    responses:
+      200:
+        description: Class information with members retrieved successfully.
+        schema:
+          type: object
+    """
+    try:
+        user_classes = UserClassService.get_by_user(current_user.id, status="1")
+        if not user_classes:
+            return get_json_result(data={"has_class": False, "class_info": None, "members": []})
+
+        # Take the first class (user belongs to one class in this scenario)
+        uc = user_classes[0]
+
+        # Get class info
+        try:
+            class_info = Class.select().where(Class.id == uc.class_id).get()
+        except Class.DoesNotExist:
+            return get_json_result(data={"has_class": False, "class_info": None, "members": []})
+
+        # Get all members (teachers and students) in this class
+        members_data = UserClassService.get_by_class(uc.class_id, status="1")
+
+        members = []
+        for m in members_data:
+            try:
+                user = UserService.query(id=m.user_id)
+                if user:
+                    members.append({
+                        "user_id": user[0].id,
+                        "nickname": user[0].nickname,
+                        "email": user[0].email,
+                        "avatar": user[0].avatar or "",
+                        "role": m.role,  # teacher or student
+                    })
+            except Exception:
+                pass
+
+        return get_json_result(data={
+            "has_class": True,
+            "class_info": {
+                "id": class_info.id,
+                "name": class_info.name,
+                "description": class_info.description or "",
+            },
+            "members": members,
+        })
     except Exception as e:
         return server_error_response(e)

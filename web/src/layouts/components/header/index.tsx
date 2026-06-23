@@ -37,8 +37,8 @@ const RagHeader = () => {
   );
 
   const currentPath = useMemo(() => {
-    // 如果是聊天页面，激活助教菜单
-    if (pathname.startsWith('/chat')) {
+    // 聊天和学习页面都属于助教
+    if (pathname.startsWith('/chat') || pathname.startsWith('/learning')) {
       return t('teachingAssistant');
     }
     return (
@@ -56,7 +56,7 @@ const RagHeader = () => {
   );
 
   const handleLogoClick = useCallback(() => {
-    navigate('/');
+    navigate('/teaching-assistant');
   }, [navigate]);
 
   return (

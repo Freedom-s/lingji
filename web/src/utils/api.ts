@@ -15,6 +15,9 @@ export default {
   tenant_info: `${api_host}/user/tenant_info`,
   set_tenant_info: `${api_host}/user/set_tenant_info`,
 
+  // class
+  myClass: `${api_host}/user/my_class`,
+
   // team
   addTenantUser: (tenantId: string) => `${api_host}/tenant/${tenantId}/user`,
   listTenantUser: (tenantId: string) =>

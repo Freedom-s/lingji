@@ -48,7 +48,7 @@ const LearningPage = () => {
     },
   });
 
-  // Set conversationId in URL AFTER data arrives (once)
+  // Always start a new conversation when entering the learning page
   const hasSetConversation = useRef(false);
   const { conversationId: urlConversationId, isNew: urlIsNew } = useGetChatSearchParams();
   useEffect(() => {
@@ -56,12 +56,8 @@ const LearningPage = () => {
 
     if (!urlConversationId && !urlIsNew) {
       const newParams = new URLSearchParams(window.location.search);
-      if (conversations.length > 0) {
-        newParams.set(ChatSearchParams.ConversationId, conversations[0].id);
-      } else {
-        newParams.set(ChatSearchParams.ConversationId, getConversationId());
-        newParams.set(ChatSearchParams.isNew, 'true');
-      }
+      newParams.set(ChatSearchParams.ConversationId, getConversationId());
+      newParams.set(ChatSearchParams.isNew, 'true');
       setSearchParams(newParams.toString());
     }
     hasSetConversation.current = true;
@@ -73,6 +69,13 @@ const LearningPage = () => {
 
   // Fetch page chunks for selected document
   const { pages, totalPages, loading: pageLoading } = useFetchChunksForViewer(docId);
+
+  // Auto-select first document
+  useEffect(() => {
+    if (!docId && !docListLoading && documentList.length > 0) {
+      setDocId(documentList[0].id);
+    }
+  }, [docId, docListLoading, documentList, setDocId]);
 
   useEffect(() => {
     setCurrentPage(1);

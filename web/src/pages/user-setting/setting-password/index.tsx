@@ -1,6 +1,8 @@
 import { useSaveSetting } from '@/hooks/user-setting-hooks';
 import { rsaPsw } from '@/utils';
-import { Button, Divider, Form, Input, Space } from 'antd';
+import { Button, Divider, Form, Input } from 'antd';
+import { useTheme } from '@/components/theme-provider';
+import classNames from 'classnames';
 import SettingTitle from '../components/setting-title';
 import { useValidateSubmittable } from '../hooks';
 
@@ -13,14 +15,12 @@ type FieldType = {
   confirm_password?: string;
 };
 
-const tailLayout = {
-  wrapperCol: { offset: 20, span: 4 },
-};
-
 const UserSettingPassword = () => {
   const { form, submittable } = useValidateSubmittable();
   const { saveSetting, loading } = useSaveSetting();
   const { t } = useTranslate('setting');
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   const onFinish = (values: any) => {
     const password = rsaPsw(values.password) as string;
@@ -38,86 +38,78 @@ const UserSettingPassword = () => {
       <SettingTitle
         title={t('password')}
         description={t('passwordDescription')}
-      ></SettingTitle>
-      <Divider />
-      <Form
-        colon={false}
-        name="basic"
-        labelAlign={'left'}
-        labelCol={{ span: 8 }}
-        wrapperCol={{ span: 16 }}
-        style={{ width: '100%' }}
-        initialValues={{ remember: true }}
-        onFinish={onFinish}
-        onFinishFailed={onFinishFailed}
-        form={form}
-        autoComplete="off"
-        // requiredMark={'optional'}
-      >
-        <Form.Item<FieldType>
-          label={t('currentPassword')}
-          name="password"
-          rules={[
-            {
-              required: true,
-              message: t('currentPasswordMessage'),
-              whitespace: true,
-            },
-          ]}
+      />
+      <div className={classNames(styles.passwordCard, { [styles.passwordCardDark]: isDark })}>
+        <Form
+          colon={false}
+          name="basic"
+          labelAlign="left"
+          labelCol={{ span: 6 }}
+          wrapperCol={{ span: 18 }}
+          style={{ width: '100%' }}
+          initialValues={{ remember: true }}
+          onFinish={onFinish}
+          onFinishFailed={onFinishFailed}
+          form={form}
+          autoComplete="off"
         >
-          <Input.Password />
-        </Form.Item>
-        <Divider />
-        <Form.Item label={t('newPassword')} required>
           <Form.Item<FieldType>
-            noStyle
-            name="new_password"
+            label={t('currentPassword')}
+            name="password"
             rules={[
               {
                 required: true,
-                message: t('newPasswordMessage'),
+                message: t('currentPasswordMessage'),
                 whitespace: true,
               },
-              { type: 'string', min: 8, message: t('newPasswordDescription') },
             ]}
           >
             <Input.Password />
           </Form.Item>
-        </Form.Item>
-        <Divider />
-        <Form.Item<FieldType>
-          label={t('confirmPassword')}
-          name="confirm_password"
-          dependencies={['new_password']}
-          rules={[
-            {
-              required: true,
-              message: t('confirmPasswordMessage'),
-              whitespace: true,
-            },
-            { type: 'string', min: 8, message: t('newPasswordDescription') },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('new_password') === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(
-                  new Error(t('confirmPasswordNonMatchMessage')),
-                );
+          <Divider className={styles.sectionDivider} />
+          <Form.Item label={t('newPassword')} required>
+            <Form.Item<FieldType>
+              noStyle
+              name="new_password"
+              rules={[
+                {
+                  required: true,
+                  message: t('newPasswordMessage'),
+                  whitespace: true,
+                },
+                { type: 'string', min: 8, message: t('newPasswordDescription') },
+              ]}
+            >
+              <Input.Password />
+            </Form.Item>
+          </Form.Item>
+          <Divider className={styles.sectionDivider} />
+          <Form.Item<FieldType>
+            label={t('confirmPassword')}
+            name="confirm_password"
+            dependencies={['new_password']}
+            rules={[
+              {
+                required: true,
+                message: t('confirmPasswordMessage'),
+                whitespace: true,
               },
-            }),
-          ]}
-        >
-          <Input.Password />
-        </Form.Item>
-        <Divider />
-        <Form.Item
-          {...tailLayout}
-          shouldUpdate={(prevValues, curValues) =>
-            prevValues.additional !== curValues.additional
-          }
-        >
-          <Space>
+              { type: 'string', min: 8, message: t('newPasswordDescription') },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('new_password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(
+                    new Error(t('confirmPasswordNonMatchMessage')),
+                  );
+                },
+              }),
+            ]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <div className={styles.actionRow}>
             <Button htmlType="button">{t('cancel')}</Button>
             <Button
               type="primary"
@@ -127,9 +119,9 @@ const UserSettingPassword = () => {
             >
               {t('save', { keyPrefix: 'common' })}
             </Button>
-          </Space>
-        </Form.Item>
-      </Form>
+          </div>
+        </Form>
+      </div>
     </section>
   );
 };

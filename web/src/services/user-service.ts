@@ -124,4 +124,6 @@ export const listTenant = () => request.get(api.listTenant);
 export const agreeTenant = (tenantId: string) =>
   request.put(api.agreeTenant(tenantId));
 
+export const fetchMyClass = () => request.get(api.myClass);
+
 export default userService;

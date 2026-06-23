@@ -1,7 +1,87 @@
+/* ============================================
+   Profile Settings — 个人信息
+   ============================================ */
+
 .profileWrapper {
   width: 100%;
-  .emailDescription {
-    padding: 10px 0;
-    margin: 0;
+  max-width: 720px;
+}
+
+.profileCard {
+  border-radius: 24px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), #ffffff 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.86) inset,
+    0 16px 36px rgba(37, 99, 235, 0.05);
+  padding: 32px;
+  backdrop-filter: blur(14px);
+}
+
+.profileCardDark {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(14, 24, 40, 0.96), rgba(9, 18, 32, 0.96) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Form section dividers */
+.sectionDivider {
+  margin: 20px 0;
+  border-color: rgba(226, 232, 240, 0.6);
+}
+
+/* Avatar upload area */
+.avatarUpload {
+  :global {
+    .ant-upload-select {
+      border-radius: 18px !important;
+      border: 2px dashed rgba(37, 99, 235, 0.2) !important;
+      background: rgba(37, 99, 235, 0.03) !important;
+      transition: border-color 0.2s, background 0.2s;
+
+      &:hover {
+        border-color: rgba(37, 99, 235, 0.4) !important;
+        background: rgba(37, 99, 235, 0.06) !important;
+      }
+    }
   }
+}
+
+/* Action buttons */
+.actionRow {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 8px;
+
+  :global {
+    .ant-btn-default {
+      border-radius: 14px;
+      height: 42px;
+      font-weight: 600;
+      border-color: rgba(226, 232, 240, 0.86);
+      color: #64748b;
+
+      &:hover {
+        border-color: #cbd5e1;
+        color: #475569;
+      }
+    }
+
+    .ant-btn-primary {
+      border-radius: 14px;
+      height: 42px;
+      font-weight: 600;
+    }
+  }
+}
+
+.emailDescription {
+  padding: 6px 0 0;
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
 }

@@ -11,15 +11,15 @@ import {
   Divider,
   Form,
   Input,
-  Space,
   Spin,
   Upload,
   UploadFile,
 } from 'antd';
 import { useEffect } from 'react';
+import { useTheme } from '@/components/theme-provider';
+import classNames from 'classnames';
 import SettingTitle from '../components/setting-title';
 import { useValidateSubmittable } from '../hooks';
-import parentStyles from '../index.less';
 import styles from './index.less';
 
 type FieldType = {
@@ -28,15 +28,13 @@ type FieldType = {
   avatar?: string;
 };
 
-const tailLayout = {
-  wrapperCol: { offset: 20, span: 4 },
-};
-
 const UserSettingProfile = () => {
   const { data: userInfo, loading } = useFetchUserInfo();
   const { saveSetting, loading: submitLoading } = useSaveSetting();
   const { form, submittable } = useValidateSubmittable();
   const { t } = useTranslate('setting');
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   const onFinish = async (values: any) => {
     const avatar = await getBase64FromUploadFileList(values.avatar);
@@ -57,80 +55,71 @@ const UserSettingProfile = () => {
       <SettingTitle
         title={t('profile')}
         description={t('profileDescription')}
-      ></SettingTitle>
-      <Divider />
+      />
       <Spin spinning={loading}>
-        <Form
-          colon={false}
-          name="basic"
-          labelAlign={'left'}
-          labelCol={{ span: 8 }}
-          wrapperCol={{ span: 16 }}
-          style={{ width: '100%' }}
-          initialValues={{ remember: true }}
-          onFinish={onFinish}
-          onFinishFailed={onFinishFailed}
-          form={form}
-          autoComplete="off"
-        >
-          <Form.Item<FieldType>
-            label={t('username')}
-            name="nickname"
-            rules={[
-              {
-                required: true,
-                message: t('usernameMessage'),
-                whitespace: true,
-              },
-            ]}
+        <div className={classNames(styles.profileCard, { [styles.profileCardDark]: isDark })}>
+          <Form
+            colon={false}
+            name="basic"
+            labelAlign="left"
+            labelCol={{ span: 6 }}
+            wrapperCol={{ span: 18 }}
+            style={{ width: '100%' }}
+            initialValues={{ remember: true }}
+            onFinish={onFinish}
+            onFinishFailed={onFinishFailed}
+            form={form}
+            autoComplete="off"
           >
-            <Input />
-          </Form.Item>
-          <Divider />
-          <Form.Item<FieldType>
-            label={
-              <div>
-                <Space>{t('photo')}</Space>
-                <div>{t('photoDescription')}</div>
-              </div>
-            }
-            name="avatar"
-            valuePropName="fileList"
-            getValueFromEvent={normFile}
-          >
-            <Upload
-              listType="picture-card"
-              maxCount={1}
-              accept="image/*"
-              beforeUpload={() => {
-                return false;
-              }}
-              showUploadList={{ showPreviewIcon: false, showRemoveIcon: false }}
+            <Form.Item<FieldType>
+              label={t('username')}
+              name="nickname"
+              rules={[
+                {
+                  required: true,
+                  message: t('usernameMessage'),
+                  whitespace: true,
+                },
+              ]}
             >
-              <button style={{ border: 0, background: 'none' }} type="button">
-                <PlusOutlined />
-                <div style={{ marginTop: 8 }}>
-                  {t('upload', { keyPrefix: 'common' })}
-                </div>
-              </button>
-            </Upload>
-          </Form.Item>
-          <Divider />
-          <Form.Item label={t('email')}>
-            <Form.Item<FieldType> name="email" noStyle>
-              <Input disabled />
+              <Input />
             </Form.Item>
-            <p className={parentStyles.itemDescription}>
-              {t('emailDescription')}
-            </p>
-          </Form.Item>
-          <Form.Item
-            {...tailLayout}
-            shouldUpdate={(prevValues, curValues) =>
-              prevValues.additional !== curValues.additional
-            }
-          >
-            <Space>
+            <Divider className={styles.sectionDivider} />
+            <Form.Item<FieldType>
+              label={t('photo')}
+              name="avatar"
+              valuePropName="fileList"
+              getValueFromEvent={normFile}
+              extra={t('photoDescription')}
+            >
+              <Upload
+                listType="picture-card"
+                maxCount={1}
+                accept="image/*"
+                className={styles.avatarUpload}
+                beforeUpload={() => {
+                  return false;
+                }}
+                showUploadList={{ showPreviewIcon: false, showRemoveIcon: false }}
+              >
+                <button style={{ border: 0, background: 'none' }} type="button">
+                  <PlusOutlined />
+                  <div style={{ marginTop: 8 }}>
+                    {t('upload', { keyPrefix: 'common' })}
+                  </div>
+                </button>
+              </Upload>
+            </Form.Item>
+            <Divider className={styles.sectionDivider} />
+            <Form.Item label={t('email')}>
+              <Form.Item<FieldType> name="email" noStyle>
+                <Input disabled />
+              </Form.Item>
+              <p className={styles.emailDescription}>
+                {t('emailDescription')}
+              </p>
+            </Form.Item>
+            <div className={styles.actionRow}>
               <Button htmlType="button">{t('cancel')}</Button>
               <Button
                 type="primary"
@@ -140,9 +129,9 @@ const UserSettingProfile = () => {
               >
                 {t('save', { keyPrefix: 'common' })}
               </Button>
-            </Space>
-          </Form.Item>
-        </Form>
+            </div>
+          </Form>
+        </div>
       </Spin>
     </section>
   );

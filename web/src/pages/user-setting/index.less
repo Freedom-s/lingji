@@ -1,14 +1,227 @@
+/* ============================================
+   UserSetting — 用户设置页面布局（悬浮下拉式）
+   ============================================ */
+
 .settingWrapper {
   width: 100%;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.06), transparent 28%),
+    radial-gradient(ellipse at bottom left, rgba(20, 184, 166, 0.04), transparent 32%),
+    linear-gradient(180deg, #f6f8fc 0%, #f8faf5 100%);
+}
 
-  .outletWrapper {
-    padding: 32px 32px 0;
-    height: 100%;
-    overflow-y: auto;
+.settingWrapperDark {
+  background:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 24%),
+    radial-gradient(ellipse at bottom left, rgba(20, 184, 166, 0.05), transparent 28%),
+    linear-gradient(180deg, #0f172a 0%, #111827 100%);
+}
+
+.pageInner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+  min-height: 100%;
+}
+
+/* ── Floating Navigation Bar ── */
+
+.navBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding: 16px 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 12px 28px rgba(37, 99, 235, 0.06);
+  backdrop-filter: blur(14px);
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+}
+
+.navBarDark {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.navLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.navEyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #14b8a6;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Dropdown Trigger ── */
+
+.navDropdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.92);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  &:hover {
+    border-color: rgba(37, 99, 235, 0.3);
+    background: rgba(37, 99, 235, 0.04);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
   }
 
-  .itemDescription {
-    padding: 10px 0;
-    margin: 0;
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.navDropdownDark {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.7);
+  color: #f8fafc;
+
+  &:hover {
+    border-color: rgba(96, 165, 250, 0.3);
+    background: rgba(96, 165, 250, 0.06);
+    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.1);
+  }
+}
+
+.navDropdownIcon {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  color: #2563eb;
+}
+
+.navDropdownDark .navDropdownIcon {
+  color: #60a5fa;
+}
+
+.navDropdownLabel {
+  white-space: nowrap;
+}
+
+.navDropdownArrow {
+  font-size: 10px;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+.navDropdownDark .navDropdownArrow {
+  color: #64748b;
+}
+
+/* ── Right Side ── */
+
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  background: rgba(254, 242, 242, 0.5);
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.logoutBtnDark {
+  border-color: rgba(248, 113, 113, 0.15);
+  background: rgba(248, 113, 113, 0.06);
+  color: #f87171;
+
+  &:hover {
+    background: rgba(248, 113, 113, 0.12);
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+}
+
+/* ── Dropdown Menu Items ── */
+
+.logoutItem {
+  color: #ef4444;
+}
+
+/* ── Content ── */
+
+.outletWrapper {
+  min-height: 0;
+}
+
+/* Shared item description */
+.itemDescription {
+  padding: 10px 0;
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .pageInner {
+    padding: 20px 16px 48px;
+  }
+
+  .navBar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+  }
+
+  .navLeft {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .navRight {
+    width: 100%;
+  }
+
+  .logoutBtn {
+    width: 100%;
+    justify-content: center;
   }
 }
