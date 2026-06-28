@@ -22,6 +22,7 @@ import {
   useSelectDerivedMessages,
   useSendMessageWithSse,
 } from '@/hooks/logic-hooks';
+import { IAttachmentInfo } from '@/hooks/temp-file-hooks';
 import { IConversation, IDialog, Message } from '@/interfaces/database/chat';
 import { getFileExtension } from '@/utils';
 import api from '@/utils/api';
@@ -364,6 +365,12 @@ export const useSendNextMessage = (controller: AbortController) => {
   const { send, answer, done } = useSendMessageWithSse(
     api.completeConversation,
   );
+  // 附件对话 SSE（使用 completion_with_attachment 端点）
+  const {
+    send: sendWithAttachment,
+    answer: answerWithAttachment,
+    done: doneWithAttachment,
+  } = useSendMessageWithSse(api.completionWithAttachment);
   const {
     ref,
     derivedMessages,
@@ -454,6 +461,42 @@ export const useSendNextMessage = (controller: AbortController) => {
     messages: derivedMessages,
   });
 
+  const handleSendMessageWithAttachment = useCallback(
+    async ({
+      message,
+      currentConversationId,
+      messages,
+      attachmentIds,
+    }: {
+      message: Message;
+      currentConversationId?: string;
+      messages?: Message[];
+      attachmentIds: string[];
+    }) => {
+      const res = await sendWithAttachment(
+        {
+          conversation_id: currentConversationId ?? conversationId,
+          messages: [...(messages ?? derivedMessages ?? []), message],
+          attachment_ids: attachmentIds,
+        },
+        controller,
+      );
+
+      if (res && (res?.response.status !== 200 || res?.data?.code !== 0)) {
+        setValue(message.content);
+        removeLatestMessage();
+      }
+    },
+    [
+      derivedMessages,
+      conversationId,
+      removeLatestMessage,
+      setValue,
+      sendWithAttachment,
+      controller,
+    ],
+  );
+
   useEffect(() => {
     //  #1289
     if (answer.answer && conversationId && isNew !== 'true') {
@@ -461,28 +504,94 @@ export const useSendNextMessage = (controller: AbortController) => {
     }
   }, [answer, addNewestAnswer, conversationId, isNew]);
 
+  useEffect(() => {
+    if (answerWithAttachment.answer && conversationId && isNew !== 'true') {
+      addNewestAnswer(answerWithAttachment);
+    }
+  }, [answerWithAttachment, addNewestAnswer, conversationId, isNew]);
+
   const handlePressEnter = useCallback(
-    (documentIds: string[]) => {
-      if (trim(value) === '') return;
+    (documentIds: string[], attachments?: IAttachmentInfo[]) => {
+      if (trim(value) === '' && !attachments?.length) return;
       const id = uuid();
+
+      const hasAttachments = attachments && attachments.length > 0;
+      const attachmentIds = hasAttachments
+        ? attachments!.map((a) => a.attachment_id)
+        : [];
 
       addNewestQuestion({
         content: value,
         doc_ids: documentIds,
         id,
         role: MessageType.User,
+        ...(hasAttachments && {
+          attachments: attachments!.map((a) => ({
+            id: a.attachment_id,
+            file_name: a.file_name,
+            file_type: a.file_type,
+            file_size: a.file_size,
+            mime_type: a.mime_type,
+          })),
+        }),
       });
-      if (done) {
+
+      if (hasAttachments ? doneWithAttachment : done) {
         setValue('');
-        handleSendMessage({
+        const msg: Message = {
           id,
           content: value.trim(),
           role: MessageType.User,
           doc_ids: documentIds,
-        });
+          ...(hasAttachments && {
+            attachments: attachments!.map((a) => ({
+              id: a.attachment_id,
+              file_name: a.file_name,
+              file_type: a.file_type,
+              file_size: a.file_size,
+              mime_type: a.mime_type,
+            })),
+          }),
+        };
+
+        if (hasAttachments) {
+          const isNew = getConversationIsNew();
+          if (isNew !== 'true') {
+            handleSendMessageWithAttachment({
+              message: msg,
+              attachmentIds,
+            });
+          } else {
+            setConversation(value, true, conversationId).then((data) => {
+              if (data.code === 0) {
+                setConversationIsNew('');
+                handleSendMessageWithAttachment({
+                  message: msg,
+                  currentConversationId: data.data.id,
+                  messages: data.data.message,
+                  attachmentIds,
+                });
+              }
+            });
+          }
+        } else {
+          handleSendMessage(msg);
+        }
       }
     },
-    [addNewestQuestion, handleSendMessage, done, setValue, value],
+    [
+      addNewestQuestion,
+      handleSendMessage,
+      handleSendMessageWithAttachment,
+      setConversation,
+      setConversationIsNew,
+      getConversationIsNew,
+      done,
+      doneWithAttachment,
+      setValue,
+      value,
+      conversationId,
+    ],
   );
 
   return {
@@ -491,7 +600,7 @@ export const useSendNextMessage = (controller: AbortController) => {
     value,
     setValue,
     regenerateMessage,
-    sendLoading: !done,
+    sendLoading: !done || !doneWithAttachment,
     loading,
     ref,
     derivedMessages,
