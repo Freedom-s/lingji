@@ -4,7 +4,10 @@ PDF 转换器
 将各种格式文档转换为 PDF
 """
 
+import itertools
 import os
+import threading
+import time
 import requests
 from typing import Dict, Optional
 import tempfile
@@ -33,38 +36,87 @@ class GotenbergConvertError(RuntimeError):
     pass
 
 
-def convert_file(file_path: str, gotenberg_url: str = "http://localhost:3000") -> bytes:
+# Gotenberg 实例地址池（4 个容器，端口 3000-3003）
+GOTENBERG_URLS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+]
+
+_gotenberg_cycler = itertools.cycle(GOTENBERG_URLS)
+_gotenberg_lock = threading.Lock()
+
+
+def _pick_gotenberg_url() -> str:
+    """轮询选 Gotenberg 实例，4 个容器均摊负载"""
+    with _gotenberg_lock:
+        return next(_gotenberg_cycler)
+
+
+def convert_file(
+    file_path: str,
+    gotenberg_url: str = None,
+    max_retries: int = 3,
+) -> bytes:
     """
-    统一入口：根据文件扩展名调用对应的转换函数
-    
+    统一入口：根据文件扩展名调用对应的转换函数，503 时自动换实例重试
+
     :param file_path: 待转换文件路径
-    :param gotenberg_url: Gotenberg 服务地址
+    :param gotenberg_url: Gotenberg 服务地址（None 则从地址池轮询）
+    :param max_retries: 最大重试次数
     :return: PDF 文件二进制内容
     :raises ValueError: 不支持的文件类型
     :raises GotenbergConvertError: 转换失败
-
-    这个最终返回的是pdf文件的字节流
     """
     ext = file_path.rsplit(".", 1)[-1].lower()
-    
+
     if ext in LIBREOFFICE_EXTS:
-        return convert_office_to_pdf(file_path, gotenberg_url=gotenberg_url)
+        def convert(url): return convert_office_to_pdf(file_path, gotenberg_url=url)
     elif ext in HTML_EXTS:
-        return convert_html_to_pdf(file_path, gotenberg_url=gotenberg_url)
+        def convert(url): return convert_html_to_pdf(file_path, gotenberg_url=url)
     elif ext in MARKDOWN_EXTS:
-        return convert_markdown_to_pdf(file_path, gotenberg_url=gotenberg_url)
+        def convert(url): return convert_markdown_to_pdf(file_path, gotenberg_url=url)
     elif ext in PDF_EXTS:
         with open(file_path, "rb") as f:
             return f.read()
     else:
         raise ValueError(f"不支持的文件类型: {ext}")
 
+    # 4 个 Gotenberg 容器，轮询选一个，503/400 就换下一个重试
+    # 400 也可能是 Gotenberg 实例内部 LibreOffice 状态异常（uno exception），
+    # 同一文件换实例后往往能成功，因此也纳入重试逻辑
+    last_error = None
+    tried_urls = set()
+    for attempt in range(max_retries):
+        url = gotenberg_url or _pick_gotenberg_url()
+        while url in tried_urls and len(tried_urls) < len(GOTENBERG_URLS):
+            url = _pick_gotenberg_url()
+        tried_urls.add(url)
+
+        try:
+            return convert(url)
+        except GotenbergConvertError as e:
+            last_error = e
+            should_retry = ("503" in str(e) or "400" in str(e)) and attempt < max_retries - 1
+            if should_retry:
+                reason = "繁忙 (503)" if "503" in str(e) else "LibreOffice 异常 (400)"
+                print(
+                    f"Gotenberg {url} {reason}，换实例重试 "
+                    f"(第 {attempt + 1}/{max_retries} 次): {os.path.basename(file_path)}"
+                )
+                time.sleep(0.5)
+            else:
+                raise
+
+    raise last_error
+
 
 def convert_office_to_pdf(
     input_file_path: str,
     *,
     gotenberg_url: str = "http://localhost:3000",
-    timeout: int = 60,
+    timeout: int = 300,
     libreoffice_options: Optional[Dict[str, str]] = None,
 ) -> bytes:
     """
@@ -126,7 +178,7 @@ def convert_html_to_pdf(
     html_file_path: str,
     *,
     gotenberg_url: str = "http://localhost:3000",
-    timeout: int = 60,
+    timeout: int = 300,
     chromium_options: Optional[Dict[str, str]] = None,
 ) -> bytes:
     """
@@ -176,8 +228,8 @@ def convert_html_to_pdf(
 def convert_markdown_to_pdf(
     md_path: str, 
     *, 
-    gotenberg_url: str = "http://localhost:3000", 
-    timeout: int = 60
+    gotenberg_url: str = "http://localhost:3000",
+    timeout: int = 300
 ) -> bytes:
     """
     使用 Gotenberg 将 Markdown 转换为 PDF

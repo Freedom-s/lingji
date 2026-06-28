@@ -1,9 +1,32 @@
 services:
-  gotenberg:
-    container_name: ragflow-gotenberg
+  gotenberg-1:
+    container_name: ragflow-gotenberg-1
     image: gotenberg/gotenberg:8
+    environment:
+      API_TIMEOUT: "300s"
     ports:
       - 3000:3000
+  gotenberg-2:
+    container_name: ragflow-gotenberg-2
+    image: gotenberg/gotenberg:8
+    environment:
+      API_TIMEOUT: "300s"
+    ports:
+      - 3001:3000
+  gotenberg-3:
+    container_name: ragflow-gotenberg-3
+    image: gotenberg/gotenberg:8
+    environment:
+      API_TIMEOUT: "300s"
+    ports:
+      - 3002:3000
+  gotenberg-4:
+    container_name: ragflow-gotenberg-4
+    image: gotenberg/gotenberg:8
+    environment:
+      API_TIMEOUT: "300s"
+    ports:
+      - 3003:3000
   es01:
     container_name: ragflow-es-01
     profiles:

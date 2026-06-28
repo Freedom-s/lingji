@@ -213,29 +213,15 @@ export function useFileUpload(config: FileUploadConfig = {}) {
       const formData = new FormData()
       formData.append("files", fileItem.file)
 
-      // 根据文件大小选择上传方式
-      if (fileItem.size > finalConfig.largeFileThreshold) {
-        // 大文件分块上传
-        await uploadLargeFile(fileItem.file, {
-          chunkSize: finalConfig.chunkSize,
-          timeout: finalConfig.timeout,
-          onProgress: (progress) => {
-            if (!checkCancellation()) {
-              fileItem.progress = progress
-            }
+      // 统一走普通上传（Gotenberg 4 容器 + 300s 超时已足够）
+      await uploadFileApiV2(formData, {
+        timeout: finalConfig.timeout,
+        onProgress: (progress) => {
+          if (!checkCancellation()) {
+            fileItem.progress = progress
           }
-        })
-      } else {
-        // 普通文件上传
-        await uploadFileApiV2(formData, {
-          timeout: finalConfig.timeout,
-          onProgress: (progress) => {
-            if (!checkCancellation()) {
-              fileItem.progress = progress
-            }
-          }
-        })
-      }
+        }
+      })
 
       // 检查是否被取消
       if (checkCancellation()) {

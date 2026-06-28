@@ -33,7 +33,7 @@ const {
   clearCompleted
 } = useFileUpload({
   autoUpload: false,
-  maxConcurrent: 2,
+  maxConcurrent: 4,
   onSuccess: () => {
     getTableData()
   },
