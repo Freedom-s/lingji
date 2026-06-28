@@ -368,6 +368,26 @@ const MessageInput = ({
                 documentInfo?.name ||
                 '';
               const fileSize = tempFileInfo?.file_size || documentInfo?.size || 0;
+              const image = isImageFile(fileName) && tempFileInfo?.attachment_id;
+
+              // 图片文件只展示缩略图
+              if (image && item.status !== 'uploading' && item.status !== 'error') {
+                return (
+                  <List.Item>
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={getAttachmentThumbnailUrl(tempFileInfo!.attachment_id)}
+                        alt={fileName}
+                        onClick={() => setPreviewImage(getAttachmentFileUrl(tempFileInfo!.attachment_id))}
+                        style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', display: 'block' }}
+                      />
+                      <span className={styles.deleteIcon}>
+                        <CloseCircleOutlined onClick={() => handleRemove(item)} />
+                      </span>
+                    </div>
+                  </List.Item>
+                );
+              }
 
               return (
                 <List.Item>
@@ -382,18 +402,7 @@ const MessageInput = ({
                       ) : item.status === 'error' ? (
                         <InfoCircleOutlined size={30}></InfoCircleOutlined>
                       ) : (
-                        <>
-                          {isImageFile(fileName) && tempFileInfo?.attachment_id ? (
-                            <img
-                              src={getAttachmentThumbnailUrl(tempFileInfo.attachment_id)}
-                              alt={fileName}
-                              onClick={() => setPreviewImage(getAttachmentFileUrl(tempFileInfo.attachment_id))}
-                              style={{ width: 60, height: 56, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', flexShrink: 0 }}
-                            />
-                          ) : (
-                            <FileIcon id={id} name={fileName}></FileIcon>
-                          )}
-                        </>
+                        <FileIcon id={id} name={fileName}></FileIcon>
                       )}
                       <Flex vertical style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <Text
