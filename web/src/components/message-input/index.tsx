@@ -52,11 +52,11 @@ const getFileIds = (fileList: UploadFile[]) => {
   const ids = fileList.reduce((pre, cur) => {
     const responseData = get(cur, 'response.data', []);
 
-    // 如果是临时文件上传（包含file_id字段），跳过处理
+    // 如果是临时文件上传（包含file_id或attachment_id字段），跳过处理
     if (
       responseData &&
       typeof responseData === 'object' &&
-      'file_id' in responseData
+      ('file_id' in responseData || 'attachment_id' in responseData)
     ) {
       return pre; // 临时文件不需要添加到文档ID列表中
     }
