@@ -5,7 +5,7 @@ import {
   useRemoveNextDocument,
   useUploadAndParseDocument,
 } from '@/hooks/document-hooks';
-import { ITempFileInfo, useUploadTempFile } from '@/hooks/temp-file-hooks';
+import { IAttachmentInfo, getAttachmentThumbnailUrl, useUploadAttachment } from '@/hooks/temp-file-hooks';
 import { getExtension } from '@/utils/document-util';
 import { formatBytes } from '@/utils/file-util';
 import {
@@ -73,12 +73,19 @@ const isUploadSuccess = (file: UploadFile) => {
   return typeof code === 'number' && code === 0;
 };
 
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+
+const isImageFile = (fileName: string) => {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  return IMAGE_EXTENSIONS.includes(ext);
+};
+
 interface IProps {
   disabled: boolean;
   value: string;
   sendDisabled: boolean;
   sendLoading: boolean;
-  onPressEnter(documentIds: string[]): void;
+  onPressEnter(documentIds: string[], attachments?: IAttachmentInfo[]): void;
   onInputChange: ChangeEventHandler<HTMLTextAreaElement>;
   conversationId: string;
   uploadMethod?: string;
@@ -117,11 +124,11 @@ const MessageInput = ({
   const { deleteDocument } = useDeleteDocument();
   const { data: documentInfos, setDocumentIds } = useFetchDocumentInfosByIds();
   const { uploadAndParseDocument } = useUploadAndParseDocument(uploadMethod);
-  const { uploadTempFile } = useUploadTempFile();
+  const { uploadAttachment } = useUploadAttachment();
   const conversationIdRef = useRef(conversationId);
 
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [tempFiles, setTempFiles] = useState<ITempFileInfo[]>([]);
+  const [tempFiles, setTempFiles] = useState<IAttachmentInfo[]>([]);
 
   const handlePreview = async (file: UploadFile) => {
     if (!file.url && !file.preview) {
@@ -147,19 +154,19 @@ const MessageInput = ({
         if (!fileToUpload) {
           throw new Error('No file object available for upload');
         }
-        const tempFileInfo = await uploadTempFile({
+        const attachmentInfo = await uploadAttachment({
           file: fileToUpload as File,
           conversationId: conversationId,
         });
-        console.log('[DEBUG] MessageInput: Upload successful:', tempFileInfo);
+        console.log('[DEBUG] MessageInput: Upload successful:', attachmentInfo);
 
-        setTempFiles((prev) => [...prev, tempFileInfo]);
+        setTempFiles((prev) => [...prev, attachmentInfo]);
         setFileList((list) => {
           const nextList = list.filter((x) => x.uid !== file.uid);
           nextList.push({
             ...file,
             originFileObj: file as any,
-            response: { code: 0, data: tempFileInfo },
+            response: { code: 0, data: attachmentInfo },
             percent: 100,
             status: 'done',
           });
@@ -224,9 +231,10 @@ const MessageInput = ({
   const handlePressEnter = useCallback(async () => {
     if (isUploadingFile) return;
 
-    // 只处理知识库文档上传，移除临时文件上传功能
     const ids = getFileIds(fileList.filter((x) => isUploadSuccess(x)));
-    onPressEnter(ids);
+
+    // 传递附件信息给上层组件
+    onPressEnter(ids, tempFiles);
 
     // 清空文件列表
     setFileList([]);
@@ -251,9 +259,9 @@ const MessageInput = ({
       if (useTempUpload) {
         // 临时文件移除模式
         const tempFileInfo = get(file, 'response.data');
-        if (tempFileInfo?.file_id) {
+        if (tempFileInfo?.attachment_id) {
           setTempFiles((prev) =>
-            prev.filter((f) => f.file_id !== tempFileInfo.file_id),
+            prev.filter((f) => f.attachment_id !== tempFileInfo.attachment_id),
           );
         }
         setFileList((preList) => {
@@ -350,14 +358,14 @@ const MessageInput = ({
                 : null;
               const documentInfo = getDocumentInfoById(id);
               const fileExtension = getExtension(
-                tempFileInfo?.filename || documentInfo?.name || '',
+                tempFileInfo?.file_name || documentInfo?.name || '',
               );
               const fileName =
-                tempFileInfo?.filename ||
+                tempFileInfo?.file_name ||
                 item.originFileObj?.name ||
                 documentInfo?.name ||
                 '';
-              const fileSize = tempFileInfo?.size || documentInfo?.size || 0;
+              const fileSize = tempFileInfo?.file_size || documentInfo?.size || 0;
 
               return (
                 <List.Item>
@@ -372,7 +380,16 @@ const MessageInput = ({
                       ) : item.status === 'error' ? (
                         <InfoCircleOutlined size={30}></InfoCircleOutlined>
                       ) : (
-                        <FileIcon id={id} name={fileName}></FileIcon>
+                        <>
+                          {isImageFile(fileName) && (
+                            <img
+                              src={getAttachmentThumbnailUrl(tempFileInfo?.attachment_id)}
+                              alt={fileName}
+                              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4 }}
+                            />
+                          )}
+                          <FileIcon id={id} name={fileName}></FileIcon>
+                        </>
                       )}
                       <Flex vertical style={{ width: '90%' }}>
                         <Text
@@ -432,7 +449,7 @@ const MessageInput = ({
               showUploadList={false}
               accept={
                 useTempUpload
-                  ? '.txt,.docx,.md,.json,.xml,.csv,.py,.js,.html,.css'
+                  ? '.txt,.md,.pdf,.ppt,.pptx,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp'
                   : undefined
               }
               beforeUpload={(file) => {
@@ -440,16 +457,8 @@ const MessageInput = ({
                   // 检查文件类型
                   const fileName = file.name.toLowerCase();
                   const allowedExtensions = [
-                    '.txt',
-                    '.docx',
-                    '.md',
-                    '.json',
-                    '.xml',
-                    '.csv',
-                    '.py',
-                    '.js',
-                    '.html',
-                    '.css',
+                    '.txt', '.md', '.pdf', '.ppt', '.pptx', '.doc', '.docx',
+                    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
                   ];
                   const isAllowed = allowedExtensions.some((ext) =>
                     fileName.endsWith(ext),
