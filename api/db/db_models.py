@@ -1052,6 +1052,21 @@ class Conversation(DataBaseModel):
         db_table = "conversation"
 
 
+class Attachment(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    conversation_id = CharField(max_length=32, null=False, index=True, help_text="关联的对话ID")
+    user_id = CharField(max_length=32, null=False, index=True, help_text="上传者ID")
+    file_name = CharField(max_length=255, null=False, help_text="原始文件名")
+    file_type = CharField(max_length=32, null=False, help_text="txt/md/pdf/ppt/pptx/doc/docx/image")
+    file_size = IntegerField(default=0, help_text="文件大小(bytes)")
+    mime_type = CharField(max_length=128, null=False, help_text="MIME类型")
+    minio_path = CharField(max_length=512, null=False, help_text="MinIO存储路径")
+    status = CharField(max_length=1, null=True, default="1", help_text="is it validate(0: wasted, 1: validate)", index=True)
+
+    class Meta:
+        db_table = "attachment"
+
+
 class APIToken(DataBaseModel):
     tenant_id = CharField(max_length=32, null=False, index=True)
     token = CharField(max_length=255, null=False, index=True)
@@ -1320,6 +1335,12 @@ def migrate_db():
             migrate(
                 migrator.add_column("class_dialog", "dialog_id",
                                     CharField(max_length=32, null=False, index=True, help_text="dialog id"))
+            )
+        except Exception:
+            pass
+        try:
+            migrate(
+                migrator.create_table(Attachment)
             )
         except Exception:
             pass
