@@ -20,9 +20,9 @@ import {
   Card,
   Divider,
   Flex,
-  Image,
   Input,
   List,
+  Modal,
   Space,
   Spin,
   Typography,
@@ -130,6 +130,7 @@ const MessageInput = ({
 
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [tempFiles, setTempFiles] = useState<IAttachmentInfo[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const handlePreview = async (file: UploadFile) => {
     if (!file.url && !file.preview) {
@@ -383,13 +384,11 @@ const MessageInput = ({
                       ) : (
                         <>
                           {isImageFile(fileName) && tempFileInfo?.attachment_id && (
-                            <Image
+                            <img
                               src={getAttachmentThumbnailUrl(tempFileInfo.attachment_id)}
-                              preview={{ src: getAttachmentFileUrl(tempFileInfo.attachment_id) }}
-                              width={40}
-                              height={40}
-                              style={{ objectFit: 'cover', borderRadius: 4 }}
-                              fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iMjAiIHk9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE2IiBmaWxsPSIjYmZiZmJmIj7wn5G4PC90ZXh0Pjwvc3ZnPg=="
+                              alt={fileName}
+                              onClick={() => setPreviewImage(getAttachmentFileUrl(tempFileInfo.attachment_id))}
+                              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
                             />
                           )}
                           <FileIcon id={id} name={fileName}></FileIcon>
@@ -509,6 +508,21 @@ const MessageInput = ({
           )}
         </Flex>
       </Flex>
+      <Modal
+        open={!!previewImage}
+        footer={null}
+        onCancel={() => setPreviewImage(null)}
+        width="auto"
+        style={{ maxWidth: '90vw' }}
+      >
+        {previewImage && (
+          <img
+            src={previewImage}
+            alt="预览"
+            style={{ maxWidth: '100%', maxHeight: '80vh' }}
+          />
+        )}
+      </Modal>
     </Flex>
   );
 };
