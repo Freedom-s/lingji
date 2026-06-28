@@ -102,10 +102,10 @@ const ChatContainer = ({ controller, fontSize = 10 }: IProps) => {
           sendLoading={sendLoading}
           value={value}
           onInputChange={handleInputChange}
-          onPressEnter={(documentIds: string[]) => handlePressEnter(documentIds)}
+          onPressEnter={(documentIds: string[], attachments?: any[]) => handlePressEnter(documentIds, attachments)}
           conversationId={conversationId}
-          useTempUpload={false}
-          showUploadIcon={false}
+          useTempUpload={true}
+          showUploadIcon={true}
           createConversationBeforeUploadDocument={
             createConversationBeforeUploadDocument
           }
