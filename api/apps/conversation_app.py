@@ -381,7 +381,7 @@ def _stream_with_attachment(dia, msg, conv, message_id, req):
         history.append({"role": "user", "content": user_content})
 
     for chunk in chat_mdl.chat_streamly(system_prompt, history):
-        ans = structure_answer(conv, chunk, message_id, conv.id)
+        ans = structure_answer(conv, {"answer": chunk, "reference": {}}, message_id, conv.id)
         yield "data:" + json_module.dumps(
             {"code": 0, "message": "", "data": ans},
             ensure_ascii=False
