@@ -956,7 +956,6 @@ def upload_attachment():
 
 
 @manager.route("/attachment/<attachment_id>/thumbnail", methods=["GET"])  # type: ignore # noqa: F821
-@login_required
 def attachment_thumbnail(attachment_id):
     """获取附件缩略图（仅图片类型）"""
     try:
