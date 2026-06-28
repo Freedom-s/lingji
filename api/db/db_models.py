@@ -1064,7 +1064,7 @@ class Attachment(DataBaseModel):
     status = CharField(max_length=1, null=True, default="1", help_text="is it validate(0: wasted, 1: validate)", index=True)
 
     class Meta:
-        db_table = "attachment"
+        db_table = "conversation_attachment"
 
 
 class APIToken(DataBaseModel):
@@ -1338,9 +1338,5 @@ def migrate_db():
             )
         except Exception:
             pass
-        try:
-            migrate(
-                migrator.create_table(Attachment)
-            )
-        except Exception:
-            pass
+        # Note: conversation_attachment table is auto-created by init_database_tables() at server startup.
+        # No migrate_db entry needed — new tables don't need DDL migrations.
