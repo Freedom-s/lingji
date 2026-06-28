@@ -383,18 +383,19 @@ const MessageInput = ({
                         <InfoCircleOutlined size={30}></InfoCircleOutlined>
                       ) : (
                         <>
-                          {isImageFile(fileName) && tempFileInfo?.attachment_id && (
+                          {isImageFile(fileName) && tempFileInfo?.attachment_id ? (
                             <img
                               src={getAttachmentThumbnailUrl(tempFileInfo.attachment_id)}
                               alt={fileName}
                               onClick={() => setPreviewImage(getAttachmentFileUrl(tempFileInfo.attachment_id))}
-                              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
+                              style={{ width: 60, height: 56, objectFit: 'cover', borderRadius: 6, cursor: 'pointer', flexShrink: 0 }}
                             />
+                          ) : (
+                            <FileIcon id={id} name={fileName}></FileIcon>
                           )}
-                          <FileIcon id={id} name={fileName}></FileIcon>
                         </>
                       )}
-                      <Flex vertical style={{ width: '90%' }}>
+                      <Flex vertical style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <Text
                           ellipsis={{ tooltip: fileName }}
                           className={styles.nameText}
@@ -513,13 +514,14 @@ const MessageInput = ({
         footer={null}
         onCancel={() => setPreviewImage(null)}
         width="auto"
-        style={{ maxWidth: '90vw' }}
+        centered
+        styles={{ body: { padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#1f1f1f' } }}
       >
         {previewImage && (
           <img
             src={previewImage}
             alt="预览"
-            style={{ maxWidth: '100%', maxHeight: '80vh' }}
+            style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain' }}
           />
         )}
       </Modal>
