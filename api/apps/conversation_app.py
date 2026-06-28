@@ -38,6 +38,12 @@ try:
 except ImportError:
     DOC_AVAILABLE = False
 
+try:
+    from pptx import Presentation
+    PPTX_AVAILABLE = True
+except ImportError:
+    PPTX_AVAILABLE = False
+
 from api.db.services.attachment_service import AttachmentService
 from api.db.services.database import get_minio_client
 from api.utils import get_uuid, current_timestamp
@@ -214,6 +220,181 @@ def _stream_with_agent(dia, msg, conv, message_id, req):
         yield "data:" + json_module.dumps(
             {"code": 0, "message": "", "data": ans},
             ensure_ascii=False,
+        ) + "\n\n"
+
+
+def _extract_attachment_content(minio_path: str, file_type: str) -> str:
+    """从 MinIO 读取附件并提取文本内容"""
+    minio_client = get_minio_client()
+    bucket_name = "temp"
+    try:
+        response = minio_client.get_object(bucket_name, minio_path)
+        content_bytes = response.read()
+        response.close()
+        response.release_conn()
+    except Exception as e:
+        return f"[读取附件失败: {e}]"
+
+    file_ext = minio_path.rsplit('.', 1)[-1].lower() if '.' in minio_path else ''
+
+    if file_type in ('txt', 'md'):
+        encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1']
+        for enc in encodings:
+            try:
+                return content_bytes.decode(enc)
+            except UnicodeDecodeError:
+                continue
+        return content_bytes.decode('utf-8', errors='ignore')
+
+    if file_type == 'doc':
+        if file_ext == 'docx':
+            if not DOCX_AVAILABLE:
+                return "[缺少 .docx 解析库(python-docx)]"
+            try:
+                doc_stream = io.BytesIO(content_bytes)
+                doc = Document(doc_stream)
+                paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                        if row_text:
+                            paragraphs.append(' | '.join(row_text))
+                return '\n\n'.join(paragraphs) if paragraphs else '[文档内容为空]'
+            except Exception as e:
+                return f"[.docx 文件解析失败: {e}]"
+        else:
+            if not DOC_AVAILABLE:
+                return "[缺少 .doc 解析库(docx2txt/olefile)]"
+            try:
+                import tempfile
+                import os
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.doc') as tmp:
+                    tmp.write(content_bytes)
+                    tmp_path = tmp.name
+                text = docx2txt_process(tmp_path)
+                os.unlink(tmp_path)
+                return text
+            except Exception as e:
+                return f"[.doc 文件解析失败: {e}]"
+
+    if file_type == 'pdf':
+        try:
+            import PyPDF2
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content_bytes))
+            pages = []
+            for page in pdf_reader.pages:
+                text = page.extract_text()
+                if text:
+                    pages.append(text)
+            return '\n\n'.join(pages) if pages else '[PDF 无可提取文本]'
+        except ImportError:
+            return '[缺少 PDF 解析库(PyPDF2)]'
+        except Exception as e:
+            return f"[PDF 解析失败: {e}]"
+
+    if file_type == 'ppt':
+        if file_ext == 'pptx':
+            if not PPTX_AVAILABLE:
+                return '[缺少 PPT 解析库(python-pptx)]'
+            try:
+                prs = Presentation(io.BytesIO(content_bytes))
+                slides = []
+                for i, slide in enumerate(prs.slides, 1):
+                    slide_text = []
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for para in shape.text_frame.paragraphs:
+                                if para.text.strip():
+                                    slide_text.append(para.text.strip())
+                    if slide_text:
+                        slides.append(f"[第{i}页]\n" + '\n'.join(slide_text))
+                return '\n\n'.join(slides) if slides else '[PPT 无可提取文本]'
+            except Exception as e:
+                return f"[PPT 解析失败: {e}]"
+        else:
+            return '[暂不支持旧版 .ppt 格式，请转换为 .pptx]'
+
+    return f"[不支持的内容提取: {file_type}]"
+
+
+def _get_attachment_image_base64(minio_path: str) -> str:
+    """从 MinIO 读取图片并返回 base64 data URL"""
+    minio_client = get_minio_client()
+    try:
+        response = minio_client.get_object("temp", minio_path)
+        content_bytes = response.read()
+        response.close()
+        response.release_conn()
+    except Exception as e:
+        return f"[读取图片失败: {e}]"
+
+    ext = minio_path.rsplit('.', 1)[-1].lower() if '.' in minio_path else 'jpg'
+    mime_map = {'jpg': 'jpeg', 'jpeg': 'jpeg', 'png': 'png', 'gif': 'gif', 'webp': 'webp', 'bmp': 'bmp'}
+    mime = f"image/{mime_map.get(ext, 'jpeg')}"
+    b64 = base64.b64encode(content_bytes).decode('utf-8')
+    return f"data:{mime};base64,{b64}"
+
+
+def _stream_with_attachment(dia, msg, conv, message_id, req):
+    """使用附件内容进行流式对话（不走知识库检索）"""
+    from api.db.services.llm_service import LLMBundle
+    from api.db import LLMType
+    import json as json_module
+
+    attachment_ids = req.get("attachment_ids", [])
+    if not attachment_ids:
+        yield "data:" + json_module.dumps(
+            {"code": 500, "message": "缺少附件ID", "data": {"answer": "**ERROR**: 缺少附件ID"}},
+            ensure_ascii=False
+        ) + "\n\n"
+        return
+
+    attachments = list(AttachmentService.get_by_ids(attachment_ids))
+
+    image_attachments = []
+    text_attachments = []
+
+    for att in attachments:
+        if att.file_type == 'image':
+            image_attachments.append(att)
+        else:
+            text_attachments.append(att)
+
+    text_context_parts = []
+    for att in text_attachments:
+        content = _extract_attachment_content(att.minio_path, att.file_type)
+        text_context_parts.append(f"[附件: {att.file_name}]\n{content}")
+
+    system_prompt = "你是一个智能助手，请基于用户上传的文件内容回答问题。"
+    if text_context_parts:
+        system_prompt += "\n\n以下是用户上传的文件内容：\n\n" + "\n\n---\n\n".join(text_context_parts)
+
+    history = []
+    for m in msg[:-1]:
+        history.append({"role": m["role"], "content": m.get("content", "")})
+
+    last_msg = msg[-1]
+    user_content = last_msg.get("content", "")
+
+    chat_mdl = LLMBundle(dia.tenant_id, LLMType.CHAT, dia.llm_id)
+
+    if image_attachments:
+        content_parts = [{"type": "text", "text": user_content}]
+        for att in image_attachments:
+            b64_url = _get_attachment_image_base64(att.minio_path)
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": b64_url}
+            })
+        history.append({"role": "user", "content": content_parts})
+    else:
+        history.append({"role": "user", "content": user_content})
+
+    for chunk in chat_mdl.chat_streamly(system_prompt, history):
+        ans = structure_answer(conv, chunk, message_id, conv.id)
+        yield "data:" + json_module.dumps(
+            {"code": 0, "message": "", "data": ans},
+            ensure_ascii=False
         ) + "\n\n"
 
 
@@ -415,6 +596,61 @@ def completion():
             except Exception as e:
                 traceback.print_exc()
                 yield "data:" + json.dumps({"code": 500, "message": str(e), "data": {"answer": "**ERROR**: " + str(e), "reference": {}}}, ensure_ascii=False) + "\n\n"
+            yield "data:" + json.dumps({"code": 0, "message": "", "data": True}, ensure_ascii=False) + "\n\n"
+
+        if req.get("stream", True):
+            resp = Response(stream(), mimetype="text/event-stream")
+            resp.headers.add_header("Cache-control", "no-cache")
+            resp.headers.add_header("Connection", "keep-alive")
+            resp.headers.add_header("X-Accel-Buffering", "no")
+            resp.headers.add_header("Content-Type", "text/event-stream; charset=utf-8")
+            return resp
+
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route("/completion_with_attachment", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("conversation_id", "messages", "attachment_ids")
+def completion_with_attachment():
+    req = request.json
+    msg = []
+    for m in req["messages"]:
+        if m["role"] == "system":
+            continue
+        if m["role"] == "assistant" and not msg:
+            continue
+        msg.append({"id": m.get("id", str(uuid.uuid4())), "role": m.get("role"), "content": m.get("content"),
+                     "attachments": m.get("attachments", [])})
+
+    message_id = msg[-1].get("id")
+    try:
+        e, conv = ConversationService.get_by_id(req["conversation_id"])
+        if not e:
+            return get_data_error_result(message="Conversation not found!")
+
+        conv.message = deepcopy(msg)
+        if not conv.reference:
+            conv.reference = []
+        conv.reference.append({"chunks": [], "doc_aggs": []})
+
+        e, dia = DialogService.get_by_id(conv.dialog_id)
+        if not e:
+            return get_data_error_result(message="Dialog not found!")
+
+        def stream():
+            nonlocal dia, msg, req, conv
+            try:
+                for ans in _stream_with_attachment(dia, msg, conv, message_id, req):
+                    yield ans
+                ConversationService.update_by_id(conv.id, conv.to_dict())
+            except Exception as e:
+                traceback.print_exc()
+                yield "data:" + json.dumps(
+                    {"code": 500, "message": str(e), "data": {"answer": "**ERROR**: " + str(e), "reference": {}}},
+                    ensure_ascii=False
+                ) + "\n\n"
             yield "data:" + json.dumps({"code": 0, "message": "", "data": True}, ensure_ascii=False) + "\n\n"
 
         if req.get("stream", True):
