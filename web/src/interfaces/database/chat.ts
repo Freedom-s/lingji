@@ -72,6 +72,7 @@ export interface Message {
   role: MessageType;
   doc_ids?: string[];
   temp_file_ids?: string[];
+  attachments?: { id: string; file_name: string; file_type: string; file_size: number; mime_type: string }[];
   prompt?: string;
   id?: string;
   audio_binary?: string;

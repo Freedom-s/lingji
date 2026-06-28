@@ -14,7 +14,8 @@ import { IRegenerateMessage, IRemoveMessageById } from '@/hooks/logic-hooks';
 import { IMessage } from '@/pages/chat/interface';
 import MarkdownContent from '@/pages/chat/markdown-content';
 import { getExtension, isImage } from '@/utils/document-util';
-import { Avatar, Button, Flex, List, Space, Tag, Typography } from 'antd';
+import { getAttachmentFileUrl, getAttachmentThumbnailUrl } from '@/hooks/temp-file-hooks';
+import { Avatar, Button, Flex, List, Modal, Space, Tag, Typography } from 'antd';
 import { DownOutlined, UpOutlined } from '@ant-design/icons';
 import FileIcon from '../file-icon';
 import IndentedTreeModal from '../indented-tree/modal';
@@ -65,6 +66,16 @@ const MessageItem = ({
   const { visible, hideModal, showModal } = useSetModalState();
   const [clickedDocumentId, setClickedDocumentId] = useState('');
   const [referenceExpanded, setReferenceExpanded] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const messageAttachments = useMemo(() => {
+    return (item as any).attachments || [];
+  }, [(item as any).attachments]);
+
+  const isImageFile = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
+  };
 
   const referenceDocumentList = useMemo(() => {
     return reference?.doc_aggs ?? [];
@@ -164,6 +175,49 @@ const MessageItem = ({
               ></MarkdownContent>
             </div>
             
+            {/* 附件展示 */}
+            {isUser && messageAttachments.length > 0 && (
+              <Flex gap={8} wrap="wrap" style={{ marginTop: 4 }}>
+                {messageAttachments.map((att: any) =>
+                  isImageFile(att.file_name) ? (
+                    <img
+                      key={att.id}
+                      src={getAttachmentThumbnailUrl(att.id)}
+                      alt={att.file_name}
+                      onClick={() => setPreviewImage(getAttachmentFileUrl(att.id))}
+                      style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 6, cursor: 'pointer' }}
+                    />
+                  ) : (
+                    <Button
+                      key={att.id}
+                      type="default"
+                      size="small"
+                      icon={<FileIcon id={att.id} name={att.file_name} />}
+                      style={{ maxWidth: 200 }}
+                    >
+                      <Text ellipsis={{ tooltip: att.file_name }} style={{ maxWidth: 140 }}>
+                        {att.file_name}
+                      </Text>
+                    </Button>
+                  ),
+                )}
+              </Flex>
+            )}
+
+            {/* 附件预览 Modal */}
+            <Modal
+              open={!!previewImage}
+              footer={null}
+              onCancel={() => setPreviewImage(null)}
+              width="auto"
+              centered
+              styles={{ body: { padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#1f1f1f' } }}
+            >
+              {previewImage && (
+                <img src={previewImage} alt="预览" style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain' }} />
+              )}
+            </Modal>
+
             {/* 页面检索模式：显示页面引用 */}
             {isAssistant && isPageMode && (
               <PageReferenceItem
