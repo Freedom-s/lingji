@@ -382,13 +382,14 @@ const MessageInput = ({
                         <InfoCircleOutlined size={30}></InfoCircleOutlined>
                       ) : (
                         <>
-                          {isImageFile(fileName) && (
+                          {isImageFile(fileName) && tempFileInfo?.attachment_id && (
                             <Image
-                              src={getAttachmentThumbnailUrl(tempFileInfo?.attachment_id)}
-                              preview={{ src: getAttachmentFileUrl(tempFileInfo?.attachment_id) }}
+                              src={getAttachmentThumbnailUrl(tempFileInfo.attachment_id)}
+                              preview={{ src: getAttachmentFileUrl(tempFileInfo.attachment_id) }}
                               width={40}
                               height={40}
                               style={{ objectFit: 'cover', borderRadius: 4 }}
+                              fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iMjAiIHk9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE2IiBmaWxsPSIjYmZiZmJmIj7wn5G4PC90ZXh0Pjwvc3ZnPg=="
                             />
                           )}
                           <FileIcon id={id} name={fileName}></FileIcon>
