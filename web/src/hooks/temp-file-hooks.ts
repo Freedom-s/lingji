@@ -44,8 +44,14 @@ export const useUploadAttachment = () => {
 
 export const useDeleteAttachment = () => {
   const deleteAttachment = async (attachmentId: string) => {
-    const response = await chatService.deleteAttachment({ url: attachmentId });
-    const data = response?.data || response;
+    // Use direct fetch since the API URL template doesn't work with registerServer
+    const response = await fetch(`/v1/conversation/attachment/${attachmentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+      },
+    });
+    const data = await response.json();
     if (data?.code === 0) {
       return true;
     }

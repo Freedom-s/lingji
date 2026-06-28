@@ -264,19 +264,8 @@ def _extract_attachment_content(minio_path: str, file_type: str) -> str:
             except Exception as e:
                 return f"[.docx 文件解析失败: {e}]"
         else:
-            if not DOC_AVAILABLE:
-                return "[缺少 .doc 解析库(docx2txt/olefile)]"
-            try:
-                import tempfile
-                import os
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.doc') as tmp:
-                    tmp.write(content_bytes)
-                    tmp_path = tmp.name
-                text = docx2txt_process(tmp_path)
-                os.unlink(tmp_path)
-                return text
-            except Exception as e:
-                return f"[.doc 文件解析失败: {e}]"
+            # 旧版 .doc 格式（OLE2），无法用 docx2txt 直接解析
+            return "[暂不支持旧版 .doc 格式的内容提取，建议转换为 .docx 格式后重新上传]"
 
     if file_type == 'pdf':
         try:

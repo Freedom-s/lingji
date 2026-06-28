@@ -167,7 +167,7 @@ def completion(tenant_id, chat_id, question, name="New session", session_id=None
 def cleanup_attachments_for_conversation(conversation_id: str):
     """删除指定 conversation 下所有附件（MinIO 文件 + MySQL 逻辑删除）"""
     from api.db.services.attachment_service import AttachmentService
-    from management.server.database import get_minio_client
+    from api.db.services.database import get_minio_client
 
     attachments = AttachmentService.get_by_conversation(conversation_id)
     minio_client = get_minio_client()
