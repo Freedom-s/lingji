@@ -394,10 +394,23 @@ export const useScrollToBottom = (messages?: unknown) => {
   const ref = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
-    if (messages) {
-      ref.current?.scrollIntoView({ behavior: 'instant' });
+    if (!messages || !ref.current) return;
+
+    // 向上查找第一个可滚动的父元素作为消息容器
+    let el: HTMLElement | null = ref.current.parentElement;
+    while (el) {
+      const style = window.getComputedStyle(el);
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') break;
+      el = el.parentElement;
     }
-  }, [messages]); // If the message changes, scroll to the bottom
+    if (el) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      // 用户向上翻了超过 80px 就不自动滚动
+      if (distanceFromBottom > 80) return;
+    }
+
+    ref.current.scrollIntoView({ behavior: 'instant' });
+  }, [messages]);
 
   useEffect(() => {
     scrollToBottom();
