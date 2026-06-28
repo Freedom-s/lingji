@@ -125,6 +125,13 @@ export default {
   uploadTempFile: `${api_host}/conversation/upload_temp_file`,
   getTempFile: (fileId: string) =>
     `${api_host}/conversation/get_temp_file/${fileId}`,
+  // 附件上传和获取API (MinIO持久化方案)
+  uploadAttachment: `${api_host}/conversation/upload_attachment`,
+  completionWithAttachment: `${api_host}/conversation/completion_with_attachment`,
+  getAttachmentThumbnail: (attachmentId: string) =>
+    `${api_host}/conversation/attachment/${attachmentId}/thumbnail`,
+  deleteAttachment: (attachmentId: string) =>
+    `${api_host}/conversation/attachment/${attachmentId}`,
 
   // learning stats
   getDialogStats: (dialogId: string) =>

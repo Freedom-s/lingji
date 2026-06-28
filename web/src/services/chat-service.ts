@@ -29,6 +29,10 @@ const {
   getRelatedQuestions,
   uploadTempFile,
   getTempFile,
+  uploadAttachment,
+  completionWithAttachment,
+  getAttachmentThumbnail,
+  deleteAttachment,
 } = api;
 
 const methods = {
@@ -135,6 +139,22 @@ const methods = {
   getTempFile: {
     url: getTempFile,
     method: 'get',
+  },
+  uploadAttachment: {
+    url: uploadAttachment,
+    method: 'post',
+  },
+  completionWithAttachment: {
+    url: completionWithAttachment,
+    method: 'post',
+  },
+  getAttachmentThumbnail: {
+    url: getAttachmentThumbnail,
+    method: 'get',
+  },
+  deleteAttachment: {
+    url: deleteAttachment,
+    method: 'delete',
   },
 } as const;
 

@@ -1,29 +1,22 @@
 import chatService from '@/services/chat-service';
 import { useMutation } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
 
-export interface ITempFileInfo {
-  file_id: string;
-  filename: string;
-  size: number;
-  content_type: string;
+export interface IAttachmentInfo {
+  attachment_id: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  mime_type: string;
 }
 
-export const useUploadTempFile = () => {
-  const { t } = useTranslation();
-
+export const useUploadAttachment = () => {
   const {
     data,
     isPending: loading,
     mutateAsync,
   } = useMutation({
-    mutationKey: ['uploadTempFile'],
+    mutationKey: ['uploadAttachment'],
     mutationFn: async (params: { file: File; conversationId?: string }) => {
-      console.log(
-        '[DEBUG] Starting temp file upload:',
-        params?.file?.name || 'unknown file',
-      );
-
       if (!params?.file) {
         throw new Error('No file provided for upload');
       }
@@ -34,52 +27,35 @@ export const useUploadTempFile = () => {
         formData.append('conversation_id', params.conversationId);
       }
 
-      try {
-        console.log('[DEBUG] Calling chatService.uploadTempFile');
-        const response = await chatService.uploadTempFile(formData);
-        console.log('[DEBUG] Upload response:', response);
+      const response = await chatService.uploadAttachment(formData);
+      const actualResponse = Array.isArray(response) ? response[0] : response;
+      const data = actualResponse?.data || actualResponse;
 
-        // Handle the response structure from umi-request with getResponse: true
-        // response is an array [response, originalResponse] when getResponse: true
-        const actualResponse = Array.isArray(response) ? response[0] : response;
-        const data = actualResponse?.data || actualResponse;
-        console.log('[DEBUG] Parsed data:', data);
-
-        if (data?.code === 0) {
-          console.log('[DEBUG] Upload successful');
-          return data.data as ITempFileInfo;
-        } else {
-          console.error(
-            '[DEBUG] Upload failed with code:',
-            data?.code,
-            'message:',
-            data?.message,
-          );
-          throw new Error(data?.message || 'Upload failed');
-        }
-      } catch (error: any) {
-        console.error('[DEBUG] Upload error:', error);
-        throw error;
+      if (data?.code === 0) {
+        return data.data as IAttachmentInfo;
+      } else {
+        throw new Error(data?.message || 'Upload failed');
       }
     },
   });
 
-  return { data, loading, uploadTempFile: mutateAsync };
+  return { data, loading, uploadAttachment: mutateAsync };
 };
 
-export const useGetTempFile = () => {
-  const getTempFile = async (fileId: string) => {
-    const response = await chatService.getTempFile(fileId);
-
-    // Handle the response structure from umi-request with getResponse: true
-    const data = response.data || response;
-
-    if (data.code === 0) {
-      return data.data;
-    } else {
-      throw new Error(data.message || 'Get file failed');
+export const useDeleteAttachment = () => {
+  const deleteAttachment = async (attachmentId: string) => {
+    const response = await chatService.deleteAttachment({ url: attachmentId });
+    const data = response?.data || response;
+    if (data?.code === 0) {
+      return true;
     }
+    throw new Error(data?.message || 'Delete failed');
   };
 
-  return { getTempFile };
+  return { deleteAttachment };
+};
+
+export const getAttachmentThumbnailUrl = (attachmentId: string): string => {
+  // chatService.getAttachmentThumbnail uses template URL, construct the URL directly
+  return `/v1/conversation/attachment/${attachmentId}/thumbnail`;
 };
