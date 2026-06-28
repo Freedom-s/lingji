@@ -62,6 +62,9 @@ export const useDeleteAttachment = () => {
 };
 
 export const getAttachmentThumbnailUrl = (attachmentId: string): string => {
-  // chatService.getAttachmentThumbnail uses template URL, construct the URL directly
   return `/v1/conversation/attachment/${attachmentId}/thumbnail`;
+};
+
+export const getAttachmentFileUrl = (attachmentId: string): string => {
+  return `/v1/conversation/attachment/${attachmentId}/file`;
 };

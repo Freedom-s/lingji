@@ -987,6 +987,30 @@ def attachment_thumbnail(attachment_id):
         return server_error_response(e)
 
 
+@manager.route("/attachment/<attachment_id>/file", methods=["GET"])  # type: ignore # noqa: F821
+def attachment_file(attachment_id):
+    """获取附件原文件（仅图片类型，无认证，attachment_id 为 UUID 不可猜测）"""
+    try:
+        e, att = AttachmentService.get_by_id(attachment_id)
+        if not e:
+            return get_data_error_result(message="附件不存在")
+
+        if att.file_type != 'image':
+            return get_data_error_result(message="非图片类型不支持预览", code=404)
+
+        minio_client = get_minio_client()
+        response = minio_client.get_object("temp", att.minio_path)
+        content_bytes = response.read()
+        response.close()
+        response.release_conn()
+
+        mime = att.mime_type or 'image/jpeg'
+        return Response(content_bytes, mimetype=mime)
+
+    except Exception as e:
+        return server_error_response(e)
+
+
 @manager.route("/attachment/<attachment_id>", methods=["DELETE"])  # type: ignore # noqa: F821
 @login_required
 def delete_attachment(attachment_id):

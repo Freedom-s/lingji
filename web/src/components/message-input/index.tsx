@@ -5,7 +5,7 @@ import {
   useRemoveNextDocument,
   useUploadAndParseDocument,
 } from '@/hooks/document-hooks';
-import { IAttachmentInfo, getAttachmentThumbnailUrl, useUploadAttachment } from '@/hooks/temp-file-hooks';
+import { IAttachmentInfo, getAttachmentThumbnailUrl, getAttachmentFileUrl, useUploadAttachment } from '@/hooks/temp-file-hooks';
 import { getExtension } from '@/utils/document-util';
 import { formatBytes } from '@/utils/file-util';
 import {
@@ -20,6 +20,7 @@ import {
   Card,
   Divider,
   Flex,
+  Image,
   Input,
   List,
   Space,
@@ -382,10 +383,12 @@ const MessageInput = ({
                       ) : (
                         <>
                           {isImageFile(fileName) && (
-                            <img
+                            <Image
                               src={getAttachmentThumbnailUrl(tempFileInfo?.attachment_id)}
-                              alt={fileName}
-                              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4 }}
+                              preview={{ src: getAttachmentFileUrl(tempFileInfo?.attachment_id) }}
+                              width={40}
+                              height={40}
+                              style={{ objectFit: 'cover', borderRadius: 4 }}
                             />
                           )}
                           <FileIcon id={id} name={fileName}></FileIcon>
