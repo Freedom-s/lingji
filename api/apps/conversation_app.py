@@ -47,6 +47,7 @@ except ImportError:
 from api.db.services.attachment_service import AttachmentService
 from api.db.services.database import get_minio_client
 from api.utils import get_uuid, current_timestamp
+from PIL import Image
 
 
 def extract_file_content(file_content_bytes, filename, content_type):
@@ -961,6 +962,63 @@ def upload_attachment():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return server_error_response(e)
+
+
+@manager.route("/attachment/<attachment_id>/thumbnail", methods=["GET"])  # type: ignore # noqa: F821
+@login_required
+def attachment_thumbnail(attachment_id):
+    """获取附件缩略图（仅图片类型）"""
+    try:
+        e, att = AttachmentService.get_by_id(attachment_id)
+        if not e:
+            return get_data_error_result(message="附件不存在")
+
+        if att.file_type != 'image':
+            return get_data_error_result(message="非图片类型无缩略图", code=404)
+
+        minio_client = get_minio_client()
+        response = minio_client.get_object("temp", att.minio_path)
+        content_bytes = response.read()
+        response.close()
+        response.release_conn()
+
+        # 生成 200px 宽缩略图
+        image = Image.open(io.BytesIO(content_bytes))
+        image.thumbnail((200, 200 * image.height // image.width), Image.LANCZOS)
+        output = io.BytesIO()
+        image_format = image.format or 'JPEG'
+        image.save(output, format=image_format)
+        output.seek(0)
+
+        mime = att.mime_type or 'image/jpeg'
+        return Response(output.getvalue(), mimetype=mime)
+
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route("/attachment/<attachment_id>", methods=["DELETE"])  # type: ignore # noqa: F821
+@login_required
+def delete_attachment(attachment_id):
+    """删除单个附件（MinIO + 逻辑删除）"""
+    try:
+        e, att = AttachmentService.get_by_id(attachment_id)
+        if not e:
+            return get_data_error_result(message="附件不存在")
+
+        # 从 MinIO 删除文件
+        try:
+            minio_client = get_minio_client()
+            minio_client.remove_object("temp", att.minio_path)
+        except Exception:
+            pass  # MinIO 文件可能已被清理，忽略
+
+        # 逻辑删除 MySQL 记录
+        AttachmentService.update_by_id(attachment_id, {"status": "0"})
+
+        return get_json_result(data=True)
+    except Exception as e:
         return server_error_response(e)
 
 
