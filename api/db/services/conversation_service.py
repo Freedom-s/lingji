@@ -164,6 +164,21 @@ def completion(tenant_id, chat_id, question, name="New session", session_id=None
         yield answer
 
 
+def cleanup_attachments_for_conversation(conversation_id: str):
+    """删除指定 conversation 下所有附件（MinIO 文件 + MySQL 逻辑删除）"""
+    from api.db.services.attachment_service import AttachmentService
+    from management.server.database import get_minio_client
+
+    attachments = AttachmentService.get_by_conversation(conversation_id)
+    minio_client = get_minio_client()
+    for att in attachments:
+        try:
+            minio_client.remove_object("temp", att.minio_path)
+        except Exception:
+            pass  # 文件可能已不存在
+    AttachmentService.logical_delete_by_conversation(conversation_id)
+
+
 def iframe_completion(dialog_id, question, session_id=None, stream=True, **kwargs):
     e, dia = DialogService.get_by_id(dialog_id)
     assert e, "Dialog not found"

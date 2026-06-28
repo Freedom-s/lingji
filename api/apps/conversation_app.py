@@ -15,7 +15,7 @@ from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from api import settings
 from api.db import LLMType, StatusEnum
 from api.db.db_models import APIToken
-from api.db.services.conversation_service import ConversationService, structure_answer
+from api.db.services.conversation_service import ConversationService, structure_answer, cleanup_attachments_for_conversation
 from api.db.services.dialog_service import DialogService, ask, chat
 from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.llm_service import LLMBundle, TenantService
@@ -515,6 +515,7 @@ def rm():
                     break
             else:
                 return get_json_result(data=False, message="Only owner of conversation authorized for this operation.", code=settings.RetCode.OPERATING_ERROR)
+            cleanup_attachments_for_conversation(cid)
             ConversationService.delete_by_id(cid)
         return get_json_result(data=True)
     except Exception as e:
