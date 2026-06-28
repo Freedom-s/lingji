@@ -38,6 +38,10 @@ try:
 except ImportError:
     DOC_AVAILABLE = False
 
+from api.db.services.attachment_service import AttachmentService
+from api.db.services.database import get_minio_client
+from api.utils import get_uuid, current_timestamp
+
 
 def extract_file_content(file_content_bytes, filename, content_type):
     """
@@ -628,6 +632,99 @@ def get_temp_file(file_id):
         })
 
     except Exception as e:
+        return server_error_response(e)
+
+
+ALLOWED_EXTENSIONS = {
+    'txt', 'md', 'pdf', 'ppt', 'pptx', 'doc', 'docx',
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}
+
+
+def _get_file_type(ext: str) -> str:
+    """根据扩展名返回 file_type"""
+    if ext in IMAGE_EXTENSIONS:
+        return 'image'
+    if ext in ('txt', 'md'):
+        return ext
+    if ext == 'pdf':
+        return 'pdf'
+    if ext in ('ppt', 'pptx'):
+        return 'ppt'
+    if ext in ('doc', 'docx'):
+        return 'doc'
+    return ext
+
+
+@manager.route("/upload_attachment", methods=["POST"])  # noqa: F821
+@login_required
+def upload_attachment():
+    """上传附件到 MinIO temp bucket + MySQL attachment 表"""
+    try:
+        if 'file' not in request.files:
+            return get_data_error_result(message="未检测到文件")
+
+        file = request.files['file']
+        if file.filename == '':
+            return get_data_error_result(message="未选择文件")
+
+        # 检查扩展名
+        file_ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if file_ext not in ALLOWED_EXTENSIONS:
+            return get_data_error_result(
+                message=f"不支持的文件格式 .{file_ext}。支持的类型：{', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            )
+
+        # 检查文件大小
+        file_content = file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            return get_data_error_result(message="文件大小不能超过10MB")
+
+        # 生成 ID 和 MinIO 路径
+        attachment_id = get_uuid()
+        conversation_id = request.form.get('conversation_id', '')
+        minio_path = f"{conversation_id}/{attachment_id}/{file.filename}"
+
+        # 上传到 MinIO temp bucket
+        minio_client = get_minio_client()
+        bucket_name = "temp"
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+
+        minio_client.put_object(
+            bucket_name,
+            minio_path,
+            io.BytesIO(file_content),
+            len(file_content)
+        )
+
+        # 写入 MySQL
+        file_type = _get_file_type(file_ext)
+        AttachmentService.save(
+            id=attachment_id,
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            file_name=file.filename,
+            file_type=file_type,
+            file_size=len(file_content),
+            mime_type=file.content_type or 'application/octet-stream',
+            minio_path=minio_path,
+            status="1"
+        )
+
+        return get_json_result(data={
+            "attachment_id": attachment_id,
+            "file_name": file.filename,
+            "file_type": file_type,
+            "file_size": len(file_content),
+            "mime_type": file.content_type or 'application/octet-stream'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return server_error_response(e)
 
 
