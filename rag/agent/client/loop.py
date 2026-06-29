@@ -393,3 +393,63 @@ class AgentLoop:
             "answer": answer,
             "reference": {"chunks": chunks, "doc_aggs": doc_aggs},
         }
+
+    def _fetch_images_from_minio(self, retrieved_pages: list[dict], max_images: int = 5) -> list[str]:
+        """从检索结果中提取最相关的页面截图并转为 base64 data URL。
+
+        去重 → 按相关性分数降序 → 取前 max_images 张 → MinIO 拉取 → base64。
+        单张获取失败跳过，不阻断流程。
+        """
+        if max_images <= 0 or not retrieved_pages:
+            return []
+
+        # 1. 按 page_id 去重
+        seen: set[str] = set()
+        unique_pages: list[dict] = []
+        for p in retrieved_pages:
+            pid = p.get("page_id", "")
+            if pid and pid not in seen:
+                seen.add(pid)
+                unique_pages.append(p)
+
+        # 2. 按相关性分数降序排列
+        def _score(p: dict) -> float:
+            return float(
+                p.get("rerank_score")
+                or p.get("rrf_score")
+                or p.get("similarity")
+                or 0.0
+            )
+        unique_pages.sort(key=_score, reverse=True)
+
+        # 3. 取前 max_images 张，筛选有 img_url 的
+        candidates = [p for p in unique_pages[:max_images] if p.get("img_url")]
+        if not candidates:
+            logger.info("没有可注入的图片（所有候选页面均无 img_url）")
+            return []
+
+        # 4. 从 MinIO 获取 base64
+        try:
+            from api.db.services.dialog_service import get_image_base64_from_minio
+        except ImportError:
+            logger.warning("无法导入 get_image_base64_from_minio，跳过图片注入")
+            return []
+
+        images: list[str] = []
+        for p in candidates:
+            img_url = p.get("img_url", "")
+            page_num = p.get("page_num_int", "?")
+            doc_name = p.get("docnm_kwd", "")
+            try:
+                b64 = get_image_base64_from_minio(img_url)
+                if b64:
+                    images.append(b64)
+                    logger.info(f"图片获取成功: {doc_name} p{page_num} ({len(b64)} chars)")
+                else:
+                    logger.warning(f"图片获取返回空: {doc_name} p{page_num} {img_url}")
+            except Exception as e:
+                logger.warning(f"图片获取异常 {doc_name} p{page_num} {img_url}: {e}")
+                continue
+
+        logger.info(f"图片注入准备: {len(images)}/{len(candidates)} 张成功")
+        return images
