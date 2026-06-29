@@ -453,3 +453,41 @@ class AgentLoop:
 
         logger.info(f"图片注入准备: {len(images)}/{len(candidates)} 张成功")
         return images
+
+    def _inject_images_to_user_message(self, messages: list[dict], images_base64: list[str]) -> list[dict]:
+        """将 base64 图片注入第一个 user 消息，改写为 multimodal content 格式。
+
+        找到第一个 role="user" 且 content 为纯文本的消息，
+        将其 content 改写为 [{"type": "text", ...}, {"type": "image_url", ...}, ...]。
+
+        如果 images_base64 为空，原样返回 messages（浅拷贝）。
+        始终返回新列表，不修改传入的 messages。
+        """
+        if not images_base64:
+            return list(messages)
+
+        import copy
+        msgs = copy.deepcopy(messages)
+
+        for msg in msgs:
+            if msg.get("role") == "user" and isinstance(msg.get("content"), str):
+                original_text = msg["content"]
+                content_parts: list[dict] = [
+                    {"type": "text", "text": original_text},
+                ]
+                for b64 in images_base64:
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": b64, "detail": "auto"},
+                    })
+                msg["content"] = content_parts
+                logger.info(
+                    f"user 消息已改写为 multimodal: "
+                    f"text_len={len(original_text)}, images={len(images_base64)}"
+                )
+                break
+        else:
+            # 没有找到可改写的 user 消息（理论上不会发生）
+            logger.warning("未找到 role=user 且 content 为 str 的消息，跳过图片注入")
+
+        return msgs
