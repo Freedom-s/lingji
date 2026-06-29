@@ -154,7 +154,7 @@ def extract_file_content(file_content_bytes, filename, content_type):
 # ============================================================
 
 MCP_SERVER_URL = "http://127.0.0.1:9390"
-AGENT_ENABLED = True  # Feature flag，可设置为 False 回退到旧版 chat()
+AGENT_ENABLED = False  # Feature flag，可设置为 False 回退到旧版 chat()
 
 
 def _should_use_agent(dia) -> bool:

@@ -2,6 +2,7 @@
   padding: 20px 0;
   .messageItemSection {
     display: inline-block;
+    max-width: 100%;
   }
   .messageItemSectionLeft {
     width: 95%;
@@ -10,6 +11,7 @@
   .messageItemContent {
     display: inline-flex;
     gap: 10px;  // 减小间距：16px -> 10px
+    max-width: 100%;  // 防止 inline-flex 随内容无限撑大，迫使内部 flex 子元素收缩换行
   }
   .messageItemContentReverse {
     flex-direction: row-reverse;

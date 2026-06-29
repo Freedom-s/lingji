@@ -39,10 +39,12 @@
   flex-direction: column;
 }
 
-// Critical: flex children default to min-height: auto, which prevents shrinking.
-// This forces them to shrink below content height so overflow-y: auto can work.
+// Critical: flex children default to min-height/min-width: auto, which prevents shrinking.
+// min-height: 0 allows vertical shrinking so overflow-y: auto can work.
+// min-width: 0 allows horizontal shrinking so wide content (code blocks) doesn't cause scrollbars.
 .chatContainer :global(.ant-flex) {
   min-height: 0;
+  min-width: 0;
 }
 
 .divider {
