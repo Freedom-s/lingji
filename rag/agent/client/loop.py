@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import time
@@ -466,7 +467,6 @@ class AgentLoop:
         if not images_base64:
             return list(messages)
 
-        import copy
         msgs = copy.deepcopy(messages)
 
         for msg in msgs:
