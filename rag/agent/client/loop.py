@@ -59,6 +59,7 @@ class AgentLoop:
         dialog,
         embd_id: str | None = None,
         rerank_id: str | None = None,
+        max_images: int = 5,
     ) -> Generator[dict, None, None]:
         """
         ReAct Agent 主循环：LLM 自主决策检索或回答，流式返回。
@@ -205,6 +206,12 @@ class AgentLoop:
             # LLM 返回了文本回答（无 tool_calls）→ 退出循环，生成答案
             logger.info(f"[AGENT_TRACE] Turn {turn+1} LLM 决定直接回答，退出 ReAct 循环")
             break
+
+        # 5.5 循环结束后：注入图片到 user 消息（多模态 VLM 支持）
+        images_base64 = self._fetch_images_from_minio(retrieved_pages, max_images)
+        if images_base64:
+            logger.info(f"注入 {len(images_base64)} 张图片到 user 消息")
+            messages = self._inject_images_to_user_message(messages, images_base64)
 
         # 6. 流式生成最终答案
         answer = ""
