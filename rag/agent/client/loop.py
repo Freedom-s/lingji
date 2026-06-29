@@ -413,6 +413,7 @@ class AgentLoop:
                 unique_pages.append(p)
 
         # 2. 按相关性分数降序排列
+        # Zero means "not scored" in this system, not "scored as irrelevant" -- falling through is intentional
         def _score(p: dict) -> float:
             return float(
                 p.get("rerank_score")
@@ -444,12 +445,11 @@ class AgentLoop:
                 b64 = get_image_base64_from_minio(img_url)
                 if b64:
                     images.append(b64)
-                    logger.info(f"图片获取成功: {doc_name} p{page_num} ({len(b64)} chars)")
+                    logger.debug(f"图片获取成功: {doc_name} p{page_num} ({len(b64)} chars)")
                 else:
                     logger.warning(f"图片获取返回空: {doc_name} p{page_num} {img_url}")
             except Exception as e:
                 logger.warning(f"图片获取异常 {doc_name} p{page_num} {img_url}: {e}")
-                continue
 
         logger.info(f"图片注入准备: {len(images)}/{len(candidates)} 张成功")
         return images
