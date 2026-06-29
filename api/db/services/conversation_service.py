@@ -59,8 +59,8 @@ def structure_answer(conv, ans, message_id, session_id):
 
     reference = ans["reference"]
     if not isinstance(reference, dict):
-        reference = {}
-        ans["reference"] = {}
+        reference = {"total": 0, "chunks": [], "doc_aggs": []}
+        ans["reference"] = {"total": 0, "chunks": [], "doc_aggs": []}
 
 
     # chunk_list = chunks_format(reference) # 格式化后的chunk

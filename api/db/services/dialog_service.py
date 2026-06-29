@@ -182,9 +182,9 @@ def chat_solo(dialog, messages, stream=True):
             if num_tokens_from_string(delta_ans) < 4:
                 continue
             last_ans = answer
-            yield {"answer": answer, "reference": {}}
+            yield {"answer": answer, "reference": {"total": 0, "chunks": [], "doc_aggs": []}}
         if delta_ans:
-            yield {"answer": answer, "reference": {}}
+            yield {"answer": answer, "reference": {"total": 0, "chunks": [], "doc_aggs": []}}
 
 
 def chat(dialog, messages, stream=True, **kwargs):

@@ -8,13 +8,15 @@ from rag.agent.client.mcp_client import MCPClient
 
 logger = logging.getLogger("ragflow.agent.loop")
 
-REACT_SYSTEM_PROMPT = """你是一个名为“灵机”的智能教学助手。你的目标是耐心、专业、准确地解答学生关于课程的问题。
+EMPTY_REF = {"total": 0, "chunks": [], "doc_aggs": []}
+
+REACT_SYSTEM_PROMPT = """你是一个名为"灵机"的智能教学助手。你的目标是耐心、专业、准确地解答学生关于课程的问题。
 
 【你的工作流与决策机制】
-1. **意图判断**：如果学生只是简单问候、表达情绪或闲聊（如“你好”、“谢谢”、“太难了”），请直接用亲切的语气回复，**绝对不要**调用检索工具。
+1. **意图判断**：如果学生只是简单问候、表达情绪或闲聊（如"你好"、"谢谢"、"太难了"），请直接用亲切的语气回复，**绝对不要**调用检索工具。
 2. **知识检索**：如果学生询问具体的课程概念、知识点、作业要求或相关拓展，你**必须**优先使用工具进行检索。
 3. **信息评估**：每次检索后，仔细阅读返回的结果。如果信息已经足够回答问题，请停止检索并开始生成答案；如果信息不足或只涵盖了部分问题，请提取新的关键词继续使用工具检索，直到获取完整信息。
-4. **诚实原则**：如果你经过多次检索仍未找到相关内容，请坦诚地告诉学生“在当前课件/知识库中未能找到相关信息”，并根据你的通用知识给出合理的推测或建议，但必须明确区分“课件内容”和“通用知识”。
+4. **诚实原则**：如果你经过多次检索仍未找到相关内容，请坦诚地告诉学生"在当前课件/知识库中未能找到相关信息"，并根据你的通用知识给出合理的推测或建议，但必须明确区分"课件内容"和"通用知识"。
 
 【回答规范】
 - **客观准确**：严格基于检索到的内容作答，不要编造（幻觉）知识库中不存在的特定课程规定或数据。
@@ -158,7 +160,7 @@ class AgentLoop:
 
                     # 向前端发送工具调用开始事件（可视化推理过程）
                     tool_call_log += f"\n<tool_call name=\"{tool_name}\">\n"
-                    yield {"answer": tool_call_log, "reference": {}}
+                    yield {"answer": tool_call_log, "reference": EMPTY_REF}
 
                     # 注入系统上下文参数（LLM 不传的参数，AgentLoop 自动补上）
                     self._inject_context(tool_name, args, kb_ids, tenant_ids,
@@ -183,7 +185,7 @@ class AgentLoop:
                     # 向前端发送工具调用结果（可视化推理过程）
                     formatted = self._format_tool_result(tool_name, result)
                     tool_call_log += f"{formatted}\n</tool_call>\n"
-                    yield {"answer": tool_call_log, "reference": {}}
+                    yield {"answer": tool_call_log, "reference": EMPTY_REF}
 
                     # 把工具调用和结果加入消息
                     messages.append({
@@ -218,12 +220,12 @@ class AgentLoop:
 
         for chunk in self._stream_answer(messages, retrieved_pages):
             answer = tool_call_log + "\n" + chunk if tool_call_log else chunk
-            yield {"answer": answer, "reference": {}}
+            yield {"answer": answer, "reference": EMPTY_REF}
 
         # 7. 构建最终响应（规范化引用标记 + 转换 MinIO URL）
         answer = self._normalize_references(answer)
         final = self._build_final_response(answer, retrieved_pages)
-        yield {"answer": answer, "reference": final.get("reference", {})}
+        yield {"answer": answer, "reference": final.get("reference", EMPTY_REF)}
 
         elapsed = time.time() - start_time
         logger.info(f"ReAct Agent 完成，耗时 {elapsed:.2f}s，共调用 {len(executed_tools)} 次工具，检索 {len(retrieved_pages)} 页")
@@ -376,10 +378,11 @@ class AgentLoop:
             seen.add(page_id)
             score = page.get("rerank_score") or page.get("rrf_score") or page.get("similarity") or 0.0
             chunks.append({
-                "chunk_id": page_id,
+                "page_id": page_id,
                 "content_with_weight": page.get("full_content", ""),
                 "doc_id": page.get("doc_id", ""),
                 "docnm_kwd": page.get("docnm_kwd", ""),
+                "kb_id": page.get("kb_id", ""),
                 "img_url": self._convert_minio_url(page.get("img_url", "")),
                 "page_num_int": page.get("page_num_int", 0),
                 "similarity": round(float(score), 4),
@@ -399,7 +402,7 @@ class AgentLoop:
 
         return {
             "answer": answer,
-            "reference": {"chunks": chunks, "doc_aggs": doc_aggs},
+            "reference": {"total": len(chunks), "chunks": chunks, "doc_aggs": doc_aggs},
         }
 
     def _fetch_images_from_minio(self, retrieved_pages: list[dict], max_images: int = 5) -> list[str]:
