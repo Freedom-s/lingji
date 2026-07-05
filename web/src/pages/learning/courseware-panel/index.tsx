@@ -10,7 +10,7 @@ import {
   EditOutlined,
   PlayCircleOutlined,
 } from '@ant-design/icons';
-import { Button, Empty, Result, Select, Spin, Typography, Space } from 'antd';
+import { Button, Empty, Progress, Result, Select, Spin, Typography, Space } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import request from '@/utils/request';
 import styles from './index.less';
@@ -246,6 +246,12 @@ const CoursewarePanel = ({
         ? Math.round((videoProgress.watched_seconds / videoProgress.total_duration) * 100)
         : 0;
 
+      const formatTime = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+      };
+
       return (
         <div className={styles.videoContainer}>
           <video
@@ -253,7 +259,7 @@ const CoursewarePanel = ({
             controls
             className={styles.videoPlayer}
             src={`/v1/document/get/${selectedDocId}`}
-            style={{ width: '100%', maxHeight: '62vh' }}
+            style={{ width: '100%', maxHeight: '58vh' }}
             controlsList="nodownload"
             onLoadedMetadata={() => {
               if (resumePositionRef.current > 0 && videoRef.current) {
@@ -265,7 +271,6 @@ const CoursewarePanel = ({
             onPause={stopProgressReport}
             onEnded={stopProgressReport}
             onSeeked={() => {
-              // Update lastPositionRef to avoid false delta on seek
               if (videoRef.current) {
                 lastPositionRef.current = Math.floor(videoRef.current.currentTime);
               }
@@ -275,17 +280,30 @@ const CoursewarePanel = ({
           </video>
           {/* Progress bar */}
           <div className={styles.progressBarContainer}>
-            <div className={styles.progressBar}>
-              <div
-                className={styles.progressFill}
-                style={{ width: `${progressPercent}%` }}
-              />
+            <div className={styles.progressInfo}>
+              {videoProgress.is_completed ? (
+                <span className={styles.completedBadge}>✓ 已完成</span>
+              ) : (
+                <span className={styles.progressLabel}>有效观看</span>
+              )}
+              <span className={styles.progressTime}>
+                {formatTime(videoProgress.watched_seconds)} / {formatTime(videoProgress.total_duration)}
+              </span>
             </div>
-            <span className={styles.progressText}>
-              {videoProgress.is_completed
-                ? '✓ 已完成'
-                : `已观看 ${progressPercent}%`}
-            </span>
+            <Progress
+              percent={progressPercent}
+              size="small"
+              strokeColor={videoProgress.is_completed ? '#52c41a' : {
+                '0%': '#1677ff',
+                '100%': '#52c41a',
+              }}
+              trailColor="#f0f0f0"
+              showInfo={false}
+              strokeLinecap="round"
+            />
+            {!videoProgress.is_completed && (
+              <span className={styles.progressPercent}>{progressPercent}%</span>
+            )}
           </div>
           {/* Resume toast */}
           {videoResumed && (
