@@ -679,8 +679,7 @@ class KnowledgebaseService:
                 """
 
                 # 视频文件直接标记为完成，跳过解析
-                is_video_doc = (file_type == "video")
-                doc_run = "3" if is_video_doc else "0"
+                doc_run = "3" if file_type == FileType.VIDEO.value else "0"
 
                 doc_params = [
                     doc_id,
