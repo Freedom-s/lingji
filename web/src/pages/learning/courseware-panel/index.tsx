@@ -269,7 +269,22 @@ const CoursewarePanel = ({
             }}
             onPlay={startProgressReport}
             onPause={stopProgressReport}
-            onEnded={stopProgressReport}
+            onEnded={() => {
+              stopProgressReport();
+              // 播放结束做最终上报，避免最后几秒丢失
+              if (videoRef.current) {
+                const pos = Math.floor(videoRef.current.currentTime);
+                const dur = Math.floor(videoRef.current.duration || 0);
+                request('/v1/video/progress/report', {
+                  method: 'POST',
+                  data: { docId: selectedDocId, position: pos, totalDuration: dur, playbackRate: videoRef.current.playbackRate || 1 },
+                }).then((res) => {
+                  if (res.data?.code === 0 && res.data.data) {
+                    setVideoProgress(prev => ({ ...prev, ...res.data.data }));
+                  }
+                }).catch(() => {});
+              }
+            }}
             onSeeked={() => {
               if (videoRef.current) {
                 lastPositionRef.current = Math.floor(videoRef.current.currentTime);
