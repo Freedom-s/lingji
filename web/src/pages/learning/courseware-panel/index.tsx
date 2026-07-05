@@ -290,20 +290,35 @@ const CoursewarePanel = ({
                 {formatTime(videoProgress.watched_seconds)} / {formatTime(videoProgress.total_duration)}
               </span>
             </div>
-            <Progress
-              percent={progressPercent}
-              size="small"
-              strokeColor={videoProgress.is_completed ? '#52c41a' : {
-                '0%': '#1677ff',
-                '100%': '#52c41a',
-              }}
-              trailColor="#f0f0f0"
-              showInfo={false}
-              strokeLinecap="round"
-            />
-            {!videoProgress.is_completed && (
-              <span className={styles.progressPercent}>{progressPercent}%</span>
-            )}
+            <div className={styles.progressRow}>
+              <Progress
+                percent={progressPercent}
+                size="small"
+                strokeColor={videoProgress.is_completed ? '#52c41a' : {
+                  '0%': '#1677ff',
+                  '100%': '#52c41a',
+                }}
+                trailColor="#f0f0f0"
+                showInfo={false}
+                strokeLinecap="round"
+                className={styles.progressLine}
+              />
+              <Progress
+                type="circle"
+                percent={progressPercent}
+                size={48}
+                strokeWidth={6}
+                strokeColor={videoProgress.is_completed ? '#52c41a' : {
+                  '0%': '#1677ff',
+                  '100%': '#52c41a',
+                }}
+                format={(p) => (
+                  <span className={styles.circlePercentText}>
+                    {videoProgress.is_completed ? '✓' : `${p}%`}
+                  </span>
+                )}
+              />
+            </div>
           </div>
           {/* Resume toast */}
           {videoResumed && (
