@@ -54,7 +54,6 @@ class VariantRunner:
             rerank_score.
         """
         cfg = self.config
-        results: list[dict] = []
 
         # ── Step 1: Parallel retrieval paths ──
         result_sets: dict[str, dict] = {}
