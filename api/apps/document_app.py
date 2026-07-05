@@ -392,18 +392,32 @@ def get(doc_id):
             return get_data_error_result(message="Document not found!")
 
         b, n = File2DocumentService.get_storage_address(doc_id=doc_id)
-        response = flask.make_response(STORAGE_IMPL.get(b, n))
 
         ext = re.search(r"\.([^.]+)$", doc.name)
+        ext_str = ext.group(1).lower() if ext else ""
+
+        # Video: redirect to presigned URL so browser can Range-seek natively
+        if doc.type == FileType.VIDEO.value:
+            try:
+                from datetime import timedelta
+                presigned_url = STORAGE_IMPL.get_presigned_url(b, n, timedelta(hours=24))
+                if presigned_url:
+                    return flask.redirect(presigned_url, code=302)
+            except Exception:
+                pass  # fall back to direct streaming if presigned URL unavailable
+
+        response = flask.make_response(STORAGE_IMPL.get(b, n))
+
         if ext:
             if doc.type == FileType.VISUAL.value:
-                response.headers.set("Content-Type", "image/%s" % ext.group(1))
+                response.headers.set("Content-Type", f"image/{ext_str}")
             elif doc.type == FileType.VIDEO.value:
                 video_mime_map = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime"}
-                mime = video_mime_map.get(ext.group(1).lower(), "video/mp4")
+                mime = video_mime_map.get(ext_str, "video/mp4")
                 response.headers.set("Content-Type", mime)
+                response.headers.set("Accept-Ranges", "bytes")
             else:
-                response.headers.set("Content-Type", "application/%s" % ext.group(1))
+                response.headers.set("Content-Type", f"application/{ext_str}")
         return response
     except Exception as e:
         return server_error_response(e)
