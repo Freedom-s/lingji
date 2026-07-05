@@ -99,7 +99,7 @@ const CoursewarePanel = ({
     if (!isVideo || !selectedDocId) return;
     const fetchProgress = async () => {
       try {
-        const res = await fetch(`/v1/video/progress/${selectedDocId}`);
+        const res = await fetch(`/v1/video/progress/${selectedDocId}`, { credentials: 'include' });
         const data = await res.json();
         if (data?.code === 0 && data.data) {
           setVideoProgress(data.data);
@@ -130,6 +130,7 @@ const CoursewarePanel = ({
 
       fetch('/v1/video/progress/report', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ doc_id: selectedDocId, position: pos, total_duration: dur, playback_rate: videoRef.current?.playbackRate || 1 }),
       })
