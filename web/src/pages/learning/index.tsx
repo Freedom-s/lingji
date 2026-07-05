@@ -132,7 +132,7 @@ const LearningPage = () => {
           size="small"
           icon={chatCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           onClick={() => setChatCollapsed(!chatCollapsed)}
-          title={chatCollapsed ? '展开助教' : '收起助教'}
+          title={chatCollapsed ? '展开灵机助教' : '收起灵机助教'}
         />
       </div>
 
@@ -141,7 +141,7 @@ const LearningPage = () => {
         <div className={styles.collapsedTab} onClick={() => setChatCollapsed(false)}>
           <div className={styles.collapsedTabInner}>
             <MessageOutlined className={styles.collapsedTabIcon} />
-            <span className={styles.collapsedTabText}>助 教</span>
+            <span className={styles.collapsedTabText}>灵机助教</span>
           </div>
         </div>
       ) : (
