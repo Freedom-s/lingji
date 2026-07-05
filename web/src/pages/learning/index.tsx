@@ -6,7 +6,7 @@ import { IConversation } from '@/interfaces/database/chat';
 import chatService from '@/services/chat-service';
 import { getConversationId } from '@/utils/chat';
 import { Button, Divider, Select } from 'antd';
-import { PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
+import { PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'umi';
@@ -136,8 +136,15 @@ const LearningPage = () => {
         />
       </div>
 
-      {/* Right — Chat */}
-      {!chatCollapsed && (
+      {/* Right — Chat (expanded) or collapsed tab */}
+      {chatCollapsed ? (
+        <div className={styles.collapsedTab} onClick={() => setChatCollapsed(false)}>
+          <div className={styles.collapsedTabInner}>
+            <MessageOutlined className={styles.collapsedTabIcon} />
+            <span className={styles.collapsedTabText}>助 教</span>
+          </div>
+        </div>
+      ) : (
         <div className={styles.chatColumn}>
           <div className={styles.conversationHeader}>
             <Select
