@@ -99,8 +99,13 @@ def report_progress():
         if total_duration > 0:
             record.total_duration = total_duration
 
+        # 播放到结尾（position 接近总时长）：直接标记 100% 完成
+        if total_duration > 0 and position >= total_duration - 2:
+            record.watched_seconds = total_duration
+            record.is_completed = True
+
         # 完成判定：有效观看 ≥ 总时长 × 90%
-        if record.total_duration > 0 and record.watched_seconds >= record.total_duration * 0.9:
+        if not record.is_completed and record.total_duration > 0 and record.watched_seconds >= record.total_duration * 0.9:
             record.is_completed = True
 
         # 更新时间戳
