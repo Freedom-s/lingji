@@ -2,8 +2,6 @@
 import json
 import hashlib
 import logging
-from collections import Counter
-from typing import Any
 
 import numpy as np
 
@@ -122,6 +120,9 @@ def stratified_sample(
     Returns:
         Sampled queries.
     """
+    if not queries:
+        return []
+
     rng = np.random.default_rng(seed)
 
     # Group by course
