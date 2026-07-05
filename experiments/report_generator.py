@@ -308,6 +308,8 @@ import os as _os
 
 import matplotlib as _mpl
 _mpl.use("Agg")  # Non-interactive backend
+_mpl.rcParams['font.sans-serif'] = ['Heiti TC', 'STHeiti', 'SimHei', 'Songti SC', 'Arial Unicode MS']
+_mpl.rcParams['axes.unicode_minus'] = False
 import matplotlib.pyplot as _plt
 import numpy as _np
 
@@ -406,8 +408,6 @@ def generate_tool_usage_pie(
 ) -> None:
     """Pie chart: tool call frequency distribution."""
     _ensure_output_dir(output_path)
-
-    from collections import Counter
 
     counter: Counter = Counter()
     for r in agentic_results:
