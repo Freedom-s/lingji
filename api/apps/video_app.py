@@ -55,6 +55,7 @@ def report_progress():
     doc_id = data.get("doc_id")
     position = data.get("position", 0)
     total_duration = data.get("total_duration", 0)
+    playback_rate = data.get("playback_rate", 1.0)
 
     if not doc_id:
         return get_data_error_result(message="缺少 doc_id")
@@ -84,9 +85,11 @@ def report_progress():
                 is_completed=False,
             )
 
-        # 有效观看判定：delta > 0 且 ≤ 6 秒（允许 1 秒误差，避免暂停/网络抖动）
+        # 有效观看判定：delta 阈值根据倍速动态调整
+        # 正常播放 delta ≈ 5 × playback_rate，加 1 秒容差
+        max_valid_delta = 5 * playback_rate + 1
         delta = position - record.last_position
-        if 0 < delta <= 6:
+        if 0 < delta <= max_valid_delta:
             record.watched_seconds += delta
 
         # 更新 last_position 和 total_duration

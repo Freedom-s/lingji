@@ -131,7 +131,7 @@ const CoursewarePanel = ({
       fetch('/v1/video/progress/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doc_id: selectedDocId, position: pos, total_duration: dur }),
+        body: JSON.stringify({ doc_id: selectedDocId, position: pos, total_duration: dur, playback_rate: videoRef.current?.playbackRate || 1 }),
       })
         .then((res) => res.json())
         .then((data) => {
