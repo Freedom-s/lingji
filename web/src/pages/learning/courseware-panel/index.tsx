@@ -294,6 +294,13 @@ const CoursewarePanel = ({
             }}
             onSeeked={() => {
               if (videoRef.current) {
+                const progressPercent = videoProgress.total_duration > 0
+                  ? (videoProgress.watched_seconds / videoProgress.total_duration) * 100
+                  : 0;
+                // 进度不足 90% 时禁止向前拖拽，只能顺序观看或回退
+                if (progressPercent < 90 && videoRef.current.currentTime > videoProgress.watched_seconds + 3) {
+                  videoRef.current.currentTime = videoProgress.watched_seconds;
+                }
                 lastPositionRef.current = Math.floor(videoRef.current.currentTime);
               }
             }}
