@@ -13,6 +13,7 @@ class FileType(StrEnum):
     VISUAL = "visual"
     TEXT = "txt"
     HTML = "html"
+    VIDEO = "video"
     OTHER = "other"
 
 

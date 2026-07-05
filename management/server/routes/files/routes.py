@@ -8,7 +8,7 @@ from .. import files_bp
 from auth import require_superuser, get_current_user
 
 UPLOAD_FOLDER = "/data/uploads"
-ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif", "doc", "docx", "xls", "xlsx"}
+ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif", "doc", "docx", "xls", "xlsx", "mp4", "webm", "mov"}
 
 
 def allowed_file(filename):
