@@ -58,6 +58,17 @@ const CoursewarePanel = ({
   const [quizOpen, setQuizOpen] = useState(false);
   const [noteDrawerOpen, setNoteDrawerOpen] = useState(false);
 
+  // Video progress tracking
+  const [videoProgress, setVideoProgress] = useState<{
+    watched_seconds: number;
+    total_duration: number;
+    is_completed: boolean;
+  }>({ watched_seconds: 0, total_duration: 0, is_completed: false });
+  const [videoResumed, setVideoResumed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const reportTimerRef = useRef<number | null>(null);
+  const lastPositionRef = useRef<number>(0);
+
   // Reset image error state when page or doc changes
   useEffect(() => {
     setImgError(false);
@@ -81,6 +92,66 @@ const CoursewarePanel = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Fetch video progress on mount for video docs
+  useEffect(() => {
+    if (!isVideo || !selectedDocId) return;
+    const fetchProgress = async () => {
+      try {
+        const res = await fetch(`/v1/video/progress/${selectedDocId}`);
+        const data = await res.json();
+        if (data?.code === 0 && data.data) {
+          setVideoProgress(data.data);
+          // Resume from last position if not completed
+          if (data.data.last_position > 0 && !data.data.is_completed && videoRef.current) {
+            videoRef.current.currentTime = data.data.last_position;
+            setVideoResumed(true);
+          }
+        }
+      } catch {
+        // Silently fail — progress is non-critical
+      }
+    };
+    fetchProgress();
+  }, [isVideo, selectedDocId]);
+
+  // Report video progress periodically
+  const startProgressReport = useCallback(() => {
+    if (!selectedDocId) return;
+    reportTimerRef.current = window.setInterval(() => {
+      if (!videoRef.current || videoRef.current.paused) return;
+      const pos = Math.floor(videoRef.current.currentTime);
+      const dur = Math.floor(videoRef.current.duration || 0);
+      // Only report if position actually changed
+      if (pos === lastPositionRef.current) return;
+      lastPositionRef.current = pos;
+
+      fetch('/v1/video/progress/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_id: selectedDocId, position: pos, total_duration: dur }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.code === 0 && data.data) {
+            setVideoProgress(data.data);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+  }, [selectedDocId]);
+
+  const stopProgressReport = useCallback(() => {
+    if (reportTimerRef.current) {
+      clearInterval(reportTimerRef.current);
+      reportTimerRef.current = null;
+    }
+  }, []);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => stopProgressReport();
+  }, [stopProgressReport]);
 
   // Group documents by kbName for Select
   const groupedOptions = useCallback(() => {
@@ -169,19 +240,53 @@ const CoursewarePanel = ({
       );
     }
 
-    // Video document — show video player
+    // Video document — show video player with progress tracking
     if (isVideo) {
+      const progressPercent = videoProgress.total_duration > 0
+        ? Math.round((videoProgress.watched_seconds / videoProgress.total_duration) * 100)
+        : 0;
+
       return (
         <div className={styles.videoContainer}>
           <video
+            ref={videoRef}
             controls
             className={styles.videoPlayer}
             src={`/v1/document/get/${selectedDocId}`}
-            style={{ width: '100%', maxHeight: '70vh' }}
+            style={{ width: '100%', maxHeight: '62vh' }}
             controlsList="nodownload"
+            onPlay={startProgressReport}
+            onPause={stopProgressReport}
+            onEnded={stopProgressReport}
+            onSeeked={() => {
+              // Update lastPositionRef to avoid false delta on seek
+              if (videoRef.current) {
+                lastPositionRef.current = Math.floor(videoRef.current.currentTime);
+              }
+            }}
           >
             您的浏览器不支持视频播放
           </video>
+          {/* Progress bar */}
+          <div className={styles.progressBarContainer}>
+            <div className={styles.progressBar}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className={styles.progressText}>
+              {videoProgress.is_completed
+                ? '✓ 已完成'
+                : `已观看 ${progressPercent}%`}
+            </span>
+          </div>
+          {/* Resume toast */}
+          {videoResumed && (
+            <div className={styles.resumeToast}>
+              已从上次位置继续播放
+            </div>
+          )}
         </div>
       );
     }
