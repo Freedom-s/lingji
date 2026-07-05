@@ -3,7 +3,6 @@
 Uses AgentLoop.run() with data-collection hooks. Captures per-turn
 tool calls, retrieved pages, and final answer for analysis.
 """
-import json
 import logging
 import time
 from typing import Any
@@ -63,7 +62,6 @@ def run_agentic_experiment(
         events: list[dict] = []
         all_retrieved_pages: list[dict] = []
         seen_page_ids: set[str] = set()
-        tool_calls_log: list[dict] = []
         turns: int = 0
 
         t0 = time.perf_counter()
@@ -123,7 +121,7 @@ def run_agentic_experiment(
             "ground_truth_page_id": gt_page_id,
             "retrieved_page_ids": retrieved_page_ids,
             "hit_at_rank": hit_rank,
-            "recall_1": hit_rank == 1 if hit_rank else False,
+            "recall_1": hit_rank == 1,
             "recall_3": (hit_rank is not None and hit_rank <= 3),
             "recall_5": (hit_rank is not None and hit_rank <= 5),
             "mrr_contrib": 1.0 / hit_rank if hit_rank else 0.0,
@@ -132,9 +130,7 @@ def run_agentic_experiment(
             "agentic_turns": turns,
             "agentic_tool_calls": parsed_tool_calls,
             "agentic_pages_retrieved": len(all_retrieved_pages),
-            "agentic_first_turn_hit": _check_first_turn_hit(
-                all_retrieved_pages, gt_page_id, turns, parsed_tool_calls
-            ),
+            "agentic_first_turn_hit": _check_first_turn_hit(turns),
             "agentic_final_answer_len": (
                 len(final_answer) if isinstance(final_answer, str) else 0
             ),
@@ -169,17 +165,9 @@ def _parse_tool_calls_from_text(text: str) -> list[dict]:
 
 
 def _check_first_turn_hit(
-    pages: list[dict],
-    gt_page_id: str,
     total_turns: int,
-    tool_calls: list[dict],
 ) -> bool:
-    """Heuristic: check if gt_page_id was found in first turn's results.
-
-    Since AgentLoop doesn't explicitly label turns per page, we approximate:
-    if total_turns <= 2 and the page is in retrieved_pages, it was likely
-    found in the first retrieval turn.
-    """
+    """Returns True if exactly 1 turn occurred (conservative heuristic for first-turn hit detection)."""
     if total_turns <= 0:
         return False
     # If only one round of tool calls, any hit is a first-turn hit
