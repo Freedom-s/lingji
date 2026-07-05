@@ -5,8 +5,8 @@ import { useSafeLocalStorageState } from '@/hooks/chat-font-hooks';
 import { IConversation } from '@/interfaces/database/chat';
 import chatService from '@/services/chat-service';
 import { getConversationId } from '@/utils/chat';
-import { Button, Divider, Select, Space } from 'antd';
-import { PlusOutlined, MessageOutlined } from '@ant-design/icons';
+import { Button, Divider, Select } from 'antd';
+import { PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'umi';
@@ -28,6 +28,7 @@ const LearningPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [controller, setController] = useState(new AbortController());
   const [fontSize] = useSafeLocalStorageState(FONT_SIZE_STORAGE_KEY, DEFAULT_FONT_SIZE);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
   const [, setSearchParams] = useSearchParams();
 
   const kbIds = useMemo(() => dialog?.kb_ids ?? [], [dialog]);
@@ -106,7 +107,7 @@ const LearningPage = () => {
   }, [controller, setSearchParams]);
 
   return (
-    <div className={styles.learningWrapper}>
+    <div className={`${styles.learningWrapper} ${chatCollapsed ? styles.chatCollapsed : ''}`}>
       {/* Left — Courseware */}
       <CoursewarePanel
         pages={pages}
@@ -122,43 +123,56 @@ const LearningPage = () => {
         docLoading={docListLoading}
       />
 
-      <Divider type="vertical" className={styles.divider} />
+      {/* Collapsible divider */}
+      <div className={styles.dividerBar}>
+        <Divider type="vertical" className={styles.divider} />
+        <Button
+          className={styles.toggleBtn}
+          type="text"
+          size="small"
+          icon={chatCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => setChatCollapsed(!chatCollapsed)}
+          title={chatCollapsed ? '展开助教' : '收起助教'}
+        />
+      </div>
 
       {/* Right — Chat */}
-      <div className={styles.chatColumn}>
-        <div className={styles.conversationHeader}>
-          <Select
-            className={styles.conversationSelect}
-            value={urlIsNew === 'true' ? undefined : (urlConversationId || undefined)}
-            onChange={handleConversationChange}
-            placeholder="选择历史对话"
-            loading={conversationsLoading}
-            options={conversations.map((c) => ({
-              label: c.name || '未命名对话',
-              value: c.id,
-            }))}
-            allowClear={false}
-            showSearch
-            filterOption={(input, option) =>
-              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-            }
-            notFoundContent="暂无历史对话"
-            popupMatchSelectWidth={false}
-            style={{ minWidth: 200 }}
-          />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => handleConversationChange('__new__')}
-            ghost
-          >
-            新建对话
-          </Button>
+      {!chatCollapsed && (
+        <div className={styles.chatColumn}>
+          <div className={styles.conversationHeader}>
+            <Select
+              className={styles.conversationSelect}
+              value={urlIsNew === 'true' ? undefined : (urlConversationId || undefined)}
+              onChange={handleConversationChange}
+              placeholder="选择历史对话"
+              loading={conversationsLoading}
+              options={conversations.map((c) => ({
+                label: c.name || '未命名对话',
+                value: c.id,
+              }))}
+              allowClear={false}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              notFoundContent="暂无历史对话"
+              popupMatchSelectWidth={false}
+              style={{ minWidth: 200 }}
+            />
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => handleConversationChange('__new__')}
+              ghost
+            >
+              新建对话
+            </Button>
+          </div>
+          <div className={styles.chatContainer}>
+            <ChatContainer controller={controller} fontSize={fontSize} />
+          </div>
         </div>
-        <div className={styles.chatContainer}>
-          <ChatContainer controller={controller} fontSize={fontSize} />
-        </div>
-      </div>
+      )}
 
     </div>
   );
