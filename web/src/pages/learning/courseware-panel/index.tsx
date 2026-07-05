@@ -323,10 +323,7 @@ const CoursewarePanel = ({
               <Progress
                 percent={progressPercent}
                 size="small"
-                strokeColor={videoProgress.is_completed ? '#52c41a' : {
-                  '0%': '#1677ff',
-                  '100%': '#52c41a',
-                }}
+                strokeColor="#52c41a"
                 trailColor="#f0f0f0"
                 showInfo={false}
                 strokeLinecap="round"
@@ -337,10 +334,7 @@ const CoursewarePanel = ({
                 percent={progressPercent}
                 size={48}
                 strokeWidth={6}
-                strokeColor={videoProgress.is_completed ? '#52c41a' : {
-                  '0%': '#1677ff',
-                  '100%': '#52c41a',
-                }}
+                strokeColor="#52c41a"
                 format={(p) => (
                   <span className={styles.circlePercentText}>
                     {videoProgress.is_completed ? '✓' : `${p}%`}
