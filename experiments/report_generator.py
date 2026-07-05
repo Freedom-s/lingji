@@ -1,7 +1,9 @@
 """Generate LaTeX tables and summary JSON from experiment results."""
-import json
 import logging
+from collections import Counter
 from typing import Any
+
+import numpy as np
 
 from experiments.metrics import compute_all_metrics
 from experiments.statistical_tests import paired_ttest, per_query_hit_scores, bootstrap_ci
@@ -39,9 +41,6 @@ def generate_latex_ablation_table(variant_results: dict[str, list[dict]]) -> str
         if not results:
             continue
         m = compute_all_metrics(results)
-        ci_lo, _, ci_hi = bootstrap_ci(
-            per_query_hit_scores(results, k=3)
-        )
         rows.append(
             f"{m.get('_label', vname)} & "
             f"{m['recall_1']:.3f} & "
@@ -81,16 +80,10 @@ def generate_latex_paradigm_table(
     ag_scores_r3 = per_query_hit_scores(ag_results, k=3)
     ttest_r3 = paired_ttest(ag_scores_r3, wf_scores_r3)
 
-    wf_mrr_scores = [r["mrr_contrib"] for r in wf_results]
-    ag_mrr_scores = [r["mrr_contrib"] for r in ag_results]
-    ttest_mrr = paired_ttest(ag_mrr_scores, wf_mrr_scores)
-
     # Efficiency
     wf_latency = [r.get("elapsed_ms", 0) for r in wf_results]
     ag_latency = [r.get("elapsed_ms", 0) for r in ag_results]
     ag_turns = [r.get("agentic_turns", 0) for r in ag_results]
-
-    import numpy as np
 
     table = (
         r"\begin{table}[htbp]" "\n"
@@ -239,7 +232,6 @@ def generate_summary_json(
             per_query_hit_scores(wf, k=3),
         )
 
-        import numpy as np
         ag_turns = [r.get("agentic_turns", 0) for r in ag]
 
         summary["paradigm_comparison"] = {
@@ -275,7 +267,6 @@ def analyze_tool_usage(agentic_results: list[dict]) -> dict[str, Any]:
     Returns:
         dict with tool_frequency, turn_distribution, common_sequences.
     """
-    from collections import Counter
 
     tool_counter: Counter = Counter()
     turn_dist: Counter = Counter()
@@ -300,7 +291,7 @@ def analyze_tool_usage(agentic_results: list[dict]) -> dict[str, Any]:
         "total_queries": len(agentic_results),
         "total_tool_calls": total_calls,
         "mean_calls_per_query": total_calls / total_queries,
-        "mean_turns_per_query": sum(turn_dist.keys()) / total_queries
+        "mean_turns_per_query": sum(k * v for k, v in turn_dist.items()) / total_queries
         if sum(turn_dist.values()) > 0 else 0,
         "tool_frequency": dict(tool_counter.most_common()),
         "turn_distribution": {str(k): v for k, v in sorted(turn_dist.items())},
