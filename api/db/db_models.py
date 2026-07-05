@@ -939,6 +939,23 @@ class StudentNote(DataBaseModel):
         )
 
 
+class StudentVideoProgress(DataBaseModel):
+    """学生视频观看进度表"""
+    id = CharField(max_length=32, primary_key=True)
+    student_id = CharField(max_length=32, null=False, help_text="学生user.id", index=True)
+    doc_id = CharField(max_length=32, null=False, help_text="关联document表", index=True)
+    watched_seconds = IntegerField(default=0, help_text="累计有效观看秒数")
+    total_duration = IntegerField(default=0, help_text="视频总时长（秒）")
+    last_position = IntegerField(default=0, help_text="最后播放位置（秒）")
+    is_completed = BooleanField(default=False, help_text="是否完成观看")
+
+    class Meta:
+        db_table = "student_video_progress"
+        indexes = (
+            (('student_id', 'doc_id'), True),  # unique
+        )
+
+
 class KnowledgePointMastery(DataBaseModel):
     """知识点掌握度追踪表"""
     id = CharField(max_length=32, primary_key=True)
