@@ -8,6 +8,7 @@ import {
   BulbOutlined,
   CheckSquareOutlined,
   EditOutlined,
+  PlayCircleOutlined,
 } from '@ant-design/icons';
 import { Button, Empty, Result, Select, Spin, Typography, Space } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ export interface CoursewarePanelProps {
   onPageChange: (page: number) => void;
   documentList: DocumentOption[];
   selectedDocId: string | undefined;
+  selectedDocType?: string;
   onDocSelect: (docId: string) => void;
   onDocClear: () => void;
   pageLoading: boolean;
@@ -39,11 +41,13 @@ const CoursewarePanel = ({
   onPageChange,
   documentList,
   selectedDocId,
+  selectedDocType,
   onDocSelect,
   onDocClear,
   pageLoading,
   docLoading,
 }: CoursewarePanelProps) => {
+  const isVideo = selectedDocType === 'video';
   const currentChunk = pages[currentPage - 1];
   const [imgError, setImgError] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -165,6 +169,23 @@ const CoursewarePanel = ({
       );
     }
 
+    // Video document — show video player
+    if (isVideo) {
+      return (
+        <div className={styles.videoContainer}>
+          <video
+            controls
+            className={styles.videoPlayer}
+            src={`/v1/document/get/${selectedDocId}`}
+            style={{ width: '100%', maxHeight: '70vh' }}
+            controlsList="nodownload"
+          >
+            您的浏览器不支持视频播放
+          </video>
+        </div>
+      );
+    }
+
     // No pages available
     if (!pageLoading && pages.length === 0) {
       return (
@@ -232,8 +253,8 @@ const CoursewarePanel = ({
         />
       </div>
 
-      {/* Learning Tool Buttons */}
-      {selectedDocId && (
+      {/* Learning Tool Buttons — only for non-video docs */}
+      {selectedDocId && !isVideo && (
         <div className={styles.toolButtons}>
           <Space>
             <Button
@@ -273,8 +294,8 @@ const CoursewarePanel = ({
         {renderContent()}
       </div>
 
-      {/* Page Navigation */}
-      {selectedDocId && totalPages > 0 && !pageLoading && (
+      {/* Page Navigation — only for non-video docs */}
+      {selectedDocId && !isVideo && totalPages > 0 && !pageLoading && (
         <div className={styles.pageNavigation}>
           <Button
             icon={<LeftOutlined />}

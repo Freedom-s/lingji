@@ -47,6 +47,7 @@ class FileType(StrEnum):
     AURAL = 'aural'
     VIRTUAL = 'virtual'
     FOLDER = 'folder'
+    VIDEO = 'video'
     OTHER = "other"
 
 

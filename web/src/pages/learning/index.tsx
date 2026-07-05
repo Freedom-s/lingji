@@ -67,6 +67,12 @@ const LearningPage = () => {
   const { documentList, loading: docListLoading } =
     useFetchDocumentListByKbIdsWithNames(kbIds, kbNames);
 
+  // Current selected document
+  const selectedDoc = useMemo(
+    () => documentList.find((d) => d.id === docId),
+    [documentList, docId],
+  );
+
   // Fetch page chunks for selected document
   const { pages, totalPages, loading: pageLoading } = useFetchChunksForViewer(docId);
 
@@ -109,6 +115,7 @@ const LearningPage = () => {
         onPageChange={handlePageChange}
         documentList={documentList}
         selectedDocId={docId}
+        selectedDocType={selectedDoc?.type}
         onDocSelect={handleDocSelect}
         onDocClear={handleDocClear}
         pageLoading={pageLoading}

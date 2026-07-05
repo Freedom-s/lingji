@@ -398,6 +398,10 @@ def get(doc_id):
         if ext:
             if doc.type == FileType.VISUAL.value:
                 response.headers.set("Content-Type", "image/%s" % ext.group(1))
+            elif doc.type == FileType.VIDEO.value:
+                video_mime_map = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime"}
+                mime = video_mime_map.get(ext.group(1).lower(), "video/mp4")
+                response.headers.set("Content-Type", mime)
             else:
                 response.headers.set("Content-Type", "application/%s" % ext.group(1))
         return response
