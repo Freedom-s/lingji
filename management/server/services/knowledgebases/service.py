@@ -8,6 +8,7 @@ import mysql.connector
 import requests
 from database import DB_CONFIG, get_es_client
 from utils import generate_uuid
+from services.files.utils import FileType
 
 # 解析相关模块
 from .document_parser import _update_document_progress, perform_parse
@@ -677,6 +678,10 @@ class KnowledgebaseService:
                     )
                 """
 
+                # 视频文件直接标记为完成，跳过解析
+                is_video_doc = (file_type == "video")
+                doc_run = "3" if is_video_doc else "0"
+
                 doc_params = [
                     doc_id,
                     create_time,
@@ -700,7 +705,7 @@ class KnowledgebaseService:
                     None,  # token_num到process_begin_at
                     0.0,
                     None,
-                    "0",
+                    doc_run,
                     "1",  # process_duation到status
                 ]
 
