@@ -25,9 +25,11 @@ _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from experiments.config import VARIANTS, EXPERIMENT_DEFAULTS, VariantConfig
+from experiments.config import VARIANTS, EXPERIMENT_DEFAULTS
 from experiments.test_set_loader import load_test_set, save_test_set
 from experiments.variant_runner import VariantRunner
+from experiments.workflow_runner import run_workflow_experiment
+from experiments.agentic_runner import run_agentic_experiment
 from experiments.metrics import compute_all_metrics
 from experiments.report_generator import (
     generate_summary_json,
@@ -74,7 +76,7 @@ def setup_dealer_and_executor(kb_ids: list[str]) -> tuple[Any, Any, Any, Any, An
     # we construct bundles directly using the same tenant
     # In practice, the caller should provide rerank_id and chat_llm_id
     rerank_mdl = None
-    chat_mdl = LLMBundle(tenant_id, LLMType.CHAT, embd_id)  # fallback; override via CLI
+    chat_mdl = None  # Must be provided via --chat_llm_id CLI flag for agentic/context-recall paths
 
     executor = MCPToolExecutor(
         dealer=dealer,
@@ -161,67 +163,6 @@ def run_variant_experiments(
     return all_results
 
 
-def run_paradigm_experiments(
-    test_queries: list[dict],
-    dealer: Any,
-    executor: Any,
-    embd_mdl: Any,
-    chat_mdl: Any,
-    kb_ids: list[str],
-    tenant_ids: list[str],
-    rerank_id: str | None = None,
-) -> tuple[list[dict], list[dict]]:
-    """Run both Workflow and Agentic experiments.
-
-    Returns (workflow_results, agentic_results).
-    """
-    from experiments.workflow_runner import run_workflow_experiment
-    from experiments.agentic_runner import run_agentic_experiment
-
-    # Determine models
-    rerank_mdl = None
-
-    # Workflow
-    logger.info("=== Running Workflow mode ===")
-    wf_results = run_workflow_experiment(
-        test_queries=test_queries,
-        dealer=dealer,
-        embd_mdl=embd_mdl,
-        kb_ids=kb_ids,
-        tenant_ids=tenant_ids,
-        rerank_mdl=rerank_mdl,
-        chat_mdl=chat_mdl,
-        enable_context_recall=True,
-    )
-
-    # Agentic
-    logger.info("=== Running Agentic mode ===")
-    # Agentic needs MCP server at known URL
-    mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:9390")
-
-    # Need a dialog-like object for AgentLoop context
-    class _DialogProxy:
-        pass
-
-    dialog = _DialogProxy()
-    dialog.kb_ids = kb_ids
-    dialog.tenant_id = tenant_ids[0] if tenant_ids else ""
-
-    ag_results = run_agentic_experiment(
-        test_queries=test_queries,
-        mcp_url=mcp_url,
-        chat_mdl=chat_mdl,
-        kb_ids=kb_ids,
-        tenant_ids=tenant_ids,
-        dialog=dialog,
-        embd_id=embd_mdl.llm_name if embd_mdl else None,
-        rerank_id=rerank_id,
-        max_turns=EXPERIMENT_DEFAULTS["agentic_max_turns"],
-    )
-
-    return wf_results, ag_results
-
-
 def main():
     parser = argparse.ArgumentParser(description="Run PAGE-RAG retrieval experiments")
     parser.add_argument("--test_set", required=True, help="Path to test_set.jsonl")
@@ -297,27 +238,38 @@ def main():
     wf_results: list[dict] = []
     ag_results: list[dict] = []
     if args.compare_modes in ("workflow", "both"):
-        wf_results, ag_results = run_paradigm_experiments(
-            test_queries, dealer, executor, embd_mdl, chat_mdl,
-            kb_ids, tenant_ids, args.rerank_id,
+        wf_results = run_workflow_experiment(
+            test_queries, dealer, embd_mdl, kb_ids, tenant_ids,
+            rerank_mdl=rerank_mdl, chat_mdl=chat_mdl,
+            enable_context_recall=True,
         )
-        if args.compare_modes == "workflow":
-            all_results["workflow"] = wf_results
-            save_test_set(wf_results, os.path.join(args.output_dir, "workflow_results.jsonl"))
+        all_results["workflow"] = wf_results
+        save_test_set(wf_results, os.path.join(args.output_dir, "workflow_results.jsonl"))
+    if args.compare_modes in ("agentic", "both"):
+        if not chat_mdl:
+            logger.error("Agentic mode requires --chat_llm_id. Skipping agentic experiment.")
         else:
-            all_results["workflow"] = wf_results
+            mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:9390")
+
+            class _DialogProxy:
+                pass
+            dialog = _DialogProxy()
+            dialog.kb_ids = kb_ids
+            dialog.tenant_id = tenant_ids[0] if tenant_ids else ""
+
+            ag_results = run_agentic_experiment(
+                test_queries=test_queries,
+                mcp_url=mcp_url,
+                chat_mdl=chat_mdl,
+                kb_ids=kb_ids,
+                tenant_ids=tenant_ids,
+                dialog=dialog,
+                embd_id=embd_mdl.llm_name if embd_mdl else None,
+                rerank_id=args.rerank_id,
+                max_turns=EXPERIMENT_DEFAULTS["agentic_max_turns"],
+            )
             all_results["agentic"] = ag_results
-            save_test_set(wf_results, os.path.join(args.output_dir, "workflow_results.jsonl"))
             save_test_set(ag_results, os.path.join(args.output_dir, "agentic_results.jsonl"))
-    elif args.compare_modes == "agentic":
-        _wf, ag_results = run_paradigm_experiments(
-            test_queries, dealer, executor, embd_mdl, chat_mdl,
-            kb_ids, tenant_ids, args.rerank_id,
-        )
-        all_results["workflow"] = _wf
-        all_results["agentic"] = ag_results
-        save_test_set(_wf, os.path.join(args.output_dir, "workflow_results.jsonl"))
-        save_test_set(ag_results, os.path.join(args.output_dir, "agentic_results.jsonl"))
 
     # Generate summary
     summary = generate_summary_json(all_results)
