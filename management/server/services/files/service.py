@@ -15,8 +15,9 @@ CHUNK_EXPIRY_SECONDS = 3600 * 24  # 分块24小时过期
 
 temp_dir = tempfile.gettempdir()
 UPLOAD_FOLDER = os.path.join(temp_dir, "uploads")
-ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "bmp", "txt", "md", "html", "csv"}
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "bmp", "txt", "md", "html", "csv", "mp4", "webm", "mov"}
 IMAGE_EXTES = {"jpg", "jpeg", "png", "bmp"}
+VIDEO_EXTES = {"mp4", "webm", "mov"}
 
 
 def allowed_file(filename):
@@ -42,6 +43,8 @@ def filename_type(filename):
         return FileType.TEXT.value
     elif ext in [".html"]:
         return FileType.HTML.value
+    elif ext in [".mp4", ".webm", ".mov"]:
+        return FileType.VIDEO.value
 
     return FileType.OTHER.value
 
@@ -571,11 +574,17 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 file.save(filepath)
                 print(f"文件已保存到临时目录: {filepath}")
 
-                # 2. 判断文件类型，图片文件特殊处理
+                # 2. 判断文件类型，图片/视频文件特殊处理
                 file_ext = ext.lower().lstrip('.')
                 is_image = file_ext in IMAGE_EXTES
-                
-                if is_image:
+                is_video = file_ext in VIDEO_EXTES
+
+                if is_video:
+                    # 视频文件：直接存储原始文件，不做转换
+                    print(f"检测到视频文件: {filename}，跳过 PDF/图片转换")
+                    page_images = []  # 视频没有页面图片
+
+                elif is_image:
                     # 图片文件：直接读取，不转换为 PDF
                     print(f"检测到图片文件: {filename}，跳过 PDF 转换")
                     from PIL import Image
@@ -651,6 +660,9 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                     '.gif': 'image/gif',
                     '.bmp': 'image/bmp',
                     '.webp': 'image/webp',
+                    '.mp4': 'video/mp4',
+                    '.webm': 'video/webm',
+                    '.mov': 'video/quicktime',
                 }
                 content_type = content_type_map.get(ext, 'application/octet-stream')
 
