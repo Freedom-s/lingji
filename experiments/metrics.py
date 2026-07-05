@@ -1,6 +1,4 @@
 """Retrieval evaluation metrics: Recall@K, MRR, NDCG@K."""
-from typing import Any
-
 import numpy as np
 
 
