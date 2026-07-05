@@ -134,7 +134,7 @@ const CoursewarePanel = ({
       })
         .then((res) => {
           if (res.data?.code === 0 && res.data.data) {
-            setVideoProgress(res.data.data);
+            setVideoProgress(prev => ({ ...prev, ...res.data.data }));
           }
         })
         .catch(() => {});
