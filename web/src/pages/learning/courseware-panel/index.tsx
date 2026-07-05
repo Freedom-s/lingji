@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import { Button, Empty, Result, Select, Spin, Typography, Space } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import request from '@/utils/request';
 import styles from './index.less';
 import MindMapModal from '../components/MindMapModal';
 import FlashcardModal from '../components/FlashcardModal';
@@ -99,13 +100,12 @@ const CoursewarePanel = ({
     if (!isVideo || !selectedDocId) return;
     const fetchProgress = async () => {
       try {
-        const res = await fetch(`/v1/video/progress/${selectedDocId}`, { credentials: 'include' });
-        const data = await res.json();
-        if (data?.code === 0 && data.data) {
-          setVideoProgress(data.data);
+        const res = await request(`/v1/video/progress/${selectedDocId}`, { method: 'GET' });
+        if (res.data?.code === 0 && res.data.data) {
+          setVideoProgress(res.data.data);
           // Resume from last position if not completed
-          if (data.data.last_position > 0 && !data.data.is_completed) {
-            resumePositionRef.current = data.data.last_position;
+          if (res.data.data.last_position > 0 && !res.data.data.is_completed) {
+            resumePositionRef.current = res.data.data.last_position;
             setVideoResumed(true);
           }
         }
@@ -128,16 +128,13 @@ const CoursewarePanel = ({
       if (pos === lastPositionRef.current) return;
       lastPositionRef.current = pos;
 
-      fetch('/v1/video/progress/report', {
+      request('/v1/video/progress/report', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doc_id: selectedDocId, position: pos, total_duration: dur, playback_rate: videoRef.current?.playbackRate || 1 }),
+        data: { docId: selectedDocId, position: pos, totalDuration: dur, playbackRate: videoRef.current?.playbackRate || 1 },
       })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.code === 0 && data.data) {
-            setVideoProgress(data.data);
+        .then((res) => {
+          if (res.data?.code === 0 && res.data.data) {
+            setVideoProgress(res.data.data);
           }
         })
         .catch(() => {});
