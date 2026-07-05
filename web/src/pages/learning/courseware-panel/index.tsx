@@ -118,7 +118,7 @@ const CoursewarePanel = ({
 
   // Report video progress periodically
   const startProgressReport = useCallback(() => {
-    if (!selectedDocId) return;
+    if (!selectedDocId || videoProgress.is_completed) return;
     if (reportTimerRef.current) clearInterval(reportTimerRef.current);
     reportTimerRef.current = window.setInterval(() => {
       if (!videoRef.current || videoRef.current.paused) return;
@@ -147,6 +147,13 @@ const CoursewarePanel = ({
       reportTimerRef.current = null;
     }
   }, []);
+
+  // Stop reporting when video is completed
+  useEffect(() => {
+    if (videoProgress.is_completed) {
+      stopProgressReport();
+    }
+  }, [videoProgress.is_completed, stopProgressReport]);
 
   // Cleanup timer on unmount
   useEffect(() => {

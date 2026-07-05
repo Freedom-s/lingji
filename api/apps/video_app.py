@@ -85,12 +85,14 @@ def report_progress():
                 is_completed=False,
             )
 
-        # 有效观看判定：delta 阈值根据倍速动态调整
-        # 正常播放 delta ≈ 5 × playback_rate，加 1 秒容差
-        max_valid_delta = 5 * playback_rate + 1
-        delta = position - record.last_position
-        if 0 < delta <= max_valid_delta:
-            record.watched_seconds += delta
+        # 已完成的视频不再累加观看时长
+        if not record.is_completed:
+            # 有效观看判定：delta 阈值根据倍速动态调整
+            # 正常播放 delta ≈ 5 × playback_rate，加 1 秒容差
+            max_valid_delta = 5 * playback_rate + 1
+            delta = position - record.last_position
+            if 0 < delta <= max_valid_delta:
+                record.watched_seconds += delta
 
         # 更新 last_position 和 total_duration
         record.last_position = position
