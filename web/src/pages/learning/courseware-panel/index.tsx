@@ -68,6 +68,7 @@ const CoursewarePanel = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const reportTimerRef = useRef<number | null>(null);
   const lastPositionRef = useRef<number>(0);
+  const resumePositionRef = useRef<number>(0);
 
   // Reset image error state when page or doc changes
   useEffect(() => {
@@ -103,8 +104,8 @@ const CoursewarePanel = ({
         if (data?.code === 0 && data.data) {
           setVideoProgress(data.data);
           // Resume from last position if not completed
-          if (data.data.last_position > 0 && !data.data.is_completed && videoRef.current) {
-            videoRef.current.currentTime = data.data.last_position;
+          if (data.data.last_position > 0 && !data.data.is_completed) {
+            resumePositionRef.current = data.data.last_position;
             setVideoResumed(true);
           }
         }
@@ -118,6 +119,7 @@ const CoursewarePanel = ({
   // Report video progress periodically
   const startProgressReport = useCallback(() => {
     if (!selectedDocId) return;
+    if (reportTimerRef.current) clearInterval(reportTimerRef.current);
     reportTimerRef.current = window.setInterval(() => {
       if (!videoRef.current || videoRef.current.paused) return;
       const pos = Math.floor(videoRef.current.currentTime);
@@ -255,6 +257,12 @@ const CoursewarePanel = ({
             src={`/v1/document/get/${selectedDocId}`}
             style={{ width: '100%', maxHeight: '62vh' }}
             controlsList="nodownload"
+            onLoadedMetadata={() => {
+              if (resumePositionRef.current > 0 && videoRef.current) {
+                videoRef.current.currentTime = resumePositionRef.current;
+                resumePositionRef.current = 0;
+              }
+            }}
             onPlay={startProgressReport}
             onPause={stopProgressReport}
             onEnded={stopProgressReport}
