@@ -287,7 +287,7 @@ class MCPToolExecutor:
 
         rrf_chunks = rrf_result.get("chunks", [])
         if rrf_chunks and self.rerank_mdl:
-            return self._tool_rerank_pages(query, rrf_chunks, top_k=rerank_topk, similarity_threshold=0.3)
+            return self._tool_rerank_pages(query, rrf_chunks, top_k=rerank_topk, similarity_threshold=0.7)
         return rrf_result
 
     # ── 联网搜索 ───────────────────────────────────────────
@@ -393,7 +393,7 @@ class MCPToolExecutor:
 
             fields = self.dealer.dataStore.getFields(sres, src)
             chunk = fields.get(ids[0], {})
-            return {
+            return self._build_result([{
                 "page_id": chunk.get("page_id", ids[0]),
                 "doc_id": chunk.get("doc_id", ""),
                 "docnm_kwd": chunk.get("docnm_kwd", ""),
@@ -401,7 +401,7 @@ class MCPToolExecutor:
                 "page_num_int": chunk.get("page_num_int", 0),
                 "full_content": chunk.get("content_with_weight", ""),
                 "img_url": chunk.get("img_url", ""),
-            }
+            }])
         except Exception as e:
             logger.error(f"get_full_page error: {e}")
             return self._build_error(str(e))

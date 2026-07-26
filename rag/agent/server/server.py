@@ -74,9 +74,11 @@ def _executor(tenant_id: str = "", embd_id: str = "", rerank_id: str = "") -> MC
     )
 
 
-# ── 6 个 MCP 工具（无 set_context，系统参数由 LLM 调用时传递） ──
+# ── 6 个 MCP 工具 ──
+# 系统参数通过 exclude_args 从 LLM 可见的 schema 中隐藏，
+# AgentLoop 通过 _inject_context 自动注入。
 
-@mcp.tool()
+@mcp.tool(exclude_args=["tenant_ids", "kb_ids", "tenant_id", "embd_id", "rerank_id"])
 def hybrid_retrieve(
     query: Annotated[str, Field(description="检索内容，应传入用户问题的核心内容")],
     rerank_topk: Annotated[int, Field(default=3, description="最终返回结果数量", ge=1, le=5)],
@@ -102,7 +104,7 @@ def web_search(
     return _executor()._tool_web_search(query, max_results)
 
 
-@mcp.tool()
+@mcp.tool(exclude_args=["tenant_ids", "kb_ids"])
 def get_adjacent_pages(
     doc_id: Annotated[str, Field(description="文档 ID")],
     page_num: Annotated[int, Field(description="当前页码")],
@@ -118,25 +120,12 @@ def get_adjacent_pages(
     )
 
 
-@mcp.tool()
+@mcp.tool(exclude_args=["kb_ids"])
 def list_documents(
     kb_ids: list[str] | None = None,
 ) -> dict:
     """列出当前助教所关联知识库中的所有文档。在需要了解有哪些课件、确定检索范围时优先调用。"""
     return _executor()._tool_list_documents(kb_ids=kb_ids or [])
-
-
-@mcp.tool()
-def get_full_page(
-    doc_id: Annotated[str, Field(description="文档 ID")],
-    page_num: Annotated[int, Field(description="页码")],
-    tenant_ids: list[str] | None = None,
-    kb_ids: list[str] | None = None,
-) -> dict:
-    """获取某一页的完整内容（全文 + 图片），不做截断。"""
-    return _executor()._tool_get_full_page(
-        doc_id, page_num, tenant_ids=tenant_ids or [], kb_ids=kb_ids or [],
-    )
 
 
 @mcp.tool()

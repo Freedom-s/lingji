@@ -18,6 +18,7 @@ import MindMapModal from '../components/MindMapModal';
 import FlashcardModal from '../components/FlashcardModal';
 import QuizModal from '../components/QuizModal';
 import NoteDrawer from '../components/NoteDrawer';
+import PagePreviewModal from '../components/PagePreviewModal';
 
 const { Text } = Typography;
 
@@ -58,6 +59,7 @@ const CoursewarePanel = ({
   const [flashcardOpen, setFlashcardOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [noteDrawerOpen, setNoteDrawerOpen] = useState(false);
+  const [pagePreviewOpen, setPagePreviewOpen] = useState(false);
 
   // Video progress tracking
   const [videoProgress, setVideoProgress] = useState<{
@@ -79,6 +81,8 @@ const CoursewarePanel = ({
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Don't navigate when modal is open
+      if (pagePreviewOpen) return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         if (currentPage > 1) onPageChange(currentPage - 1);
@@ -87,7 +91,7 @@ const CoursewarePanel = ({
         if (currentPage < totalPages) onPageChange(currentPage + 1);
       }
     },
-    [currentPage, totalPages, onPageChange],
+    [currentPage, totalPages, onPageChange, pagePreviewOpen],
   );
 
   useEffect(() => {
@@ -384,13 +388,15 @@ const CoursewarePanel = ({
 
     // Show page image
     return (
-      <img
-        src={currentChunk?.imgUrl}
-        alt={`第 ${currentPage} 页`}
-        className={styles.pageImage}
-        onError={() => setImgError(true)}
-        draggable={false}
-      />
+      <div className={styles.pageImageWrapper} onClick={() => setPagePreviewOpen(true)}>
+        <img
+          src={currentChunk?.imgUrl}
+          alt={`第 ${currentPage} 页`}
+          className={styles.pageImage}
+          onError={() => setImgError(true)}
+          draggable={false}
+        />
+      </div>
     );
   };
 
@@ -507,6 +513,12 @@ const CoursewarePanel = ({
         totalPages={totalPages}
         onClose={() => setNoteDrawerOpen(false)}
         onJumpToPage={(page) => onPageChange(page)}
+      />
+      <PagePreviewModal
+        open={pagePreviewOpen}
+        onClose={() => setPagePreviewOpen(false)}
+        pages={pages}
+        currentPage={currentPage}
       />
     </div>
   );

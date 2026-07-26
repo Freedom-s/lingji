@@ -92,10 +92,7 @@ const routes = [
         path: '/teaching-assistant',
         component: '@/pages/teaching-assistant',
       },
-      {
-        path: '/deep-research',
-        component: '@/pages/deep-research',
-      },
+      // { path: '/deep-research', component: '@/pages/deep-research' },
       {
         path: '/learning',
         component: '@/pages/learning',

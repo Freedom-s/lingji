@@ -182,10 +182,6 @@ class Base(ABC):
                 
                 if extracted_tools:
                     result["tool_calls"] = extracted_tools
-                    
-                    # (可选) 打扫战场：提取完工具后，把原本脏乱的标签从返回的正文中抹除，保持内容干净
-                    result["content"] = re.sub(pattern, "", result["content"], flags=re.DOTALL).strip()
-                    result["reasoning_content"] = re.sub(pattern, "", result["reasoning_content"], flags=re.DOTALL).strip()
 
 
             # 处理长度截断提示

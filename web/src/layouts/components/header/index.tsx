@@ -1,7 +1,7 @@
 import { ReactComponent as KnowledgeBaseIcon } from '@/assets/svg/knowledge-base.svg';
 import { ReactComponent as TeachingAssistantIcon } from '@/assets/svg/teaching-assistant.svg';
-import { ReactComponent as DeepResearchIcon } from '@/assets/svg/deep-research.svg';
-import { ReactComponent as WriteIcon } from '@/assets/svg/write.svg';
+// import { ReactComponent as DeepResearchIcon } from '@/assets/svg/deep-research.svg';
+// import { ReactComponent as WriteIcon } from '@/assets/svg/write.svg';
 import { useTranslate } from '@/hooks/common-hooks';
 import { useFetchAppConf } from '@/hooks/logic-hooks';
 import { useNavigateWithFromState } from '@/hooks/route-hook';
@@ -28,7 +28,7 @@ const RagHeader = () => {
   const tagsData = useMemo(
     () => [
       { path: '/teaching-assistant', name: t('teachingAssistant'), icon: TeachingAssistantIcon },
-      { path: '/deep-research', name: t('deepResearch'), icon: DeepResearchIcon },
+      // { path: '/deep-research', name: t('deepResearch'), icon: DeepResearchIcon },
       { path: '/knowledge', name: t('knowledgeBase'), icon: KnowledgeBaseIcon },
       // { path: '/write', name: t('write'), icon: WriteIcon },
       // { path: '/search', name: t('search'), icon: SearchOutlined },
