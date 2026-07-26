@@ -431,7 +431,7 @@ def update_external_record(record_id, score):
 
 def _get_class_doc_ids_and_dialog_ids(class_id):
     """获取班级关联的所有文档 ID 和 dialog ID 集合
-    Returns: (doc_ids: list, dialog_ids: list)
+    Returns: (doc_rows: list of dict, dialog_ids: list)
     """
     conn = mysql.connector.connect(**DB_CONFIG)
     cursor = conn.cursor(dictionary=True)
@@ -588,7 +588,7 @@ def _calc_flashcard_score(student_id, doc_ids, doc_flashcard_map):
 
 
 def _calc_qa_score(student_id, dialog_ids):
-    """问答活跃度: min(消息数 / 20 × 100, 100)"""
+    """问答活跃度: min(会话数 / 10 × 100, 100)"""
     if not dialog_ids:
         return 0.0
     conn = mysql.connector.connect(**DB_CONFIG)
@@ -602,7 +602,7 @@ def _calc_qa_score(student_id, dialog_ids):
     cursor.close()
     conn.close()
     msg_count = int(row["cnt"] or 0) if row else 0
-    return round(min(msg_count / 20 * 100, 100), 1)
+    return round(min(msg_count / 10 * 100, 100), 1)
 
 
 def _calc_external_score(student_id, class_id):
@@ -680,7 +680,7 @@ def calculate_class_scores(class_id):
         current_user = get_current_user()
         if not current_user:
             return False, "获取用户信息失败"
-        user_id = current_user["user_id"]
+        # 用户认证和班级归属校验由 get_scoring_config 隐式完成
 
         # 1. 获取评分配置
         success, config = get_scoring_config(class_id)
