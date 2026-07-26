@@ -188,6 +188,24 @@ export const constantRoutes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: "/progress",
+    component: Layouts,
+    redirect: "/progress/index",
+    children: [
+      {
+        path: "index",
+        component: () => import("@/pages/progress/index.vue"),
+        name: "ProgressManagement",
+        meta: {
+          title: "进度管理",
+          svgIcon: "progress",
+          affix: false,
+          keepAlive: true
+        }
+      }
+    ]
   }
 ]
 
