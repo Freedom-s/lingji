@@ -11,7 +11,7 @@ from flask_login import UserMixin
 from playhouse.migrate import MySQLMigrator, PostgresqlMigrator, migrate
 from peewee import (
     BigIntegerField, BooleanField, CharField,
-    CompositeKey, IntegerField, TextField, FloatField, DateTimeField,
+    CompositeKey, DecimalField, IntegerField, TextField, FloatField, DateTimeField,
     Field, Model, Metadata
 )
 from playhouse.pool import PooledMySQLDatabase, PooledPostgresqlDatabase
@@ -973,6 +973,52 @@ class KnowledgePointMastery(DataBaseModel):
         db_table = "knowledge_point_mastery"
         indexes = (
             (('student_id', 'doc_id', 'node_id'), True),  # unique
+        )
+
+
+class ScoringConfig(DataBaseModel):
+    """班级评分配置表"""
+    id = CharField(max_length=32, primary_key=True)
+    class_id = CharField(max_length=32, null=False, unique=True)
+    video_enabled = BooleanField(default=True)
+    video_weight = IntegerField(default=0)
+    quiz_enabled = BooleanField(default=True)
+    quiz_weight = IntegerField(default=0)
+    note_enabled = BooleanField(default=True)
+    note_weight = IntegerField(default=0)
+    flashcard_enabled = BooleanField(default=True)
+    flashcard_weight = IntegerField(default=0)
+    qa_enabled = BooleanField(default=True)
+    qa_weight = IntegerField(default=0)
+    external_enabled = BooleanField(default=False)
+    external_weight = IntegerField(default=0)
+
+    class Meta:
+        db_table = "scoring_config"
+
+
+class ExternalScoreSource(DataBaseModel):
+    """外部评分来源表"""
+    id = CharField(max_length=32, primary_key=True)
+    class_id = CharField(max_length=32, null=False, index=True)
+    source_name = CharField(max_length=100, null=False)
+    max_score = IntegerField(null=False)
+
+    class Meta:
+        db_table = "external_score_source"
+
+
+class ExternalScoreRecord(DataBaseModel):
+    """外部评分记录表"""
+    id = CharField(max_length=32, primary_key=True)
+    source_id = CharField(max_length=32, null=False, index=True)
+    student_id = CharField(max_length=32, null=False, index=True)
+    score = DecimalField(max_digits=8, decimal_places=2, null=False)
+
+    class Meta:
+        db_table = "external_score_record"
+        indexes = (
+            (("source_id", "student_id"), True),
         )
 
 
