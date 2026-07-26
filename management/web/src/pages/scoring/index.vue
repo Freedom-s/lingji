@@ -265,6 +265,18 @@ function handleExport() {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// ============ 模板下载 ============
+function handleDownloadTemplate() {
+  const csv = "﻿学号\t得分\n20240001\t85\n"
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = "外部成绩导入模板.csv"
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -346,7 +358,7 @@ function handleExport() {
                 >
                   <el-button type="success" :icon="Upload" size="small" plain>上传 Excel</el-button>
                 </el-upload>
-                <span style="font-size: 11px; color: #c0c4cc">模板：学号 | 得分</span>
+                <el-button type="warning" :icon="Download" size="small" plain text @click="handleDownloadTemplate">下载模板</el-button>
               </div>
 
               <el-table :data="externalSources" border stripe size="small">
