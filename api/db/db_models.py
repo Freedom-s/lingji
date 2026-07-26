@@ -1022,6 +1022,49 @@ class ExternalScoreRecord(DataBaseModel):
         )
 
 
+class WeeklyProgress(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    class_id = CharField(max_length=32, null=False, index=True)
+    name = CharField(max_length=200, null=False)
+    week_start = DateField(null=False)
+    week_end = DateField(null=False)
+    status = CharField(max_length=1, null=True, default="1")
+
+    class Meta:
+        db_table = "weekly_progress"
+
+
+class WeeklyProgressDoc(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    progress_id = CharField(max_length=32, null=False, index=True)
+    doc_id = CharField(max_length=32, null=False, index=True)
+    quiz_threshold = IntegerField(default=0)
+
+    class Meta:
+        db_table = "weekly_progress_doc"
+        indexes = (
+            (("progress_id", "doc_id"), True),
+        )
+
+
+class StudentProgressStatus(DataBaseModel):
+    id = CharField(max_length=32, primary_key=True)
+    progress_id = CharField(max_length=32, null=False, index=True)
+    doc_id = CharField(max_length=32, null=False, index=True)
+    student_id = CharField(max_length=32, null=False, index=True)
+    is_completed = BooleanField(default=False)
+    completed_at = DateTimeField(null=True)
+    video_completed = BooleanField(default=False)
+    quiz_passed = BooleanField(default=False)
+    has_notes = BooleanField(default=False)
+
+    class Meta:
+        db_table = "student_progress_status"
+        indexes = (
+            (("progress_id", "doc_id", "student_id"), True),
+        )
+
+
 class Task(DataBaseModel):
     id = CharField(max_length=32, primary_key=True)
     doc_id = CharField(max_length=32, null=False, index=True)
