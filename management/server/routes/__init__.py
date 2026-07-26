@@ -12,6 +12,7 @@ knowledgebase_bp = Blueprint('knowledgebases', __name__, url_prefix='/api/v1/kno
 conversation_bp = Blueprint('conversation', __name__, url_prefix='/api/v1/conversation')
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/v1/dashboard')
 scoring_bp = Blueprint('scoring', __name__, url_prefix='/api/v1/scoring')
+progress_bp = Blueprint('progress', __name__, url_prefix='/api/v1/progress')
 
 # 导入路由
 from .users.routes import *
@@ -24,6 +25,7 @@ from .knowledgebases.routes import *
 from .conversation.routes import *
 from .dashboard.routes import *
 from .scores.routes import *
+from .progress.routes import *
 
 
 def register_routes(app):
@@ -38,3 +40,4 @@ def register_routes(app):
     app.register_blueprint(conversation_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(scoring_bp)
+    app.register_blueprint(progress_bp)
