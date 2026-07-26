@@ -16,8 +16,21 @@ def _get_utc8_time():
 
 def get_weekly_progress_list(class_id):
     try:
+        current_user = get_current_user()
+        if not current_user:
+            return []
+        user_id = current_user["user_id"]
+
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
+
+        # 校验班级归属
+        cursor.execute("SELECT id FROM class WHERE id = %s AND tenant_id = %s", (class_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return []
+
         cursor.execute(
             "SELECT id, class_id, name, week_start, week_end, status, create_date "
             "FROM weekly_progress WHERE class_id = %s ORDER BY week_start DESC",
@@ -199,8 +212,20 @@ def delete_weekly_progress(progress_id):
 def get_class_documents(class_id):
     """获取班级关联的所有文档（含名称、类型、是否有测验）"""
     try:
+        current_user = get_current_user()
+        if not current_user:
+            return []
+        user_id = current_user["user_id"]
+
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
+
+        # 校验班级归属
+        cursor.execute("SELECT id FROM class WHERE id = %s AND tenant_id = %s", (class_id, user_id))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return []
 
         # 复用评分系统的数据链路：class → class_dialog → dialog → kb_ids → document
         cursor.execute("SELECT dialog_id FROM class_dialog WHERE class_id = %s", (class_id,))

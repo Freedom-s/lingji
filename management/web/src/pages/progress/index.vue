@@ -65,23 +65,24 @@ function openCreate() {
   if (selectedClassId.value) loadDocs()
 }
 
-function openEdit(row: WeeklyProgressItem) {
+async function openEdit(row: WeeklyProgressItem) {
   isEditing.value = true
   editingId.value = row.id
   formData.name = row.name
   formData.week_start = row.week_start
   formData.week_end = row.week_end
   dialogVisible.value = true
-  loadDocs()
-  // 等文档数据加载后再设置选中状态——这里简化处理，从后端获取已有数据
-  getProgressStatusApi(row.id).then(({ data: statusData }) => {
+  // 先加载文档列表，再根据已有进度设置选中状态
+  await loadDocsAsync()
+  try {
+    const { data: statusData } = await getProgressStatusApi(row.id)
     const pDocs = statusData.progress.docs
     availableDocs.value.forEach(d => { docSelection[d.id] = false; docThresholds[d.id] = 0 })
     pDocs.forEach((pd: any) => {
       docSelection[pd.doc_id] = true
       docThresholds[pd.doc_id] = pd.quiz_threshold
     })
-  })
+  } catch { /* ignore — docs will be unselected */ }
 }
 
 function loadDocs() {
@@ -91,6 +92,15 @@ function loadDocs() {
     availableDocs.value.forEach(d => {
       if (!(d.id in docSelection)) { docSelection[d.id] = false; docThresholds[d.id] = 0 }
     })
+  })
+}
+
+async function loadDocsAsync() {
+  if (!selectedClassId.value) return
+  const { data } = await getClassDocumentsApi(selectedClassId.value)
+  availableDocs.value = data || []
+  availableDocs.value.forEach(d => {
+    if (!(d.id in docSelection)) { docSelection[d.id] = false; docThresholds[d.id] = 0 }
   })
 }
 
