@@ -11,7 +11,7 @@ from flask_login import UserMixin
 from playhouse.migrate import MySQLMigrator, PostgresqlMigrator, migrate
 from peewee import (
     BigIntegerField, BooleanField, CharField,
-    CompositeKey, DecimalField, IntegerField, TextField, FloatField, DateTimeField,
+    CompositeKey, DateField, DecimalField, IntegerField, TextField, FloatField, DateTimeField,
     Field, Model, Metadata
 )
 from playhouse.pool import PooledMySQLDatabase, PooledPostgresqlDatabase
