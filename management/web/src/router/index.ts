@@ -170,6 +170,24 @@ export const constantRoutes: RouteRecordRaw[] = [
         }
       }
     ]
+  },
+  {
+    path: "/scoring",
+    component: Layouts,
+    redirect: "/scoring/index",
+    children: [
+      {
+        path: "index",
+        component: () => import("@/pages/scoring/index.vue"),
+        name: "ScoringManagement",
+        meta: {
+          title: "评分管理",
+          svgIcon: "scoring",
+          affix: false,
+          keepAlive: true
+        }
+      }
+    ]
   }
 ]
 
