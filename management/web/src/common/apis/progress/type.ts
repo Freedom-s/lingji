@@ -68,3 +68,44 @@ export interface ProgressStatusResult {
   summary: ProgressSummary
   students: StudentProgressStatus[]
 }
+
+export interface TeacherProgressStudentSummary {
+  student_id: string
+  student_name: string
+  completed_docs: number
+  total_docs: number
+}
+
+export interface TeacherProgressReminderItem {
+  id: string
+  class_id: string
+  class_name: string
+  name: string
+  week_start: string
+  week_end: string
+  state: "upcoming" | "active" | "overdue"
+  day_count: number
+  total_students: number
+  completed_count: number
+  incomplete_count: number
+  completion_rate: number
+  completed_students: TeacherProgressStudentSummary[]
+  incomplete_students: TeacherProgressStudentSummary[]
+}
+
+export interface TeacherProgressReminderResult {
+  summary: {
+    total_progresses: number
+    attention_progresses: number
+    overdue_progresses: number
+    total_incomplete_students: number
+  }
+  items: TeacherProgressReminderItem[]
+}
+
+export type WeeklyProgressListResponseData = ApiResponseData<WeeklyProgressItem[]>
+export type WeeklyProgressCreateResponseData = ApiResponseData<{ id: string }>
+export type ProgressMutationResponseData = ApiResponseData<null>
+export type ClassDocumentListResponseData = ApiResponseData<ClassDocument[]>
+export type ProgressStatusResponseData = ApiResponseData<ProgressStatusResult>
+export type TeacherProgressReminderResponseData = ApiResponseData<TeacherProgressReminderResult>

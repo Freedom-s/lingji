@@ -1,28 +1,23 @@
-import type {
-  ClassDocument,
-  CreateProgressData,
-  ProgressStatusResult,
-  WeeklyProgressItem
-} from "./type"
+import type * as Progress from "./type"
 import { request } from "@/http/axios"
 
 export function getWeeklyProgressListApi(classId: string) {
-  return request<WeeklyProgressItem[]>({
+  return request<Progress.WeeklyProgressListResponseData>({
     url: `api/v1/progress/${classId}`,
     method: "get"
   })
 }
 
-export function createWeeklyProgressApi(classId: string, data: CreateProgressData) {
-  return request<{ id: string }>({
+export function createWeeklyProgressApi(classId: string, data: Progress.CreateProgressData) {
+  return request<Progress.WeeklyProgressCreateResponseData>({
     url: `api/v1/progress/${classId}`,
     method: "post",
     data
   })
 }
 
-export function updateWeeklyProgressApi(progressId: string, data: CreateProgressData) {
-  return request({
+export function updateWeeklyProgressApi(progressId: string, data: Progress.CreateProgressData) {
+  return request<Progress.ProgressMutationResponseData>({
     url: `api/v1/progress/detail/${progressId}`,
     method: "put",
     data
@@ -30,29 +25,36 @@ export function updateWeeklyProgressApi(progressId: string, data: CreateProgress
 }
 
 export function deleteWeeklyProgressApi(progressId: string) {
-  return request({
+  return request<Progress.ProgressMutationResponseData>({
     url: `api/v1/progress/detail/${progressId}`,
     method: "delete"
   })
 }
 
 export function getClassDocumentsApi(classId: string) {
-  return request<ClassDocument[]>({
+  return request<Progress.ClassDocumentListResponseData>({
     url: `api/v1/progress/docs/${classId}`,
     method: "get"
   })
 }
 
 export function getProgressStatusApi(progressId: string) {
-  return request<ProgressStatusResult>({
+  return request<Progress.ProgressStatusResponseData>({
     url: `api/v1/progress/status/${progressId}`,
     method: "get"
   })
 }
 
 export function refreshProgressStatusApi(progressId: string) {
-  return request({
+  return request<Progress.ProgressMutationResponseData>({
     url: `api/v1/progress/refresh/${progressId}`,
     method: "post"
+  })
+}
+
+export function getTeacherProgressRemindersApi() {
+  return request<Progress.TeacherProgressReminderResponseData>({
+    url: "api/v1/progress/reminders",
+    method: "get"
   })
 }

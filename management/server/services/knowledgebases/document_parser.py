@@ -31,8 +31,10 @@ from .utils import _create_task_record, _update_document_progress, _update_kb_ch
 # tknzr = RagTokenizer()
 tknzr = JiebaTokenizer() # 改用普通的jieba分词来做
 
-# OCR 服务地址
-OCR_URL = "http://localhost:8888/file_parse"
+# OCR 服务地址（host/port 从 .env 读取，默认 localhost:8888）
+OCR_HOST = os.getenv("OCR_HOST", "localhost")
+OCR_PORT = os.getenv("OCR_PORT", "8888")
+OCR_URL = f"http://{OCR_HOST}:{OCR_PORT}/file_parse"
 
 # OCR 并发页面的最大并发数
 OCR_MAX_WORKERS = 2

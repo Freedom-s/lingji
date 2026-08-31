@@ -1,7 +1,7 @@
 import requests
 # 直接写一个脚本，然后一次去处理每张图片，把结果全部存储到一个list里面
 data = {
-    "file_path": '/home/ssc/sjh/output_images/0002/page_003.png',
+    "file_path": '/Users/suojianhua/PyProjects/ragflow-plus-version2/mineru-ocr-service/imgs/docvqa2.jpg',
     "parse_method": "auto",
     "is_json_md_dump": True,
     "return_layout": True,
@@ -10,7 +10,7 @@ data = {
     "return_images": True
 }
 url = "http://localhost:8888/file_parse"
-response = requests.post(url, data, timeout=60)
+response = requests.post(url, data, timeout=800)
 
 response.raise_for_status()
 
@@ -34,6 +34,8 @@ if 'content_list' in result:
         # 提取正文文本
         if 'text' in item and item['text']:
             text += item['text'] + '\n'
+print("*"*50)
+print("*"*50)
 print(text)
 # md_content = result.get("md_content")
 # print('md_content', md_content)

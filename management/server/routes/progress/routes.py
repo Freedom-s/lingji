@@ -7,9 +7,22 @@ from services.progress.service import (
     get_class_documents,
     get_progress_status,
     refresh_progress_status,
+    get_teacher_progress_reminders,
 )
 from routes import progress_bp
 from auth import require_superuser
+
+
+@progress_bp.route('/reminders', methods=['GET'])
+@require_superuser
+def teacher_progress_reminders():
+    try:
+        success, result = get_teacher_progress_reminders()
+        if success:
+            return jsonify({"code": 0, "data": result, "message": "获取进度提醒成功"})
+        return jsonify({"code": 400, "message": result}), 400
+    except Exception as e:
+        return jsonify({"code": 500, "message": f"获取进度提醒失败: {str(e)}"}), 500
 
 
 @progress_bp.route('/<string:class_id>', methods=['GET'])

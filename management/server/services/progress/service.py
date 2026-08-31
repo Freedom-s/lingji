@@ -1,7 +1,7 @@
 import json
 import mysql.connector
 import pytz
-from datetime import datetime
+from datetime import date, datetime
 from utils import generate_uuid
 from database import DB_CONFIG
 from auth import get_current_user
@@ -39,9 +39,9 @@ def get_weekly_progress_list(class_id):
         rows = cursor.fetchall()
         # 转换 date 类型为字符串
         for r in rows:
-            if isinstance(r.get("week_start"), datetime):
+            if isinstance(r.get("week_start"), (date, datetime)):
                 r["week_start"] = r["week_start"].strftime("%Y-%m-%d")
-            if isinstance(r.get("week_end"), datetime):
+            if isinstance(r.get("week_end"), (date, datetime)):
                 r["week_end"] = r["week_end"].strftime("%Y-%m-%d")
         cursor.close()
         conn.close()
@@ -474,9 +474,9 @@ def get_progress_status(progress_id):
             conn.close()
             return False, "进度不存在"
 
-        if isinstance(progress.get("week_start"), datetime):
+        if isinstance(progress.get("week_start"), (date, datetime)):
             progress["week_start"] = progress["week_start"].strftime("%Y-%m-%d")
-        if isinstance(progress.get("week_end"), datetime):
+        if isinstance(progress.get("week_end"), (date, datetime)):
             progress["week_end"] = progress["week_end"].strftime("%Y-%m-%d")
 
         # 文档列表
@@ -547,4 +547,111 @@ def get_progress_status(progress_id):
 
     except mysql.connector.Error as err:
         print(f"获取进度状态失败: {err}")
+        return False, str(err)
+
+
+def get_teacher_progress_reminders():
+    """获取当前老师所有周进度的完成提醒，用于后台首页。"""
+    current_user = get_current_user()
+    if not current_user:
+        return False, "获取用户信息失败"
+
+    user_id = current_user["user_id"]
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT wp.id
+            FROM weekly_progress wp
+            JOIN class c ON wp.class_id = c.id
+            WHERE c.tenant_id = %s AND wp.status = '1'
+            ORDER BY wp.week_end ASC, wp.week_start ASC
+            """,
+            (user_id,),
+        )
+        progress_ids = [row["id"] for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+
+        items = []
+        today = date.today()
+        for progress_id in progress_ids:
+            success, result = get_progress_status(progress_id)
+            if not success:
+                continue
+
+            progress = result["progress"]
+            start_value = progress.get("week_start")
+            end_value = progress.get("week_end")
+            start_date = (
+                start_value.date() if isinstance(start_value, datetime)
+                else start_value if isinstance(start_value, date)
+                else datetime.strptime(str(start_value)[:10], "%Y-%m-%d").date()
+            )
+            end_date = (
+                end_value.date() if isinstance(end_value, datetime)
+                else end_value if isinstance(end_value, date)
+                else datetime.strptime(str(end_value)[:10], "%Y-%m-%d").date()
+            )
+
+            if today < start_date:
+                state = "upcoming"
+                day_count = (start_date - today).days
+            elif today > end_date:
+                state = "overdue"
+                day_count = (today - end_date).days
+            else:
+                state = "active"
+                day_count = (end_date - today).days
+
+            completed_students = []
+            incomplete_students = []
+            for student in result["students"]:
+                target = completed_students if student["is_all_completed"] else incomplete_students
+                target.append({
+                    "student_id": student["student_id"],
+                    "student_name": student["student_name"],
+                    "completed_docs": student["total_completed"],
+                    "total_docs": student["total_docs"],
+                })
+
+            summary = result["summary"]
+            items.append({
+                "id": progress["id"],
+                "class_id": progress["class_id"],
+                "class_name": progress.get("class_name", ""),
+                "name": progress["name"],
+                "week_start": start_date.strftime("%Y-%m-%d"),
+                "week_end": end_date.strftime("%Y-%m-%d"),
+                "state": state,
+                "day_count": day_count,
+                "total_students": summary["total_students"],
+                "completed_count": summary["completed_count"],
+                "incomplete_count": summary["incomplete_count"],
+                "completion_rate": summary["completion_rate"],
+                "completed_students": completed_students,
+                "incomplete_students": incomplete_students,
+            })
+
+        state_priority = {"overdue": 0, "active": 1, "upcoming": 2}
+        items.sort(key=lambda item: (
+            item["incomplete_count"] == 0,
+            state_priority[item["state"]],
+            item["week_end"],
+        ))
+        return True, {
+            "summary": {
+                "total_progresses": len(items),
+                "attention_progresses": sum(1 for item in items if item["incomplete_count"] > 0),
+                "overdue_progresses": sum(
+                    1 for item in items
+                    if item["state"] == "overdue" and item["incomplete_count"] > 0
+                ),
+                "total_incomplete_students": sum(item["incomplete_count"] for item in items),
+            },
+            "items": items,
+        }
+    except (mysql.connector.Error, ValueError) as err:
+        print(f"获取教师进度提醒失败: {err}")
         return False, str(err)

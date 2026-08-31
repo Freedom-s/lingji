@@ -1,12 +1,4 @@
-import type {
-  ClassScoreResult,
-  CreateExternalSourceData,
-  ExternalScoreRecord,
-  ExternalScoreSource,
-  SaveScoringConfigData,
-  ScoringConfig,
-  StudentScore
-} from "./type"
+import type { ClassScoreResult, CreateExternalSourceData, ExternalScoreRecord, ExternalScoreSource, SaveScoringConfigData, ScoringConfig, StudentScore } from "./type"
 import { request } from "@/http/axios"
 
 /** 获取班级评分配置 */
@@ -44,7 +36,7 @@ export function createExternalSourceApi(data: CreateExternalSourceData) {
 }
 
 /** 修改外部数据源 */
-export function updateExternalSourceApi(sourceId: string, data: { source_name: string; max_score: number }) {
+export function updateExternalSourceApi(sourceId: string, data: { source_name: string, max_score: number }) {
   return request({
     url: `api/v1/scoring/external-source/${sourceId}`,
     method: "put",
@@ -65,6 +57,15 @@ export function getExternalRecordsApi(sourceId: string) {
   return request<ExternalScoreRecord[]>({
     url: `api/v1/scoring/external-record/${sourceId}`,
     method: "get"
+  })
+}
+
+/** 下载预填班级学生花名册的外部成绩 Excel 模板 */
+export function downloadExternalTemplateApi(sourceId: string) {
+  return request<Blob>({
+    url: `api/v1/scoring/external-record/template/${sourceId}`,
+    method: "get",
+    responseType: "blob"
   })
 }
 

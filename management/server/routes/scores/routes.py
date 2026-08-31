@@ -1,4 +1,6 @@
-from flask import jsonify, request
+from io import BytesIO
+
+from flask import jsonify, request, send_file
 from services.scores.service import (
     get_scoring_config,
     save_scoring_config,
@@ -7,6 +9,7 @@ from services.scores.service import (
     update_external_source,
     delete_external_source,
     get_external_records,
+    get_external_template_context,
     upsert_external_records,
     update_external_record,
     calculate_class_scores,
@@ -111,6 +114,98 @@ def remove_external_source(source_id):
 
 # ========== 外部评分记录 ==========
 
+@scoring_bp.route('/external-record/template/<string:source_id>', methods=['GET'])
+@require_superuser
+def download_external_template(source_id):
+    """按数据源所属班级生成预填学生花名册的 Excel 模板。"""
+    try:
+        success, result = get_external_template_context(source_id)
+        if not success:
+            return jsonify({"code": 400, "message": result}), 400
+
+        import openpyxl
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.worksheet.datavalidation import DataValidation
+
+        source = result["source"]
+        students = result["students"]
+
+        def safe_excel_text(value):
+            text = str(value or "")
+            return f"'{text}" if text.startswith(("=", "+", "-", "@")) else text
+
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "成绩导入"
+        worksheet.append(["系统学生ID", "学生姓名", "登录邮箱", "得分"])
+        for student in students:
+            worksheet.append([
+                student["id"],
+                safe_excel_text(student.get("nickname")),
+                safe_excel_text(student.get("email")),
+                None,
+            ])
+
+        header_fill = PatternFill("solid", fgColor="1F4E78")
+        score_fill = PatternFill("solid", fgColor="FFF2CC")
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for row_number in range(2, max(len(students) + 2, 3)):
+            worksheet.cell(row=row_number, column=4).fill = score_fill
+
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = f"A1:D{max(len(students) + 1, 1)}"
+        worksheet.column_dimensions["A"].width = 36
+        worksheet.column_dimensions["B"].width = 18
+        worksheet.column_dimensions["C"].width = 32
+        worksheet.column_dimensions["D"].width = 14
+        worksheet.row_dimensions[1].height = 24
+
+        max_score = float(source["max_score"])
+        validation = DataValidation(
+            type="decimal",
+            operator="between",
+            formula1="0",
+            formula2=str(max_score),
+            allow_blank=True,
+        )
+        validation.error = f"得分必须在 0 至 {max_score:g} 之间"
+        validation.errorTitle = "得分无效"
+        validation.prompt = f"请填写 0 至 {max_score:g} 之间的得分"
+        validation.promptTitle = "填写得分"
+        validation.showErrorMessage = True
+        validation.showInputMessage = True
+        worksheet.add_data_validation(validation)
+        validation.add(f"D2:D{max(len(students) + 1, 2)}")
+
+        instructions = workbook.create_sheet("填写说明")
+        instructions.append(["项目", "内容"])
+        instructions.append(["班级", source["class_name"]])
+        instructions.append(["数据源", source["source_name"]])
+        instructions.append(["满分", source["max_score"]])
+        instructions.append(["填写要求", "只填写“得分”列，请勿修改系统学生ID、姓名和登录邮箱。"])
+        instructions.append(["空白成绩", "得分为空的学生不会导入，也不会覆盖已有成绩。"])
+        instructions.column_dimensions["A"].width = 16
+        instructions.column_dimensions["B"].width = 72
+        for cell in instructions[1]:
+            cell.fill = header_fill
+            cell.font = Font(color="FFFFFF", bold=True)
+
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="外部成绩导入模板.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        return jsonify({"code": 500, "message": f"生成成绩模板失败: {str(e)}"}), 500
+
+
 @scoring_bp.route('/external-record/<string:source_id>', methods=['GET'])
 @require_superuser
 def list_external_records(source_id):
@@ -148,23 +243,25 @@ def upload_external_records():
         # 解析表头
         header = [str(c).strip() if c else "" for c in rows[0]]
         try:
-            student_id_col = header.index("学号")
+            student_id_col = header.index("系统学生ID")
             score_col = header.index("得分")
         except ValueError:
-            return jsonify({"code": 400, "message": "Excel 表头必须包含「学号」和「得分」列"}), 400
+            return jsonify({"code": 400, "message": "请使用系统下载的模板，表头必须包含「系统学生ID」和「得分」列"}), 400
 
         # 解析数据行
         records = []
-        for row in rows[1:]:
+        for row_number, row in enumerate(rows[1:], start=2):
             if not row or len(row) <= max(student_id_col, score_col):
                 continue
             sid = str(row[student_id_col]).strip() if row[student_id_col] is not None else ""
-            try:
-                score = float(row[score_col]) if row[score_col] is not None else 0
-            except (ValueError, TypeError):
+            if row[score_col] is None or str(row[score_col]).strip() == "":
                 continue
+            try:
+                score = float(row[score_col])
+            except (ValueError, TypeError):
+                return jsonify({"code": 400, "message": f"第 {row_number} 行的得分不是有效数字"}), 400
             if sid:
-                records.append({"student_id": sid, "score": score})
+                records.append({"student_id": sid, "score": score, "row_number": row_number})
 
         if not records:
             return jsonify({"code": 400, "message": "没有解析到有效数据"}), 400

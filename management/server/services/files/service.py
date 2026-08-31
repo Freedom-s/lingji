@@ -1029,7 +1029,9 @@ def get_file_preview_url(file_id):
             raise Exception(f"文件 {file_id} 不存在或无权访问")
 
         # 获取MinIO配置
-        minio_host = os.getenv("MINIO_HOST", "localhost")
+        # 注意：预览URL是返回给浏览器（客户端）访问的，必须用 MINIO_VISIT_HOST（对外访问地址），
+        # 不能用 MINIO_HOST（服务器内部连接 MinIO 的地址，默认 localhost）。
+        minio_host = os.getenv("MINIO_VISIT_HOST", "localhost")
         minio_port = os.getenv("MINIO_PORT", "9000")
 
         # 构造预览URL：http://{host}:{port}/{bucket}/{location}

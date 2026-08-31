@@ -2,11 +2,11 @@ import requests
 import os
 
 # 1. 准备你要上传的本地图片路径（仅仅是为了读取它，不是传路径给服务端）
-local_image_path = '/Users/suojianhua/PyProjects/qwen3-vl-embd/mineru-ocr-service/123.jpg'
+local_image_path = '/Users/suojianhua/PyProjects/ragflow-plus-version2/mineru-ocr-service/123.jpg'
 file_name = os.path.basename(local_image_path)
 
 
-url = "http://localhost:8888/file_parse"
+url = "http://10.15.25.201:29907/file_parse"
 
 try:
     # 3. 打开文件并构建 files 字典

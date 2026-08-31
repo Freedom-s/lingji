@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { computed, markRaw, nextTick, onMounted, ref } from "vue"
 import {
+  ArrowRight,
   ChatDotRound,
+  CircleCheck,
+  CircleClose,
   Collection,
   Files,
   MagicStick,
@@ -23,17 +26,21 @@ import type {
   ClassRankingItem,
   OverviewData
 } from "@/common/apis/dashboard/type"
+import { getTeacherProgressRemindersApi } from "@/common/apis/progress"
+import type { TeacherProgressReminderItem, TeacherProgressReminderResult } from "@/common/apis/progress/type"
 import { use } from "echarts/core"
 import { BarChart, LineChart } from "echarts/charts"
 import { GridComponent, TooltipComponent } from "echarts/components"
 import { CanvasRenderer } from "echarts/renderers"
 import dayjs from "dayjs"
 import VChart from "vue-echarts"
+import { useRouter } from "vue-router"
 
 use([CanvasRenderer, LineChart, BarChart, TooltipComponent, GridComponent])
 
 const userStore = useUserStore()
 const username = userStore.username
+const router = useRouter()
 
 const loading = ref(true)
 const timeRange = ref<"24h" | "7d" | "30d">("7d")
@@ -44,6 +51,8 @@ const assistantRankingData = ref<AssistantRankingItem[]>([])
 const classRankingData = ref<ClassRankingItem[]>([])
 const displayedValues = ref<Record<string, number>>({})
 const lastUpdatedAt = ref("--")
+const progressReminderData = ref<TeacherProgressReminderResult | null>(null)
+const progressReminderLoading = ref(false)
 
 const metricIcons = {
   students: markRaw(UserFilled),
@@ -424,6 +433,38 @@ async function fetchTrendData() {
   }
 }
 
+async function fetchProgressReminders() {
+  progressReminderLoading.value = true
+  try {
+    const res = await getTeacherProgressRemindersApi()
+    if (res.code === 0 && res.data) {
+      progressReminderData.value = res.data
+    }
+  } catch (error) {
+    console.error("获取周进度提醒失败:", error)
+  } finally {
+    progressReminderLoading.value = false
+  }
+}
+
+function progressStateLabel(item: TeacherProgressReminderItem) {
+  if (item.state === "overdue") return `逾期 ${item.day_count} 天`
+  if (item.state === "upcoming") return `${item.day_count} 天后开始`
+  if (item.day_count === 0) return "今天截止"
+  return `剩余 ${item.day_count} 天`
+}
+
+function openProgressDetail(item?: TeacherProgressReminderItem) {
+  if (!item) {
+    router.push("/progress/index")
+    return
+  }
+  router.push({
+    path: "/progress/index",
+    query: { class_id: item.class_id, progress_id: item.id }
+  })
+}
+
 function handleTimeRangeChange(range: "24h" | "7d" | "30d") {
   timeRange.value = range
   fetchTrendData()
@@ -432,6 +473,7 @@ function handleTimeRangeChange(range: "24h" | "7d" | "30d") {
 onMounted(() => {
   fetchOverviewData()
   fetchTrendData()
+  fetchProgressReminders()
 })
 </script>
 
@@ -465,6 +507,87 @@ onMounted(() => {
             </el-radio-group>
           </div>
         </div>
+      </section>
+
+      <section v-loading="progressReminderLoading" class="progress-reminder-panel panel-card">
+        <header class="progress-reminder-header">
+          <div>
+            <p class="section-eyebrow progress-eyebrow">Weekly progress</p>
+            <h2 class="progress-reminder-title">周进度提醒</h2>
+            <p class="progress-reminder-description">
+              及时查看哪些学生已经跟上节奏，哪些学生还需要提醒。
+            </p>
+          </div>
+          <div class="progress-reminder-actions">
+            <div class="reminder-summary-chip is-attention">
+              <strong>{{ progressReminderData?.summary.total_incomplete_students ?? 0 }}</strong>
+              <span>人次未完成</span>
+            </div>
+            <div class="reminder-summary-chip">
+              <strong>{{ progressReminderData?.summary.overdue_progresses ?? 0 }}</strong>
+              <span>项已逾期</span>
+            </div>
+            <el-button type="primary" plain :icon="ArrowRight" @click="openProgressDetail()">
+              全部进度
+            </el-button>
+          </div>
+        </header>
+
+        <div v-if="progressReminderData?.items.length" class="progress-reminder-grid">
+          <article
+            v-for="item in progressReminderData.items.slice(0, 4)"
+            :key="item.id"
+            :class="['progress-reminder-card', `is-${item.state}`]"
+          >
+            <div class="progress-card-head">
+              <div class="progress-class-copy">
+                <span class="progress-class-name">{{ item.class_name }}</span>
+                <h3>{{ item.name }}</h3>
+              </div>
+              <el-tag
+                :type="item.state === 'overdue' ? 'danger' : item.state === 'active' ? 'warning' : 'info'"
+                effect="light"
+                round
+              >
+                {{ progressStateLabel(item) }}
+              </el-tag>
+            </div>
+
+            <div class="progress-rate-row">
+              <el-progress
+                :percentage="item.completion_rate"
+                :stroke-width="8"
+                :color="item.incomplete_count === 0 ? '#16a36a' : item.state === 'overdue' ? '#dc5a3a' : '#d89920'"
+              />
+              <span>{{ item.completed_count }}/{{ item.total_students }} 人</span>
+            </div>
+
+            <div class="student-status-list">
+              <div class="student-status-row is-completed">
+                <CircleCheck />
+                <span class="status-label">已完成</span>
+                <span class="student-names">
+                  {{ item.completed_students.slice(0, 3).map(s => s.student_name).join('、') || '暂无' }}
+                  <template v-if="item.completed_students.length > 3">等 {{ item.completed_students.length }} 人</template>
+                </span>
+              </div>
+              <div class="student-status-row is-incomplete">
+                <CircleClose />
+                <span class="status-label">未完成</span>
+                <span class="student-names">
+                  {{ item.incomplete_students.slice(0, 3).map(s => s.student_name).join('、') || '暂无' }}
+                  <template v-if="item.incomplete_students.length > 3">等 {{ item.incomplete_students.length }} 人</template>
+                </span>
+              </div>
+            </div>
+
+            <button class="progress-detail-link" type="button" @click="openProgressDetail(item)">
+              查看每个文档完成情况
+              <ArrowRight />
+            </button>
+          </article>
+        </div>
+        <el-empty v-else description="暂时没有已发布的周进度" :image-size="88" />
       </section>
 
       <section class="metrics-grid">
@@ -562,6 +685,212 @@ onMounted(() => {
   gap: 32px;
   padding: 32px;
   align-items: center;
+}
+
+.progress-reminder-panel {
+  padding: 26px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 100% 0, rgba(245, 158, 11, 0.08), transparent 32%),
+    rgba(255, 255, 255, 0.94);
+}
+
+.progress-reminder-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.progress-eyebrow {
+  color: #b77914;
+}
+
+.progress-reminder-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.progress-reminder-description {
+  margin: 8px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+.progress-reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reminder-summary-chip {
+  min-width: 96px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 13px;
+  color: #64748b;
+  background: #f8fafc;
+
+  strong {
+    color: #334155;
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  span {
+    font-size: 11px;
+  }
+
+  &.is-attention {
+    color: #9a6510;
+    background: #fff7e2;
+
+    strong {
+      color: #b36f08;
+    }
+  }
+}
+
+.progress-reminder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.progress-reminder-card {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid #e5eaf0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: #d89920;
+  }
+
+  &.is-overdue::before {
+    background: #dc5a3a;
+  }
+
+  &.is-upcoming::before {
+    background: #7890ad;
+  }
+}
+
+.progress-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.progress-class-copy {
+  min-width: 0;
+
+  h3 {
+    overflow: hidden;
+    margin: 5px 0 0;
+    color: #1e293b;
+    font-size: 16px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.progress-class-name {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.progress-rate-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0 14px;
+
+  > span {
+    color: #64748b;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :deep(.el-progress__text) {
+    min-width: 38px;
+    color: #475569;
+    font-size: 11px !important;
+  }
+}
+
+.student-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.student-status-row {
+  display: grid;
+  grid-template-columns: 18px 46px 1fr;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 11px;
+
+  > svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  &.is-completed > svg {
+    color: #16a36a;
+  }
+
+  &.is-incomplete > svg {
+    color: #dc5a3a;
+  }
+}
+
+.status-label {
+  font-weight: 650;
+}
+
+.student-names {
+  overflow: hidden;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 15px;
+  padding: 0;
+  border: 0;
+  color: #8a641b;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+
+  > svg {
+    width: 13px;
+  }
 }
 
 .hero-copy {
@@ -832,6 +1161,15 @@ onMounted(() => {
   .hero-actions {
     align-items: stretch;
   }
+
+  .progress-reminder-header {
+    flex-direction: column;
+  }
+
+  .progress-reminder-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 768px) {
@@ -844,6 +1182,10 @@ onMounted(() => {
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
+  }
+
+  .progress-reminder-grid {
+    grid-template-columns: 1fr;
   }
 
   .chart-view {

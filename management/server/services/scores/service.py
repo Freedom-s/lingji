@@ -1,4 +1,5 @@
 import json
+import math
 import mysql.connector
 import pytz
 from datetime import datetime
@@ -320,6 +321,53 @@ def get_external_records(source_id):
         return []
 
 
+def get_external_template_context(source_id):
+    """获取外部成绩模板所需的数据源、班级和学生花名册。"""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return False, "获取用户信息失败"
+        user_id = current_user["user_id"]
+
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT ess.id, ess.source_name, ess.max_score, ess.class_id,
+                   c.name AS class_name
+            FROM external_score_source ess
+            JOIN class c ON ess.class_id = c.id
+            WHERE ess.id = %s AND c.tenant_id = %s
+            """,
+            (source_id, user_id),
+        )
+        source = cursor.fetchone()
+        if not source:
+            cursor.close()
+            conn.close()
+            return False, "数据源不存在或无权操作"
+
+        cursor.execute(
+            """
+            SELECT u.id, u.nickname, u.email
+            FROM user u
+            JOIN user_class uc ON u.id = uc.user_id
+            WHERE uc.class_id = %s
+              AND uc.role = 'student'
+              AND uc.status = '1'
+            ORDER BY u.nickname, u.email
+            """,
+            (source["class_id"],),
+        )
+        students = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return True, {"source": source, "students": students}
+    except mysql.connector.Error as err:
+        print(f"获取外部成绩模板数据失败: {err}")
+        return False, str(err)
+
+
 def upsert_external_records(source_id, records):
     """批量 upsert 外部评分记录
     records: [{"student_id": "xxx", "score": 85.5}, ...]
@@ -335,7 +383,7 @@ def upsert_external_records(source_id, records):
 
         # 校验数据源归属
         check_query = """
-            SELECT ess.id, ess.class_id FROM external_score_source ess
+            SELECT ess.id, ess.class_id, ess.max_score FROM external_score_source ess
             JOIN class c ON ess.class_id = c.id
             WHERE ess.id = %s AND c.tenant_id = %s
         """
@@ -351,13 +399,51 @@ def upsert_external_records(source_id, records):
             conn.close()
             return False, "没有要导入的数据"
 
+        cursor.execute(
+            """
+            SELECT user_id
+            FROM user_class
+            WHERE class_id = %s AND role = 'student' AND status = '1'
+            """,
+            (source_row["class_id"],),
+        )
+        valid_student_ids = {row["user_id"] for row in cursor.fetchall()}
+        invalid_student_ids = []
+        invalid_scores = []
+        max_score = float(source_row["max_score"])
+        for rec in records:
+            sid = str(rec.get("student_id", "")).strip()
+            score = rec.get("score")
+            row_number = rec.get("row_number", "?")
+            if sid not in valid_student_ids:
+                invalid_student_ids.append(f"第 {row_number} 行")
+                continue
+            try:
+                numeric_score = float(score)
+            except (TypeError, ValueError):
+                invalid_scores.append(f"第 {row_number} 行")
+                continue
+            if not math.isfinite(numeric_score) or not 0 <= numeric_score <= max_score:
+                invalid_scores.append(f"第 {row_number} 行")
+
+        if invalid_student_ids:
+            cursor.close()
+            conn.close()
+            positions = "、".join(invalid_student_ids[:5])
+            return False, f"{positions} 的学生ID不属于当前班级，请重新下载模板后填写"
+        if invalid_scores:
+            cursor.close()
+            conn.close()
+            positions = "、".join(invalid_scores[:5])
+            return False, f"{positions} 的得分无效，得分必须在 0 至 {max_score:g} 之间"
+
         ct_ms, ct_date = _get_utc8_time()
         inserted = 0
         updated = 0
 
         for rec in records:
-            sid = rec.get("student_id", "").strip()
-            score = rec.get("score", 0)
+            sid = str(rec.get("student_id", "")).strip()
+            score = float(rec.get("score"))
             if not sid:
                 continue
 
@@ -625,7 +711,9 @@ def _calc_external_score(student_id, class_id):
     normalized_scores = []
     for row in rows:
         if row["score"] is not None and row["max_score"] > 0:
-            normalized_scores.append(min(row["score"] / row["max_score"] * 100, 100))
+            score = float(row["score"])
+            max_score = float(row["max_score"])
+            normalized_scores.append(min(score / max_score * 100, 100.0))
 
     if not normalized_scores:
         return 0.0

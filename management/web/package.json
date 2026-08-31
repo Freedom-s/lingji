@@ -7,8 +7,8 @@
   "repository": "https://github.com/un-pany/v3-admin-vite",
   "scripts": {
     "dev": "vite",
-    "build:staging": "vue-tsc && vite build --mode production",
-    "build": "vue-tsc && vite build",
+    "build:staging": "vite build --mode production",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
     "prepare": "husky",

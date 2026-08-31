@@ -15,6 +15,7 @@
 #
 
 import logging
+import os
 import time
 from minio import Minio
 from minio.error import S3Error
@@ -109,9 +110,22 @@ class RAGFlowMinio:
             return False
 
     def get_presigned_url(self, bucket, fnm, expires):
+        # 预签名URL是返回给浏览器（客户端）访问的，host 会被算进 S3 V4 签名里，
+        # 所以必须用对外访问地址（MINIO_VISIT_HOST）来生成签名。否则局域网/公网其他
+        # 机器拿到 localhost 地址无法访问，且直接替换字符串会导致签名失效。
+        visit_host = os.getenv("MINIO_VISIT_HOST", "localhost")
+        for scheme in ("http://", "https://"):
+            if visit_host.startswith(scheme):
+                visit_host = visit_host[len(scheme):]
+                break
+        visit_port = os.getenv("MINIO_PORT", "9000")
+        public_conn = Minio(f"{visit_host}:{visit_port}",
+                            access_key=settings.MINIO["user"],
+                            secret_key=settings.MINIO["password"],
+                            secure=False)
         for _ in range(10):
             try:
-                return self.conn.get_presigned_url("GET", bucket, fnm, expires)
+                return public_conn.get_presigned_url("GET", bucket, fnm, expires)
             except Exception:
                 logging.exception(f"Fail to get_presigned {bucket}/{fnm}:")
                 self.__open__()
