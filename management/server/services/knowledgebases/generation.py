@@ -31,6 +31,8 @@ from . import logger
 
 GENERATION_TYPES = ("mindmap", "flashcards", "quiz")
 VIDEO_DOCUMENT_TYPE = "video"
+MAX_GENERATION_ITEMS = 500
+MAX_MINDMAP_DEPTH = 12
 _REGENERATION_LOCK = threading.Lock()
 _REGENERATING_DOCS = set()
 
@@ -202,6 +204,346 @@ def _extract_node_info(mindmap_data: dict) -> list[dict]:
     if root:
         walk(root)
     return nodes
+
+
+def _normalize_mindmap(content: dict) -> tuple[dict, set[str]]:
+    """校验并规范化教师编辑后的思维导图，保证节点 ID 唯一且结构可用。"""
+    if not isinstance(content, dict) or not isinstance(content.get("root"), dict):
+        raise ValueError("思维导图必须包含根节点")
+
+    seen_ids = set()
+    node_count = 0
+
+    def normalize_node(node: dict, depth: int) -> dict:
+        nonlocal node_count
+        if depth > MAX_MINDMAP_DEPTH:
+            raise ValueError(f"思维导图最多支持 {MAX_MINDMAP_DEPTH} 层")
+        if not isinstance(node, dict):
+            raise ValueError("思维导图节点格式错误")
+
+        node_id = str(node.get("id") or "").strip()
+        label = str(node.get("label") or "").strip()
+        children = node.get("children") or []
+        if not node_id or len(node_id) > 64:
+            raise ValueError("思维导图节点 ID 不能为空且不能超过 64 个字符")
+        if node_id in seen_ids:
+            raise ValueError(f"思维导图节点 ID 重复：{node_id}")
+        if not label or len(label) > 200:
+            raise ValueError("知识点名称不能为空且不能超过 200 个字符")
+        if not isinstance(children, list):
+            raise ValueError("思维导图子节点必须是数组")
+
+        node_count += 1
+        if node_count > MAX_GENERATION_ITEMS:
+            raise ValueError(f"思维导图最多支持 {MAX_GENERATION_ITEMS} 个节点")
+        seen_ids.add(node_id)
+        return {
+            "id": node_id,
+            "label": label,
+            "children": [normalize_node(child, depth + 1) for child in children],
+        }
+
+    root = normalize_node(content["root"], 1)
+    title = str(content.get("title") or root["label"]).strip()
+    if len(title) > 200:
+        raise ValueError("思维导图标题不能超过 200 个字符")
+    return {"title": title, "root": root}, seen_ids
+
+
+def _normalize_knowledge_point_ids(value, valid_node_ids: set[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("关联知识点必须是数组")
+    normalized = list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+    if valid_node_ids is None:
+        return normalized
+    invalid = [node_id for node_id in normalized if node_id not in valid_node_ids]
+    if invalid:
+        raise ValueError(f"关联了不存在的知识点：{invalid[0]}")
+    return normalized
+
+
+def _normalize_flashcards(content, valid_node_ids: set[str] | None) -> list[dict]:
+    if not isinstance(content, list):
+        raise ValueError("概念速记内容必须是数组")
+    if len(content) > MAX_GENERATION_ITEMS:
+        raise ValueError(f"概念速记最多支持 {MAX_GENERATION_ITEMS} 张卡片")
+
+    cards = []
+    seen_ids = set()
+    for index, item in enumerate(content):
+        if not isinstance(item, dict):
+            raise ValueError(f"第 {index + 1} 张卡片格式错误")
+        question = str(item.get("question") or "").strip()
+        answer = str(item.get("answer") or "").strip()
+        if not question or not answer:
+            raise ValueError(f"第 {index + 1} 张卡片的问题和答案不能为空")
+        try:
+            item_id = int(item.get("id", index))
+        except (TypeError, ValueError):
+            raise ValueError(f"第 {index + 1} 张卡片的 ID 必须是整数")
+        if item_id < 0 or item_id in seen_ids:
+            raise ValueError(f"第 {index + 1} 张卡片的 ID 无效或重复")
+        seen_ids.add(item_id)
+        cards.append({
+            "id": item_id,
+            "knowledge_point_ids": _normalize_knowledge_point_ids(
+                item.get("knowledge_point_ids"), valid_node_ids
+            ),
+            "question": question,
+            "answer": answer,
+        })
+    return cards
+
+
+def _normalize_quiz(content, valid_node_ids: set[str] | None) -> list[dict]:
+    if not isinstance(content, list):
+        raise ValueError("随堂测验内容必须是数组")
+    if len(content) > MAX_GENERATION_ITEMS:
+        raise ValueError(f"随堂测验最多支持 {MAX_GENERATION_ITEMS} 道题")
+
+    questions = []
+    seen_ids = set()
+    option_keys = ("A", "B", "C", "D")
+    for index, item in enumerate(content):
+        if not isinstance(item, dict):
+            raise ValueError(f"第 {index + 1} 道题格式错误")
+        question = str(item.get("question") or "").strip()
+        options = item.get("options") or {}
+        explanations = item.get("explanations") or {}
+        correct = str(item.get("correct") or "").strip().upper()
+        if not question:
+            raise ValueError(f"第 {index + 1} 道题的题干不能为空")
+        if not isinstance(options, dict) or any(not str(options.get(key) or "").strip() for key in option_keys):
+            raise ValueError(f"第 {index + 1} 道题必须填写 A、B、C、D 四个选项")
+        if correct not in option_keys:
+            raise ValueError(f"第 {index + 1} 道题的正确答案必须是 A、B、C 或 D")
+        if not isinstance(explanations, dict):
+            raise ValueError(f"第 {index + 1} 道题的选项解析格式错误")
+        try:
+            item_id = int(item.get("id", index))
+        except (TypeError, ValueError):
+            raise ValueError(f"第 {index + 1} 道题的 ID 必须是整数")
+        if item_id < 0 or item_id in seen_ids:
+            raise ValueError(f"第 {index + 1} 道题的 ID 无效或重复")
+        seen_ids.add(item_id)
+
+        questions.append({
+            "id": item_id,
+            "knowledge_point_ids": _normalize_knowledge_point_ids(
+                item.get("knowledge_point_ids"), valid_node_ids
+            ),
+            "question": question,
+            "options": {key: str(options.get(key) or "").strip() for key in option_keys},
+            "correct": correct,
+            "explanations": {key: str(explanations.get(key) or "").strip() for key in option_keys},
+        })
+    return questions
+
+
+def _load_generation_content(cursor, doc_id: str, generation_type: str):
+    cursor.execute(
+        "SELECT id, content, page_count FROM document_generation WHERE doc_id = %s AND generation_type = %s",
+        (doc_id, generation_type),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None, None, 0
+    try:
+        content = json.loads(row["content"]) if isinstance(row["content"], str) else row["content"]
+    except (json.JSONDecodeError, TypeError):
+        content = None
+    return row["id"], content, int(row.get("page_count") or 0)
+
+
+def _remove_invalid_node_references(cursor, doc_id: str, valid_node_ids: set[str]):
+    """思维导图删节点后，同步移除闪卡和测验中的失效引用。"""
+    updated_types = []
+    for generation_type in ("flashcards", "quiz"):
+        record_id, content, _ = _load_generation_content(cursor, doc_id, generation_type)
+        if not record_id or not isinstance(content, list):
+            continue
+        changed = False
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            current = item.get("knowledge_point_ids") or []
+            filtered = [node_id for node_id in current if node_id in valid_node_ids]
+            if filtered != current:
+                item["knowledge_point_ids"] = filtered
+                changed = True
+        if changed:
+            cursor.execute(
+                "UPDATE document_generation SET content = %s WHERE id = %s",
+                (json.dumps(content, ensure_ascii=False), record_id),
+            )
+            updated_types.append(generation_type)
+    return updated_types
+
+
+def _changed_existing_item_ids(old_content, new_content) -> list[int]:
+    """找出被修改或删除的旧条目 ID；新增条目不会影响既有学习记录。"""
+    if not isinstance(old_content, list):
+        return []
+    old_items = {}
+    for index, item in enumerate(old_content):
+        if not isinstance(item, dict):
+            continue
+        try:
+            item_id = int(item.get("id", index))
+        except (TypeError, ValueError):
+            continue
+        canonical_item = dict(item)
+        canonical_item["id"] = item_id
+        old_items[item_id] = canonical_item
+    new_items = {item.get("id"): item for item in new_content if isinstance(item, dict)}
+    return sorted(
+        int(item_id)
+        for item_id, old_item in old_items.items()
+        if item_id not in new_items or new_items[item_id] != old_item
+    )
+
+
+def replace_generation_content(
+    doc_id: str,
+    user_id: str,
+    generation_type: str,
+    content,
+    operation: str = "replace",
+    item_index: int | None = None,
+) -> dict:
+    """保存教师编辑后的学习内容，并修正受影响的学生学习记录。"""
+    if generation_type not in GENERATION_TYPES:
+        raise ValueError("不支持的学习内容类型")
+    if operation not in {"add", "edit", "delete", "replace"}:
+        raise ValueError("不支持的编辑操作")
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT d.id, d.run, d.type, d.chunk_num
+            FROM document d
+            JOIN knowledgebase kb ON kb.id = d.kb_id
+            WHERE d.id = %s AND kb.tenant_id = %s
+            """,
+            (doc_id, user_id),
+        )
+        document = cursor.fetchone()
+        if not document:
+            raise PermissionError("文档不存在或无权访问")
+        if str(document.get("type") or "").lower() == VIDEO_DOCUMENT_TYPE:
+            raise ValueError("视频文件没有可编辑的思维导图、概念速记和随堂测验")
+        if str(document.get("run")) != "3":
+            raise ValueError("文档尚未解析完成，暂时不能编辑学习内容")
+
+        _, mindmap_content, _ = _load_generation_content(cursor, doc_id, "mindmap")
+        valid_node_ids = None
+        old_node_ids = set()
+        old_node_labels = {}
+        if isinstance(mindmap_content, dict) and mindmap_content.get("root"):
+            old_node_labels = {
+                item["id"]: item["label"] for item in _extract_node_info(mindmap_content)
+            }
+            old_node_ids = set(old_node_labels)
+            valid_node_ids = set(old_node_ids)
+
+        if generation_type == "mindmap":
+            normalized_content, valid_node_ids = _normalize_mindmap(content)
+        elif generation_type == "flashcards":
+            normalized_content = _normalize_flashcards(content, valid_node_ids)
+        else:
+            normalized_content = _normalize_quiz(content, valid_node_ids)
+
+        record_id, old_content, page_count = _load_generation_content(cursor, doc_id, generation_type)
+        now = datetime.now()
+        current_ts = int(now.timestamp() * 1000)
+        current_date = now.strftime("%Y-%m-%d %H:%M:%S")
+        content_json = json.dumps(normalized_content, ensure_ascii=False)
+        if record_id:
+            cursor.execute(
+                """UPDATE document_generation
+                SET content = %s, update_time = %s, update_date = %s
+                WHERE id = %s""",
+                (content_json, current_ts, current_date, record_id),
+            )
+        else:
+            record_id = generate_uuid()
+            cursor.execute(
+                """INSERT INTO document_generation
+                (id, create_time, create_date, update_time, update_date, doc_id, generation_type, content, page_count)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    record_id, current_ts, current_date, current_ts, current_date,
+                    doc_id, generation_type, content_json,
+                    page_count or int(document.get("chunk_num") or 0),
+                ),
+            )
+
+        reset_records = 0
+        removed_node_ids = []
+        references_updated = []
+        if generation_type == "mindmap":
+            removed_node_ids = sorted(old_node_ids - valid_node_ids)
+            new_node_labels = {
+                item["id"]: item["label"] for item in _extract_node_info(normalized_content)
+            }
+            changed_node_ids = sorted(
+                node_id for node_id in old_node_ids & valid_node_ids
+                if old_node_labels[node_id] != new_node_labels[node_id]
+            )
+            references_updated = _remove_invalid_node_references(cursor, doc_id, valid_node_ids)
+            reset_node_ids = sorted(set(removed_node_ids + changed_node_ids))
+            if reset_node_ids:
+                placeholders = ", ".join(["%s"] * len(reset_node_ids))
+                cursor.execute(
+                    f"DELETE FROM knowledge_point_mastery WHERE doc_id = %s AND node_id IN ({placeholders})",
+                    (doc_id, *reset_node_ids),
+                )
+                reset_records += cursor.rowcount
+        elif generation_type == "flashcards":
+            affected_ids = _changed_existing_item_ids(old_content, normalized_content)
+            if affected_ids:
+                placeholders = ", ".join(["%s"] * len(affected_ids))
+                cursor.execute(
+                    f"DELETE FROM student_card_progress WHERE doc_id = %s AND card_index IN ({placeholders})",
+                    (doc_id, *affected_ids),
+                )
+                reset_records += cursor.rowcount
+        elif generation_type == "quiz":
+            affected_ids = _changed_existing_item_ids(old_content, normalized_content)
+            if affected_ids:
+                placeholders = ", ".join(["%s"] * len(affected_ids))
+                cursor.execute(
+                    f"DELETE FROM student_quiz_result WHERE doc_id = %s AND question_index IN ({placeholders})",
+                    (doc_id, *affected_ids),
+                )
+                reset_records += cursor.rowcount
+                # 掌握度是累积值，无法只减去某次历史答题，题目变化后按文档重新计算。
+                cursor.execute("DELETE FROM knowledge_point_mastery WHERE doc_id = %s", (doc_id,))
+                reset_records += cursor.rowcount
+
+        conn.commit()
+        return {
+            "generation_type": generation_type,
+            "content": normalized_content,
+            "reset_records": reset_records,
+            "removed_node_ids": removed_node_ids,
+            "references_updated": references_updated,
+        }
+    except Exception:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def generate_mindmap(doc_id: str, full_content: str, tenant_id: str) -> dict | None:

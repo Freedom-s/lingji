@@ -28,6 +28,7 @@ import { request } from "@/http/axios"
 
 import { ElMessage, ElMessageBox } from "element-plus"
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from "vue"
+import GenerationContentManager from "./components/GenerationContentManager.vue"
 import "element-plus/dist/index.css"
 import "element-plus/theme-chalk/el-message-box.css"
 
@@ -44,6 +45,8 @@ const createDialogVisible = ref(false)
 const uploadLoading = ref(false)
 const showParseProgress = ref(false)
 const currentDocId = ref("")
+const generationManagerVisible = ref(false)
+const generationManagerDocument = ref<{ id: string, name: string, type?: string } | null>(null)
 
 // 添加清理函数
 function cleanupResources() {
@@ -62,6 +65,8 @@ function cleanupResources() {
   createDialogVisible.value = false
   addDocumentDialogVisible.value = false
   showParseProgress.value = false
+  generationManagerVisible.value = false
+  generationManagerDocument.value = null
 }
 
 // 在组件停用时清理资源
@@ -568,6 +573,19 @@ async function handleRetryGeneration(row: any) {
   } finally {
     regeneratingDocIds[docId] = false
   }
+}
+
+function handleManageGenerationContent(row: any) {
+  generationManagerDocument.value = {
+    id: String(row.id),
+    name: String(row.name || "未命名文档"),
+    type: row.type
+  }
+  generationManagerVisible.value = true
+}
+
+function handleGenerationContentSaved() {
+  void loadGenerationStatuses(documentList.value)
 }
 
 // handleParseDocument 方法
@@ -1555,7 +1573,7 @@ function loadingEmbeddingModels(){
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="310" align="center">
+              <el-table-column label="操作" width="430" align="center">
                 <template #default="scope">
                   <div class="operation-buttons">
                     <el-button
@@ -1569,6 +1587,19 @@ function loadingEmbeddingModels(){
                     >
                       解析
                     </el-button>
+                    <template v-if="scope.row.run === '3' && !isVideoDocument(scope.row)">
+                      <el-divider direction="vertical" />
+                      <el-button
+                        type="primary"
+                        text
+                        bg
+                        size="small"
+                        :icon="Edit"
+                        @click="handleManageGenerationContent(scope.row)"
+                      >
+                        管理内容
+                      </el-button>
+                    </template>
                     <template v-if="scope.row.run === '3' && !isVideoDocument(scope.row) && !['complete', 'loading'].includes(scope.row.generation_status?.status)">
                       <el-divider direction="vertical" />
                       <el-button
@@ -1838,6 +1869,11 @@ function loadingEmbeddingModels(){
       @close="showParseProgress = false"
       @parse-complete="handleParseComplete"
       @parse-failed="handleParseFailed"
+    />
+    <GenerationContentManager
+      v-model="generationManagerVisible"
+      :document="generationManagerDocument"
+      @saved="handleGenerationContentSaved"
     />
   </div>
 </template>

@@ -126,3 +126,99 @@ def test_retry_only_generates_missing_content_without_overwriting_successes():
     generate_quiz.assert_called_once()
     assert result["status"] == "complete"
     assert result["regenerated_types"] == ["quiz"]
+
+
+def test_mindmap_rejects_duplicate_node_ids():
+    content = {
+        "title": "课程",
+        "root": {
+            "id": "root",
+            "label": "课程",
+            "children": [
+                {"id": "same", "label": "知识点一", "children": []},
+                {"id": "same", "label": "知识点二", "children": []},
+            ],
+        },
+    }
+
+    try:
+        generation._normalize_mindmap(content)
+    except ValueError as error:
+        assert "重复" in str(error)
+    else:
+        raise AssertionError("重复的思维导图节点 ID 应被拒绝")
+
+
+def test_flashcard_rejects_unknown_knowledge_point():
+    cards = [{
+        "id": 0,
+        "question": "什么是测试？",
+        "answer": "验证预期行为。",
+        "knowledge_point_ids": ["missing"],
+    }]
+
+    try:
+        generation._normalize_flashcards(cards, {"root"})
+    except ValueError as error:
+        assert "不存在" in str(error)
+    else:
+        raise AssertionError("关联不存在知识点的卡片应被拒绝")
+
+
+def test_flashcard_keeps_existing_references_when_mindmap_is_missing():
+    cards = [{
+        "id": 0,
+        "question": "什么是测试？",
+        "answer": "验证预期行为。",
+        "knowledge_point_ids": ["legacy-node"],
+    }]
+
+    normalized = generation._normalize_flashcards(cards, None)
+
+    assert normalized[0]["knowledge_point_ids"] == ["legacy-node"]
+
+
+def test_quiz_requires_four_complete_options():
+    questions = [{
+        "id": 0,
+        "question": "请选择正确答案",
+        "options": {"A": "一", "B": "二", "C": "三"},
+        "correct": "A",
+        "explanations": {},
+        "knowledge_point_ids": [],
+    }]
+
+    try:
+        generation._normalize_quiz(questions, set())
+    except ValueError as error:
+        assert "四个选项" in str(error)
+    else:
+        raise AssertionError("缺少选项的测验题应被拒绝")
+
+
+def test_changed_item_detection_keeps_progress_for_unchanged_and_new_items():
+    old_content = [
+        {"id": 0, "question": "旧问题", "answer": "旧答案"},
+        {"id": 1, "question": "保留问题", "answer": "保留答案"},
+    ]
+    new_content = [
+        {"id": 0, "question": "新问题", "answer": "旧答案"},
+        {"id": 1, "question": "保留问题", "answer": "保留答案"},
+        {"id": 2, "question": "新增问题", "answer": "新增答案"},
+    ]
+
+    assert generation._changed_existing_item_ids(old_content, new_content) == [0]
+
+
+def test_collection_ids_are_normalized_to_unique_integers():
+    cards = [
+        {"id": "3", "question": "问题一", "answer": "答案一", "knowledge_point_ids": []},
+        {"id": 3, "question": "问题二", "answer": "答案二", "knowledge_point_ids": []},
+    ]
+
+    try:
+        generation._normalize_flashcards(cards, set())
+    except ValueError as error:
+        assert "重复" in str(error)
+    else:
+        raise AssertionError("数值相同的卡片 ID 应被判定为重复")

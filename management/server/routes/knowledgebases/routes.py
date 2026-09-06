@@ -396,6 +396,40 @@ def retry_document_generation_route(doc_id):
         return error_response(f"重新生成失败: {str(e)}", code=500)
 
 
+@knowledgebase_bp.route("/documents/<string:doc_id>/generation/<string:generation_type>", methods=["PUT"])
+@require_superuser
+def update_document_generation_route(doc_id, generation_type):
+    """保存教师人工审核、编辑后的思维导图、闪卡或测验。"""
+    try:
+        data = request.json or {}
+        if "content" not in data:
+            return error_response("content 不能为空", code=400)
+        item_index = data.get("item_index")
+        if item_index is not None:
+            item_index = int(item_index)
+            if item_index < 0:
+                raise ValueError("item_index 不能小于 0")
+
+        current_user = get_current_user()
+        result = generation.replace_generation_content(
+            doc_id=doc_id,
+            user_id=current_user["user_id"],
+            generation_type=generation_type,
+            content=data["content"],
+            operation=data.get("operation", "replace"),
+            item_index=item_index,
+        )
+        return success_response(data=result, message="学习内容已保存")
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except (TypeError, ValueError) as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        print(f"保存文档学习内容失败: {str(e)}")
+        traceback.print_exc()
+        return error_response(f"保存失败: {str(e)}", code=500)
+
+
 @knowledgebase_bp.route("/documents/<string:doc_id>/mindmap", methods=["GET"])
 @require_superuser
 def get_document_mindmap_route(doc_id):
