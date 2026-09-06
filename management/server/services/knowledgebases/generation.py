@@ -485,6 +485,7 @@ def replace_generation_content(
             )
 
         reset_records = 0
+        unbound_videos = 0
         removed_node_ids = []
         references_updated = []
         if generation_type == "mindmap":
@@ -498,6 +499,17 @@ def replace_generation_content(
             )
             references_updated = _remove_invalid_node_references(cursor, doc_id, valid_node_ids)
             reset_node_ids = sorted(set(removed_node_ids + changed_node_ids))
+            if removed_node_ids:
+                placeholders = ", ".join(["%s"] * len(removed_node_ids))
+                cursor.execute(
+                    f"""
+                    DELETE FROM knowledge_point_video_binding
+                    WHERE courseware_doc_id = %s
+                      AND knowledge_point_id IN ({placeholders})
+                    """,
+                    (doc_id, *removed_node_ids),
+                )
+                unbound_videos = cursor.rowcount
             if reset_node_ids:
                 placeholders = ", ".join(["%s"] * len(reset_node_ids))
                 cursor.execute(
@@ -532,6 +544,7 @@ def replace_generation_content(
             "generation_type": generation_type,
             "content": normalized_content,
             "reset_records": reset_records,
+            "unbound_videos": unbound_videos,
             "removed_node_ids": removed_node_ids,
             "references_updated": references_updated,
         }

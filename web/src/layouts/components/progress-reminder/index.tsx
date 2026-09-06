@@ -24,6 +24,7 @@ import { BellRing, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'umi';
 import styles from './index.less';
+import { buildProgressDocumentPath } from './navigation';
 
 const STATE_META = {
   overdue: { label: '已逾期', className: styles.overdue },
@@ -106,15 +107,7 @@ const ProgressReminder = () => {
   const openDocument = (doc: StudentProgressDoc) => {
     setOpen(false);
     setPromptOpen(false);
-    if (!doc.dialog_id) {
-      navigate('/teaching-assistant');
-      return;
-    }
-    const params = new URLSearchParams({
-      dialogId: doc.dialog_id,
-      doc_id: doc.doc_id,
-    });
-    navigate(`/learning?${params.toString()}`);
+    navigate(buildProgressDocumentPath(doc));
   };
 
   const openTaskDrawer = (view: TaskView) => {

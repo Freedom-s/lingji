@@ -1,200 +1,339 @@
+import html
+import json
+import re
+
 import mysql.connector
+
 from database import DB_CONFIG
 
 
-def get_conversations_by_user_id(user_id, page=1, size=20, sort_by="update_time", sort_order="desc"):
-    """
-    根据用户ID获取对话列表
-
-    参数:
-        user_id (str): 用户ID
-        page (int): 当前页码
-        size (int): 每页大小
-        sort_by (str): 排序字段
-        sort_order (str): 排序方式 (asc/desc)
-
-    返回:
-        tuple: (对话列表, 总数)
-    """
+def _decode_json(value, fallback):
+    if value is None:
+        return fallback
+    if isinstance(value, (list, dict)):
+        return value
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor(dictionary=True)
+        return json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
 
-        # 直接使用user_id作为tenant_id
-        tenant_id = user_id
 
-        # 查询总记录数
-        count_sql = """
-        SELECT COUNT(*) as total 
-        FROM dialog d
-        WHERE d.tenant_id = %s
+def _format_datetime(value):
+    return value.strftime("%Y-%m-%d %H:%M:%S") if value else ""
+
+
+def _plain_text(value):
+    if not value:
+        return ""
+    without_tags = re.sub(r"<[^>]+>", " ", str(value))
+    return re.sub(r"\s+", " ", html.unescape(without_tags)).strip()
+
+
+def _normalize_reference(reference):
+    if not isinstance(reference, dict):
+        return {"documents": [], "chunks": [], "total": 0}
+
+    documents = []
+    for item in reference.get("doc_aggs") or []:
+        if not isinstance(item, dict):
+            continue
+        documents.append({
+            "documentId": item.get("doc_id", ""),
+            "documentName": item.get("doc_name", item.get("docnm_kwd", "未命名文档")),
+            "count": item.get("count", 0),
+        })
+
+    chunks = []
+    for item in reference.get("chunks") or []:
+        if not isinstance(item, dict):
+            continue
+        chunks.append({
+            "chunkId": item.get("chunk_id", item.get("id", item.get("page_id", ""))),
+            "documentId": item.get("doc_id", ""),
+            "documentName": item.get("docnm_kwd", item.get("doc_name", "未命名文档")),
+            "pageNumber": item.get("page_num_int"),
+            "content": _plain_text(item.get("content_with_weight", item.get("content", ""))),
+            "similarity": item.get("similarity"),
+        })
+
+    return {
+        "documents": documents,
+        "chunks": chunks,
+        "total": reference.get("total", len(chunks)),
+    }
+
+
+def normalize_conversation_messages(messages, references):
+    """把 conversation.message 与按助手回答顺序保存的 reference 对齐。"""
+    decoded_messages = _decode_json(messages, [])
+    decoded_references = _decode_json(references, [])
+    if not isinstance(decoded_messages, list):
+        decoded_messages = []
+    if not isinstance(decoded_references, list):
+        decoded_references = []
+
+    assistant_index = 0
+    result = []
+    for index, message in enumerate(decoded_messages):
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role", "unknown")
+        normalized_reference = None
+        if role == "assistant":
+            raw_reference = decoded_references[assistant_index] if assistant_index < len(decoded_references) else None
+            reference = _normalize_reference(raw_reference)
+            if reference["documents"] or reference["chunks"]:
+                normalized_reference = reference
+            assistant_index += 1
+
+        result.append({
+            "id": str(message.get("id") or f"message-{index}"),
+            "role": role,
+            "content": str(message.get("content") or ""),
+            "createdAt": message.get("created_at"),
+            "reference": normalized_reference,
+        })
+    return result
+
+
+def get_conversation_classes(teacher_id):
+    """获取当前老师自己的班级及其学生、会话数量。"""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                c.id,
+                c.name,
+                COUNT(DISTINCT uc.user_id) AS student_count,
+                COUNT(DISTINCT conv.id) AS conversation_count
+            FROM class c
+            LEFT JOIN user_class uc
+                ON uc.class_id = c.id
+                AND uc.role = 'student'
+                AND uc.status = '1'
+            LEFT JOIN class_dialog cd ON cd.class_id = c.id
+            LEFT JOIN conversation conv
+                ON conv.user_id = uc.user_id
+                AND conv.dialog_id = cd.dialog_id
+            WHERE c.tenant_id = %s AND c.status = '1'
+            GROUP BY c.id, c.name
+            ORDER BY c.name ASC
+            """,
+            (teacher_id,),
+        )
+        return [
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "studentCount": row.get("student_count") or 0,
+                "conversationCount": row.get("conversation_count") or 0,
+            }
+            for row in cursor.fetchall()
+        ]
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_class_students(teacher_id, class_id):
+    """获取老师指定班级中的学生，并附带该班内会话统计。"""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT
+                u.id,
+                u.nickname,
+                u.email,
+                COUNT(DISTINCT conv.id) AS conversation_count,
+                MAX(conv.update_date) AS last_active_at
+            FROM class c
+            JOIN user_class uc
+                ON uc.class_id = c.id
+                AND uc.role = 'student'
+                AND uc.status = '1'
+            JOIN user u ON u.id = uc.user_id
+            LEFT JOIN class_dialog cd ON cd.class_id = c.id
+            LEFT JOIN conversation conv
+                ON conv.user_id = u.id
+                AND conv.dialog_id = cd.dialog_id
+            WHERE c.id = %s AND c.tenant_id = %s AND c.status = '1'
+            GROUP BY u.id, u.nickname, u.email
+            ORDER BY u.nickname ASC, u.email ASC
+            """,
+            (class_id, teacher_id),
+        )
+        return [
+            {
+                "id": row["id"],
+                "name": row.get("nickname") or row.get("email") or "未命名学生",
+                "email": row.get("email") or "",
+                "conversationCount": row.get("conversation_count") or 0,
+                "lastActiveAt": _format_datetime(row.get("last_active_at")),
+            }
+            for row in cursor.fetchall()
+        ]
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _conversation_filters(class_id, teacher_id, student_id=None, keyword=""):
+    clauses = [
+        "c.id = %s",
+        "c.tenant_id = %s",
+        "c.status = '1'",
+        "uc.role = 'student'",
+        "uc.status = '1'",
+    ]
+    params = [class_id, teacher_id]
+    if student_id:
+        clauses.append("conv.user_id = %s")
+        params.append(student_id)
+    if keyword:
+        clauses.append("(conv.name LIKE %s OR CAST(conv.message AS CHAR) LIKE %s OR u.nickname LIKE %s)")
+        like_keyword = f"%{keyword}%"
+        params.extend([like_keyword, like_keyword, like_keyword])
+    return " AND ".join(clauses), params
+
+
+def get_conversations(teacher_id, class_id, student_id=None, keyword="", page=1, size=20):
+    """按班级和学生获取真实的 conversation 记录。"""
+    page = max(int(page), 1)
+    size = min(max(int(size), 1), 100)
+    where_sql, params = _conversation_filters(class_id, teacher_id, student_id, keyword.strip())
+
+    conn = mysql.connector.connect(**DB_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        base_from = f"""
+            FROM conversation conv
+            JOIN user u ON u.id = conv.user_id
+            JOIN user_class uc ON uc.user_id = conv.user_id AND uc.class_id = %s
+            JOIN class c ON c.id = uc.class_id
+            JOIN class_dialog cd ON cd.class_id = c.id AND cd.dialog_id = conv.dialog_id
+            JOIN dialog d ON d.id = conv.dialog_id
+            WHERE {where_sql}
         """
-        cursor.execute(count_sql, (tenant_id,))
+        query_params = [class_id, *params]
+        cursor.execute(f"SELECT COUNT(DISTINCT conv.id) AS total {base_from}", query_params)
         total = cursor.fetchone()["total"]
 
-        # print(f"查询到总记录数: {total}")
+        cursor.execute(
+            f"""
+            SELECT DISTINCT
+                conv.id,
+                conv.name,
+                conv.message,
+                conv.create_date,
+                conv.update_date,
+                u.id AS student_id,
+                u.nickname AS student_name,
+                u.email AS student_email,
+                c.id AS class_id,
+                c.name AS class_name,
+                d.id AS dialog_id,
+                d.name AS assistant_name
+            {base_from}
+            ORDER BY conv.update_date DESC, conv.create_date DESC
+            LIMIT %s OFFSET %s
+            """,
+            [*query_params, size, (page - 1) * size],
+        )
 
-        # 计算分页偏移量
-        offset = (page - 1) * size
-
-        # 确定排序方向
-        sort_direction = "DESC" if sort_order.lower() == "desc" else "ASC"
-
-        # 执行分页查询
-        query = f"""
-        SELECT 
-            d.id, 
-            d.name,
-            d.create_date,
-            d.update_date,
-            d.tenant_id
-        FROM 
-            dialog d
-        WHERE 
-            d.tenant_id = %s
-        ORDER BY 
-            d.{sort_by} {sort_direction}
-        LIMIT %s OFFSET %s
-        """
-
-        # print(f"执行查询: {query}")
-        # print(f"参数: tenant_id={tenant_id}, size={size}, offset={offset}")
-
-        cursor.execute(query, (tenant_id, size, offset))
-        results = cursor.fetchall()
-
-        print(f"查询结果数量: {len(results)}")
-
-        # 获取每个对话的最新消息
         conversations = []
-        for dialog in results:
-            # 查询对话的所有消息
-            conv_query = """
-            SELECT id, message, name 
-            FROM conversation 
-            WHERE dialog_id = %s
-            ORDER BY create_date DESC
-            """
-            cursor.execute(conv_query, (dialog["id"],))
-            conv_results = cursor.fetchall()
-
-            latest_message = ""
-            conversation_name = dialog["name"]  # 默认使用dialog的name
-            if conv_results and len(conv_results) > 0:
-                # 获取最新的一条对话记录
-                latest_conv = conv_results[0]
-                # 如果conversation有name，优先使用conversation的name
-                if latest_conv and latest_conv.get("name"):
-                    conversation_name = latest_conv["name"]
-
-                if latest_conv and latest_conv["message"]:
-                    # 获取最后一条消息内容
-                    messages = latest_conv["message"]
-                    if messages and len(messages) > 0:
-                        # 检查消息类型，处理字符串和字典两种情况
-                        if isinstance(messages[-1], dict):
-                            latest_message = messages[-1].get("content", "")
-                        elif isinstance(messages[-1], str):
-                            latest_message = messages[-1]
-                        else:
-                            latest_message = str(messages[-1])
-
-            conversations.append(
-                {
-                    "id": dialog["id"],
-                    "name": conversation_name,
-                    "latestMessage": latest_message[:100] + "..." if len(latest_message) > 100 else latest_message,
-                    "createTime": dialog["create_date"].strftime("%Y-%m-%d %H:%M:%S") if dialog["create_date"] else "",
-                    "updateTime": dialog["update_date"].strftime("%Y-%m-%d %H:%M:%S") if dialog["update_date"] else "",
-                }
-            )
-
-        # 关闭连接
-        cursor.close()
-        conn.close()
-
+        for row in cursor.fetchall():
+            messages = _decode_json(row.get("message"), [])
+            if not isinstance(messages, list):
+                messages = []
+            questions = [
+                str(item.get("content") or "")
+                for item in messages
+                if isinstance(item, dict) and item.get("role") == "user"
+            ]
+            conversations.append({
+                "id": row["id"],
+                "name": row.get("name") or "未命名会话",
+                "studentId": row["student_id"],
+                "studentName": row.get("student_name") or row.get("student_email") or "未命名学生",
+                "studentEmail": row.get("student_email") or "",
+                "classId": row["class_id"],
+                "className": row["class_name"],
+                "dialogId": row["dialog_id"],
+                "assistantName": row.get("assistant_name") or "未命名助教",
+                "messageCount": len(messages),
+                "questionCount": len(questions),
+                "latestQuestion": questions[-1] if questions else "暂无学生提问",
+                "createTime": _format_datetime(row.get("create_date")),
+                "updateTime": _format_datetime(row.get("update_date")),
+            })
         return conversations, total
-
-    except mysql.connector.Error as err:
-        print(f"数据库错误: {err}")
-        # 更详细的错误日志
-        import traceback
-
-        traceback.print_exc()
-        return [], 0
-    except Exception as e:
-        print(f"未知错误: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return [], 0
-
-
-def get_messages_by_conversation_id(conversation_id, page=1, size=30):
-    """
-    获取特定对话的详细信息
-
-    参数:
-        conversation_id (str): 对话ID
-        page (int): 当前页码
-        size (int): 每页大小
-
-    返回:
-        tuple: (对话详情, 总数)
-    """
-    try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor(dictionary=True)
-
-        # 查询对话信息
-        query = """
-        SELECT *
-        FROM conversation 
-        WHERE dialog_id = %s
-        ORDER BY create_date DESC
-        """
-        cursor.execute(query, (conversation_id,))
-        result = cursor.fetchall()  # 确保读取所有结果
-
-        if not result:
-            print(f"未找到对话ID: {conversation_id}")
-            cursor.close()
-            conn.close()
-            return None, 0
-
-        # 获取第一条记录作为对话详情
-        conversation = None
-        if len(result) > 0:
-            conversation = {
-                "id": result[0]["id"],
-                "dialogId": result[0].get("dialog_id", ""),
-                "createTime": result[0]["create_date"].strftime("%Y-%m-%d %H:%M:%S") if result[0].get("create_date") else "",
-                "updateTime": result[0]["update_date"].strftime("%Y-%m-%d %H:%M:%S") if result[0].get("update_date") else "",
-                "messages": result[0].get("message", []),
-            }
-
-        # 打印调试信息
-        print(f"获取到对话详情: ID={conversation_id}")
-        print(f"消息长度: {len(conversation['messages']) if conversation and conversation.get('messages') else 0}")
-
-        # 关闭连接
+    finally:
         cursor.close()
         conn.close()
 
-        # 返回对话详情和消息总数
-        total = len(conversation["messages"]) if conversation and conversation.get("messages") else 0
-        return conversation, total
 
-    except mysql.connector.Error as err:
-        print(f"数据库错误: {err}")
-        # 更详细的错误日志
-        import traceback
+def get_conversation_detail(teacher_id, class_id, conversation_id):
+    """获取会话内容；查询本身强制校验老师、班级、学生和助教四层关系。"""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT DISTINCT
+                conv.id,
+                conv.name,
+                conv.message,
+                conv.reference,
+                conv.create_date,
+                conv.update_date,
+                conv.dialog_id,
+                d.name AS assistant_name,
+                u.id AS student_id,
+                u.nickname AS student_name,
+                u.email AS student_email,
+                c.id AS class_id,
+                c.name AS class_name
+            FROM conversation conv
+            JOIN user u ON u.id = conv.user_id
+            JOIN user_class uc ON uc.user_id = conv.user_id AND uc.class_id = %s
+            JOIN class c ON c.id = uc.class_id
+            JOIN class_dialog cd ON cd.class_id = c.id AND cd.dialog_id = conv.dialog_id
+            JOIN dialog d ON d.id = conv.dialog_id
+            WHERE conv.id = %s
+                AND c.id = %s
+                AND c.tenant_id = %s
+                AND c.status = '1'
+                AND uc.role = 'student'
+                AND uc.status = '1'
+            LIMIT 1
+            """,
+            (class_id, conversation_id, class_id, teacher_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
 
-        traceback.print_exc()
-        return None, 0
-    except Exception as e:
-        print(f"未知错误: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return None, 0
+        messages = normalize_conversation_messages(row.get("message"), row.get("reference"))
+        return {
+            "id": row["id"],
+            "name": row.get("name") or "未命名会话",
+            "studentId": row["student_id"],
+            "studentName": row.get("student_name") or row.get("student_email") or "未命名学生",
+            "studentEmail": row.get("student_email") or "",
+            "classId": row["class_id"],
+            "className": row["class_name"],
+            "dialogId": row["dialog_id"],
+            "assistantName": row.get("assistant_name") or "未命名助教",
+            "messageCount": len(messages),
+            "questionCount": sum(item["role"] == "user" for item in messages),
+            "createTime": _format_datetime(row.get("create_date")),
+            "updateTime": _format_datetime(row.get("update_date")),
+            "messages": messages,
+        }
+    finally:
+        cursor.close()
+        conn.close()

@@ -9,8 +9,21 @@ import time
 from flask import request
 from flask_login import login_required, current_user
 
-from api.db.db_models import DocumentGeneration, StudentCardProgress, StudentQuizResult, StudentNote, KnowledgePointMastery, Dialog, Document, Conversation
+from api.db.db_models import (
+    Conversation,
+    Dialog,
+    Document,
+    DocumentGeneration,
+    KnowledgePointMastery,
+    KnowledgePointVideoBinding,
+    StudentCardProgress,
+    StudentNote,
+    StudentQuizResult,
+    StudentVideoProgress,
+)
 from api.db.db_models import DB
+from api.db.services.document_service import DocumentService
+from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.utils import get_uuid
 from api.utils.api_utils import get_json_result
 from api import settings
@@ -38,6 +51,143 @@ def get_mindmap(doc_id):
     except Exception as e:
         logger.error(f"get mindmap error: {e}")
         return get_json_result(data=None, message=str(e), code=settings.RetCode.EXCEPTION_ERROR)
+
+
+@manager.route("/mindmap/<courseware_doc_id>/videos", methods=["GET"])
+@login_required
+def get_mindmap_videos(courseware_doc_id):
+    """返回当前学生可访问的课件中，各思维导图节点挂载的视频。"""
+    try:
+        if not DocumentService.accessible(courseware_doc_id, current_user.id):
+            return get_json_result(
+                data={"videos_by_node": {}},
+                message="无权访问该课件",
+                code=settings.RetCode.AUTHENTICATION_ERROR,
+            )
+
+        courseware = Document.select(Document.id, Document.type).where(
+            Document.id == courseware_doc_id
+        ).first()
+        if not courseware or str(courseware.type or "").lower() == "video":
+            return get_json_result(
+                data={"videos_by_node": {}},
+                message="目标课件不存在",
+                code=settings.RetCode.NOT_FOUND,
+            )
+
+        rows = list(
+            KnowledgePointVideoBinding.select(
+                KnowledgePointVideoBinding.video_doc_id,
+                KnowledgePointVideoBinding.knowledge_point_id,
+                KnowledgePointVideoBinding.sort_order,
+                Document.name.alias("video_name"),
+                Document.type.alias("video_type"),
+            )
+            .join(Document, on=(KnowledgePointVideoBinding.video_doc_id == Document.id))
+            .where(
+                (KnowledgePointVideoBinding.courseware_doc_id == courseware_doc_id)
+                & (Document.status == "1")
+                & (Document.type == "video")
+            )
+            .order_by(
+                KnowledgePointVideoBinding.knowledge_point_id.asc(),
+                KnowledgePointVideoBinding.sort_order.asc(),
+                Document.create_time.asc(),
+            )
+            .dicts()
+        )
+        video_ids = [row["video_doc_id"] for row in rows]
+        progress_by_video = {}
+        if video_ids:
+            progress_by_video = {
+                progress.doc_id: progress
+                for progress in StudentVideoProgress.select().where(
+                    (StudentVideoProgress.student_id == current_user.id)
+                    & (StudentVideoProgress.doc_id.in_(video_ids))
+                )
+            }
+
+        videos_by_node = {}
+        for row in rows:
+            progress = progress_by_video.get(row["video_doc_id"])
+            total_duration = int(progress.total_duration or 0) if progress else 0
+            watched_seconds = int(progress.watched_seconds or 0) if progress else 0
+            progress_percent = min(
+                100,
+                round(watched_seconds / total_duration * 100) if total_duration > 0 else 0,
+            )
+            videos_by_node.setdefault(row["knowledge_point_id"], []).append({
+                "id": row["video_doc_id"],
+                "name": row["video_name"],
+                "type": row["video_type"],
+                "sort_order": int(row.get("sort_order") or 0),
+                "watched_seconds": watched_seconds,
+                "total_duration": total_duration,
+                "progress_percent": progress_percent,
+                "is_completed": bool(progress.is_completed) if progress else False,
+            })
+
+        return get_json_result(data={"videos_by_node": videos_by_node})
+    except Exception as e:
+        logger.error(f"get mindmap videos error: {e}")
+        return get_json_result(
+            data={"videos_by_node": {}},
+            message=str(e),
+            code=settings.RetCode.EXCEPTION_ERROR,
+        )
+
+
+@manager.route("/video-bindings", methods=["GET"])
+@login_required
+def get_linked_video_ids():
+    """返回指定知识库中已挂载的视频，用于学生资料列表归类。"""
+    try:
+        kb_ids = list(dict.fromkeys(
+            item.strip()
+            for item in str(request.args.get("kb_ids") or "").split(",")
+            if item.strip()
+        ))
+        if len(kb_ids) > 100:
+            return get_json_result(
+                data={"bindings": {}},
+                message="一次最多查询 100 个知识库",
+                code=settings.RetCode.ARGUMENT_ERROR,
+            )
+
+        accessible_kb_ids = [
+            kb_id for kb_id in kb_ids
+            if KnowledgebaseService.accessible(kb_id, current_user.id)
+        ]
+        if not accessible_kb_ids:
+            return get_json_result(data={"bindings": {}})
+
+        courseware_ids = Document.select(Document.id).where(
+            Document.kb_id.in_(accessible_kb_ids)
+        )
+        rows = (
+            KnowledgePointVideoBinding.select(
+                KnowledgePointVideoBinding.video_doc_id,
+                KnowledgePointVideoBinding.courseware_doc_id,
+                KnowledgePointVideoBinding.knowledge_point_id,
+            )
+            .where(KnowledgePointVideoBinding.courseware_doc_id.in_(courseware_ids))
+            .dicts()
+        )
+        bindings = {
+            row["video_doc_id"]: {
+                "courseware_doc_id": row["courseware_doc_id"],
+                "knowledge_point_id": row["knowledge_point_id"],
+            }
+            for row in rows
+        }
+        return get_json_result(data={"bindings": bindings})
+    except Exception as e:
+        logger.error(f"get linked video ids error: {e}")
+        return get_json_result(
+            data={"bindings": {}},
+            message=str(e),
+            code=settings.RetCode.EXCEPTION_ERROR,
+        )
 
 
 @manager.route("/flashcards/<doc_id>", methods=["GET"])

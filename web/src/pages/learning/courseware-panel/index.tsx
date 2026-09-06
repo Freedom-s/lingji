@@ -1,24 +1,24 @@
-import { ChunkPage, DocumentOption } from '../hooks';
 import {
-  LeftOutlined,
-  PictureOutlined,
-  RightOutlined,
-  SelectOutlined,
   ApartmentOutlined,
   BulbOutlined,
   CheckSquareOutlined,
   EditOutlined,
-  PlayCircleOutlined,
+  LeftOutlined,
+  PictureOutlined,
+  RightOutlined,
+  SelectOutlined,
 } from '@ant-design/icons';
-import { Button, Empty, Progress, Result, Select, Spin, Typography, Space } from 'antd';
+import { Button, Empty, Result, Select, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import request from '@/utils/request';
-import styles from './index.less';
-import MindMapModal from '../components/MindMapModal';
+import { useSearchParams } from 'umi';
 import FlashcardModal from '../components/FlashcardModal';
-import QuizModal from '../components/QuizModal';
+import MindMapModal from '../components/MindMapModal';
 import NoteDrawer from '../components/NoteDrawer';
 import PagePreviewModal from '../components/PagePreviewModal';
+import QuizModal from '../components/QuizModal';
+import VideoLearningPlayer from '../components/VideoLearningPlayer';
+import { ChunkPage, DocumentOption } from '../hooks';
+import styles from './index.less';
 
 const { Text } = Typography;
 
@@ -49,10 +49,16 @@ const CoursewarePanel = ({
   pageLoading,
   docLoading,
 }: CoursewarePanelProps) => {
+  const [searchParams] = useSearchParams();
   const isVideo = selectedDocType === 'video';
   const currentChunk = pages[currentPage - 1];
   const [imgError, setImgError] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const openedMindMapTargetRef = useRef<string>();
+  const initialKnowledgePointId =
+    searchParams.get('knowledge_point_id') || undefined;
+  const initialVideoId = searchParams.get('video_id') || undefined;
+  const shouldOpenMindMap = searchParams.get('open_mindmap') === '1';
 
   // Modal states
   const [mindMapOpen, setMindMapOpen] = useState(false);
@@ -61,17 +67,25 @@ const CoursewarePanel = ({
   const [noteDrawerOpen, setNoteDrawerOpen] = useState(false);
   const [pagePreviewOpen, setPagePreviewOpen] = useState(false);
 
-  // Video progress tracking
-  const [videoProgress, setVideoProgress] = useState<{
-    watched_seconds: number;
-    total_duration: number;
-    is_completed: boolean;
-  }>({ watched_seconds: 0, total_duration: 0, is_completed: false });
-  const [videoResumed, setVideoResumed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const reportTimerRef = useRef<number | null>(null);
-  const lastPositionRef = useRef<number>(0);
-  const resumePositionRef = useRef<number>(0);
+  useEffect(() => {
+    if (
+      !shouldOpenMindMap ||
+      !selectedDocId ||
+      isVideo ||
+      !initialKnowledgePointId
+    )
+      return;
+    const targetSignature = `${selectedDocId}:${initialKnowledgePointId}:${initialVideoId || ''}`;
+    if (openedMindMapTargetRef.current === targetSignature) return;
+    openedMindMapTargetRef.current = targetSignature;
+    setMindMapOpen(true);
+  }, [
+    initialKnowledgePointId,
+    initialVideoId,
+    isVideo,
+    selectedDocId,
+    shouldOpenMindMap,
+  ]);
 
   // Reset image error state when page or doc changes
   useEffect(() => {
@@ -99,88 +113,30 @@ const CoursewarePanel = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Fetch video progress on mount for video docs
-  useEffect(() => {
-    if (!isVideo || !selectedDocId) return;
-    const fetchProgress = async () => {
-      try {
-        const res = await request(`/v1/video/progress/${selectedDocId}`, { method: 'GET' });
-        if (res.data?.code === 0 && res.data.data) {
-          setVideoProgress(res.data.data);
-          // Resume from last position if not completed
-          if (res.data.data.last_position > 0 && !res.data.data.is_completed) {
-            resumePositionRef.current = res.data.data.last_position;
-            setVideoResumed(true);
-          }
-        }
-      } catch {
-        // Silently fail — progress is non-critical
-      }
-    };
-    fetchProgress();
-  }, [isVideo, selectedDocId]);
-
-  // Report video progress periodically
-  const startProgressReport = useCallback(() => {
-    if (!selectedDocId || videoProgress.is_completed) return;
-    if (reportTimerRef.current) clearInterval(reportTimerRef.current);
-    reportTimerRef.current = window.setInterval(() => {
-      if (!videoRef.current || videoRef.current.paused) return;
-      const pos = Math.floor(videoRef.current.currentTime);
-      const dur = Math.floor(videoRef.current.duration || 0);
-      // Only report if position actually changed
-      if (pos === lastPositionRef.current) return;
-      lastPositionRef.current = pos;
-
-      request('/v1/video/progress/report', {
-        method: 'POST',
-        data: { docId: selectedDocId, position: pos, totalDuration: dur, playbackRate: videoRef.current?.playbackRate || 1 },
-      })
-        .then((res) => {
-          if (res.data?.code === 0 && res.data.data) {
-            setVideoProgress(prev => ({ ...prev, ...res.data.data }));
-          }
-        })
-        .catch(() => {});
-    }, 5000);
-  }, [selectedDocId]);
-
-  const stopProgressReport = useCallback(() => {
-    if (reportTimerRef.current) {
-      clearInterval(reportTimerRef.current);
-      reportTimerRef.current = null;
-    }
-  }, []);
-
-  // Stop reporting when video is completed
-  useEffect(() => {
-    if (videoProgress.is_completed) {
-      stopProgressReport();
-    }
-  }, [videoProgress.is_completed, stopProgressReport]);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => stopProgressReport();
-  }, [stopProgressReport]);
-
   // Group documents by kbName for Select
   const groupedOptions = useCallback(() => {
     const groups = new Map<string, DocumentOption[]>();
     documentList.forEach((doc) => {
-      const existing = groups.get(doc.kbName) || [];
+      if (doc.knowledgePointBinding && doc.id !== selectedDocId) return;
+      const category = doc.knowledgePointBinding
+        ? '知识点视频（直达）'
+        : doc.type === 'video'
+          ? '未归类视频'
+          : '课件资料';
+      const groupName = `${doc.kbName} · ${category}`;
+      const existing = groups.get(groupName) || [];
       existing.push(doc);
-      groups.set(doc.kbName, existing);
+      groups.set(groupName, existing);
     });
 
-    return Array.from(groups.entries()).map(([kbName, docs]) => ({
-      label: kbName,
+    return Array.from(groups.entries()).map(([groupName, docs]) => ({
+      label: groupName,
       options: docs.map((doc) => ({
         label: doc.name,
         value: doc.id,
       })),
     }));
-  }, [documentList]);
+  }, [documentList, selectedDocId]);
 
   const handleDocSelect = (value: unknown) => {
     setImgError(false);
@@ -222,7 +178,9 @@ const CoursewarePanel = ({
             image={<SelectOutlined style={{ fontSize: 64, color: '#bbb' }} />}
             description="暂无课件文档"
           >
-            <Text type="secondary">该助教的知识库中还没有文档，请联系老师上传课件</Text>
+            <Text type="secondary">
+              该助教的知识库中还没有文档，请联系老师上传课件
+            </Text>
           </Empty>
         </div>
       );
@@ -236,7 +194,9 @@ const CoursewarePanel = ({
             image={<PictureOutlined style={{ fontSize: 64, color: '#bbb' }} />}
             description="请选择课件文档"
           >
-            <Text type="secondary">从上方下拉菜单中选择一个课件文档开始学习</Text>
+            <Text type="secondary">
+              从上方下拉菜单中选择一个课件文档开始学习
+            </Text>
           </Empty>
         </div>
       );
@@ -253,108 +213,7 @@ const CoursewarePanel = ({
 
     // Video document — show video player with progress tracking
     if (isVideo) {
-      const progressPercent = videoProgress.total_duration > 0
-        ? Math.round((videoProgress.watched_seconds / videoProgress.total_duration) * 100)
-        : 0;
-
-      const formatTime = (s: number) => {
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-      };
-
-      return (
-        <div className={styles.videoContainer}>
-          <video
-            ref={videoRef}
-            controls
-            className={styles.videoPlayer}
-            src={`/v1/document/get/${selectedDocId}`}
-            style={{ width: '100%', maxHeight: '58vh' }}
-            controlsList="nodownload"
-            onLoadedMetadata={() => {
-              if (resumePositionRef.current > 0 && videoRef.current) {
-                videoRef.current.currentTime = resumePositionRef.current;
-                resumePositionRef.current = 0;
-              }
-            }}
-            onPlay={startProgressReport}
-            onPause={stopProgressReport}
-            onEnded={() => {
-              stopProgressReport();
-              // 播放结束做最终上报，避免最后几秒丢失
-              if (videoRef.current) {
-                const pos = Math.floor(videoRef.current.currentTime);
-                const dur = Math.floor(videoRef.current.duration || 0);
-                request('/v1/video/progress/report', {
-                  method: 'POST',
-                  data: { docId: selectedDocId, position: pos, totalDuration: dur, playbackRate: videoRef.current.playbackRate || 1 },
-                }).then((res) => {
-                  if (res.data?.code === 0 && res.data.data) {
-                    setVideoProgress(prev => ({ ...prev, ...res.data.data }));
-                  }
-                }).catch(() => {});
-              }
-            }}
-            onSeeked={() => {
-              if (videoRef.current) {
-                const progressPercent = videoProgress.total_duration > 0
-                  ? (videoProgress.watched_seconds / videoProgress.total_duration) * 100
-                  : 0;
-                // 进度不足 90% 时禁止向前拖拽，只能顺序观看或回退
-                if (progressPercent < 90 && videoRef.current.currentTime > videoProgress.watched_seconds + 3) {
-                  videoRef.current.currentTime = videoProgress.watched_seconds;
-                }
-                lastPositionRef.current = Math.floor(videoRef.current.currentTime);
-              }
-            }}
-          >
-            您的浏览器不支持视频播放
-          </video>
-          {/* Progress bar */}
-          <div className={styles.progressBarContainer}>
-            <div className={styles.progressInfo}>
-              {videoProgress.is_completed ? (
-                <span className={styles.completedBadge}>✓ 已完成</span>
-              ) : (
-                <span className={styles.progressLabel}>有效观看</span>
-              )}
-              <span className={styles.progressTime}>
-                {formatTime(videoProgress.watched_seconds)} / {formatTime(videoProgress.total_duration)}
-              </span>
-            </div>
-            <div className={styles.progressRow}>
-              <Progress
-                percent={progressPercent}
-                size="small"
-                strokeColor="#52c41a"
-                trailColor="#f0f0f0"
-                showInfo={false}
-                strokeLinecap="round"
-                className={styles.progressLine}
-              />
-              <Progress
-                type="circle"
-                percent={progressPercent}
-                size={48}
-                strokeWidth={6}
-                strokeColor="#52c41a"
-                format={(p) => (
-                  <span className={styles.circlePercentText}>
-                    {videoProgress.is_completed ? '✓' : `${p}%`}
-                  </span>
-                )}
-              />
-            </div>
-          </div>
-          {/* Resume toast */}
-          {videoResumed && (
-            <div className={styles.resumeToast}>
-              已从上次位置继续播放
-            </div>
-          )}
-        </div>
-      );
+      return <VideoLearningPlayer docId={selectedDocId} />;
     }
 
     // No pages available
@@ -378,9 +237,7 @@ const CoursewarePanel = ({
             status="warning"
             title="图片加载失败"
             subTitle="无法加载该页面图片，可能是网络问题或图片已失效"
-            extra={
-              <Button onClick={handleRetryImage}>重试</Button>
-            }
+            extra={<Button onClick={handleRetryImage}>重试</Button>}
           />
         </div>
       );
@@ -388,7 +245,10 @@ const CoursewarePanel = ({
 
     // Show page image
     return (
-      <div className={styles.pageImageWrapper} onClick={() => setPagePreviewOpen(true)}>
+      <div
+        className={styles.pageImageWrapper}
+        onClick={() => setPagePreviewOpen(true)}
+      >
         <img
           src={currentChunk?.imgUrl}
           alt={`第 ${currentPage} 页`}
@@ -413,13 +273,18 @@ const CoursewarePanel = ({
           style={{ width: '100%' }}
           options={groupedOptions()}
           filterOption={(input, option) =>
-            (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+            (option?.label as string)
+              ?.toLowerCase()
+              .includes(input.toLowerCase())
           }
           notFoundContent={
             docLoading ? (
               <Spin size="small" />
             ) : (
-              <Empty description="暂无课件文档" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty
+                description="暂无课件文档"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
             )
           }
           allowClear
@@ -503,9 +368,23 @@ const CoursewarePanel = ({
       )}
 
       {/* Modals */}
-      <MindMapModal open={mindMapOpen} docId={selectedDocId} onClose={() => setMindMapOpen(false)} />
-      <FlashcardModal open={flashcardOpen} docId={selectedDocId} onClose={() => setFlashcardOpen(false)} />
-      <QuizModal open={quizOpen} docId={selectedDocId} onClose={() => setQuizOpen(false)} />
+      <MindMapModal
+        open={mindMapOpen}
+        docId={selectedDocId}
+        initialNodeId={shouldOpenMindMap ? initialKnowledgePointId : undefined}
+        initialVideoId={shouldOpenMindMap ? initialVideoId : undefined}
+        onClose={() => setMindMapOpen(false)}
+      />
+      <FlashcardModal
+        open={flashcardOpen}
+        docId={selectedDocId}
+        onClose={() => setFlashcardOpen(false)}
+      />
+      <QuizModal
+        open={quizOpen}
+        docId={selectedDocId}
+        onClose={() => setQuizOpen(false)}
+      />
       <NoteDrawer
         open={noteDrawerOpen}
         docId={selectedDocId}

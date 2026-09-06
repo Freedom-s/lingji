@@ -157,9 +157,6 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: "/conversation",
     component: Layouts,
     redirect: "/conversation/index",
-    meta: {
-      hidden: true
-    },
     children: [
       {
         path: "index",

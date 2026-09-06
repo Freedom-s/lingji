@@ -106,7 +106,10 @@ const LearningPage = () => {
   // Auto-select first document
   useEffect(() => {
     if (!docId && !docListLoading && documentList.length > 0) {
-      setDocId(documentList[0].id);
+      const defaultDocument =
+        documentList.find((document) => !document.knowledgePointBinding) ||
+        documentList[0];
+      setDocId(defaultDocument.id);
     }
   }, [docId, docListLoading, documentList, setDocId]);
 

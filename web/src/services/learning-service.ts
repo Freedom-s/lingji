@@ -9,6 +9,12 @@ const unwrap = <T>(p: Promise<any>): Promise<T> => p.then((res: any) => res?.dat
 const learningService = {
   getMindMap: (docId: string) => unwrap(request.get(`${BASE}/mindmap/${docId}`)),
 
+  getMindMapVideos: (docId: string) =>
+    unwrap(request.get(`${BASE}/mindmap/${docId}/videos`)),
+
+  getVideoBindings: (kbIds: string[]) =>
+    unwrap(request.get(`${BASE}/video-bindings`, { params: { kb_ids: kbIds.join(',') } })),
+
   getFlashcards: (docId: string) => unwrap(request.get(`${BASE}/flashcards/${docId}`)),
 
   updateFlashcardProgress: (docId: string, data: { card_index: number; status: string }) =>

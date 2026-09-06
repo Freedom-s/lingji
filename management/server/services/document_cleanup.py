@@ -85,6 +85,15 @@ def delete_document_rows(cursor, documents, update_knowledgebase_counts=True):
     doc_ids = [document["document_id"] for document in unique_documents]
     placeholders = ", ".join(["%s"] * len(doc_ids))
 
+    cursor.execute(
+        f"""
+        DELETE FROM knowledge_point_video_binding
+        WHERE video_doc_id IN ({placeholders})
+           OR courseware_doc_id IN ({placeholders})
+        """,
+        (*doc_ids, *doc_ids),
+    )
+
     for table_name in DOCUMENT_CHILD_TABLES:
         cursor.execute(
             f"DELETE FROM {table_name} WHERE doc_id IN ({placeholders})",

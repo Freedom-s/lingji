@@ -17,6 +17,7 @@ from api.db.db_models import (
     Dialog,
     Document,
     DocumentGeneration,
+    KnowledgePointVideoBinding,
     StudentNote,
     StudentProgressStatus,
     StudentQuizResult,
@@ -224,6 +225,21 @@ def progress_reminders():
             .dicts()
         )
         doc_ids = list({link["doc_id"] for link in doc_links})
+        video_bindings = {
+            row["video_doc_id"]: {
+                "courseware_doc_id": row["courseware_doc_id"],
+                "knowledge_point_id": row["knowledge_point_id"],
+            }
+            for row in (
+                KnowledgePointVideoBinding.select(
+                    KnowledgePointVideoBinding.video_doc_id,
+                    KnowledgePointVideoBinding.courseware_doc_id,
+                    KnowledgePointVideoBinding.knowledge_point_id,
+                )
+                .where(KnowledgePointVideoBinding.video_doc_id.in_(doc_ids))
+                .dicts()
+            )
+        } if doc_ids else {}
         video_completed, quiz_stats, noted_docs, quiz_docs = _learning_state(
             student_id, doc_ids
         )
@@ -253,6 +269,7 @@ def progress_reminders():
                     and quiz_rate >= link["quiz_threshold"]
                 )
                 has_notes = doc_id in noted_docs
+                binding = video_bindings.get(doc_id, {}) if is_video else {}
                 is_completed = (
                     video_done if is_video else quiz_passed if has_quiz else has_notes
                 )
@@ -267,6 +284,8 @@ def progress_reminders():
                     "quiz_passed": quiz_passed,
                     "has_notes": has_notes,
                     "is_completed": is_completed,
+                    "courseware_doc_id": binding.get("courseware_doc_id", ""),
+                    "knowledge_point_id": binding.get("knowledge_point_id", ""),
                 }
                 _save_status(student_id, progress.id, doc_status)
                 docs.append(doc_status)

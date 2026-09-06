@@ -561,6 +561,7 @@ class KnowledgebaseService:
                 SELECT
                     d.id,
                     d.name,
+                    d.type,
                     d.chunk_num,
                     d.create_date,
                     d.status,

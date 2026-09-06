@@ -6,10 +6,13 @@ import {
   CircleCheck,
   CircleClose,
   Collection,
+  DataAnalysis,
   Files,
   MagicStick,
+  QuestionFilled,
   School,
-  UserFilled
+  UserFilled,
+  WarningFilled
 } from "@element-plus/icons-vue"
 import SvgDashboard from "../images/dashboard.svg?component"
 import { useUserStore } from "@/pinia/stores/user"
@@ -18,7 +21,14 @@ import {
   getAssistantRankingApi,
   getClassRankingApi,
   getConversationTrendApi,
-  getOverviewApi
+  getLearningInsightsApi,
+  getOverviewApi,
+  getStudentLearningDetailApi
+} from "@/common/apis/dashboard"
+import type {
+  LearningInsightsData,
+  LearningInsightStudent,
+  StudentLearningDetailData
 } from "@/common/apis/dashboard"
 import type {
   AssistantRankingItem,
@@ -53,6 +63,14 @@ const displayedValues = ref<Record<string, number>>({})
 const lastUpdatedAt = ref("--")
 const progressReminderData = ref<TeacherProgressReminderResult | null>(null)
 const progressReminderLoading = ref(false)
+const learningInsights = ref<LearningInsightsData | null>(null)
+const learningInsightsLoading = ref(false)
+const insightClassId = ref("")
+const insightSection = ref<HTMLElement | null>(null)
+const studentDetailVisible = ref(false)
+const studentDetailLoading = ref(false)
+const selectedStudentDetail = ref<StudentLearningDetailData | null>(null)
+const detailActiveTab = ref<"quiz" | "questions">("quiz")
 
 const metricIcons = {
   students: markRaw(UserFilled),
@@ -447,6 +465,55 @@ async function fetchProgressReminders() {
   }
 }
 
+async function fetchLearningInsights() {
+  learningInsightsLoading.value = true
+  try {
+    const res = await getLearningInsightsApi({
+      range: timeRange.value,
+      class_id: insightClassId.value || undefined,
+      limit: 10
+    })
+    if (res.code === 0 && res.data) {
+      learningInsights.value = res.data
+    }
+  } catch (error) {
+    console.error("获取学习洞察失败:", error)
+  } finally {
+    learningInsightsLoading.value = false
+  }
+}
+
+async function openStudentDetail(student: LearningInsightStudent, tab: "quiz" | "questions" = "quiz") {
+  detailActiveTab.value = tab
+  studentDetailVisible.value = true
+  studentDetailLoading.value = true
+  selectedStudentDetail.value = null
+  try {
+    const res = await getStudentLearningDetailApi(student.student_id, { range: timeRange.value })
+    if (res.code === 0 && res.data) {
+      selectedStudentDetail.value = res.data
+    }
+  } catch (error) {
+    console.error("获取学生学习明细失败:", error)
+  } finally {
+    studentDetailLoading.value = false
+  }
+}
+
+function focusLearningInsights() {
+  insightSection.value?.scrollIntoView({ behavior: "smooth", block: "start" })
+}
+
+function openConversationManagement() {
+  router.push("/conversation/index")
+}
+
+function accuracyTone(accuracy: number) {
+  if (accuracy >= 80) return "is-good"
+  if (accuracy >= 60) return "is-medium"
+  return "is-risk"
+}
+
 function progressStateLabel(item: TeacherProgressReminderItem) {
   if (item.state === "overdue") return `逾期 ${item.day_count} 天`
   if (item.state === "upcoming") return `${item.day_count} 天后开始`
@@ -468,12 +535,14 @@ function openProgressDetail(item?: TeacherProgressReminderItem) {
 function handleTimeRangeChange(range: "24h" | "7d" | "30d") {
   timeRange.value = range
   fetchTrendData()
+  fetchLearningInsights()
 }
 
 onMounted(() => {
   fetchOverviewData()
   fetchTrendData()
   fetchProgressReminders()
+  fetchLearningInsights()
 })
 </script>
 
@@ -607,6 +676,150 @@ onMounted(() => {
         </article>
       </section>
 
+      <section ref="insightSection" v-loading="learningInsightsLoading" class="learning-insight-panel panel-card">
+        <header class="learning-insight-header">
+          <div>
+            <p class="section-eyebrow insight-eyebrow">Learning intelligence</p>
+            <h2 class="learning-insight-title">学生学习洞察</h2>
+            <p class="learning-insight-description">
+              查看每名学生做过的题、答错记录和实际提问，快速定位全班共性难点。
+            </p>
+          </div>
+          <el-select
+            v-model="insightClassId"
+            class="insight-class-select"
+            placeholder="全部班级"
+            clearable
+            @change="fetchLearningInsights"
+          >
+            <el-option label="全部班级" value="" />
+            <el-option
+              v-for="classItem in learningInsights?.classes || []"
+              :key="classItem.id"
+              :label="classItem.name"
+              :value="classItem.id"
+            />
+          </el-select>
+        </header>
+
+        <div class="insight-summary-grid">
+          <div class="insight-summary-item is-blue">
+            <el-icon><UserFilled /></el-icon>
+            <span>活跃学生</span>
+            <strong>{{ learningInsights?.summary.active_student_count ?? 0 }}</strong>
+            <small>/ {{ learningInsights?.summary.student_count ?? 0 }} 人</small>
+          </div>
+          <div class="insight-summary-item is-slate">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>累计答题</span>
+            <strong>{{ learningInsights?.summary.quiz_attempt_count ?? 0 }}</strong>
+            <small>次</small>
+          </div>
+          <div class="insight-summary-item is-red">
+            <el-icon><WarningFilled /></el-icon>
+            <span>错误作答</span>
+            <strong>{{ learningInsights?.summary.wrong_answer_count ?? 0 }}</strong>
+            <small>次</small>
+          </div>
+          <button class="insight-summary-item is-amber is-action" type="button" @click="openConversationManagement">
+            <el-icon><QuestionFilled /></el-icon>
+            <span>学生提问</span>
+            <strong>{{ learningInsights?.summary.question_count ?? 0 }}</strong>
+            <small>次 · 查看会话</small>
+          </button>
+        </div>
+
+        <div class="learning-insight-grid">
+          <article class="student-activity-card">
+            <div class="insight-card-heading">
+              <div>
+                <span class="insight-card-index">01</span>
+                <h3>每个学生做了什么</h3>
+              </div>
+              <span class="section-meta">{{ rangeLabelMap[timeRange] }}</span>
+            </div>
+            <el-table
+              :data="learningInsights?.students || []"
+              class="student-insight-table"
+              height="430"
+              empty-text="当前时间范围内还没有学生数据"
+              @row-click="row => openStudentDetail(row)"
+            >
+              <el-table-column label="学生" min-width="170" fixed>
+                <template #default="{ row }">
+                  <div class="student-identity">
+                    <span class="student-avatar">{{ row.student_name.slice(0, 1) }}</span>
+                    <span>
+                      <strong>{{ row.student_name }}</strong>
+                      <small>{{ row.student_email }}</small>
+                    </span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="class_names" label="班级" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="quiz_attempts" label="答题" width="70" align="center" />
+              <el-table-column prop="wrong_answers" label="答错" width="70" align="center">
+                <template #default="{ row }">
+                  <span :class="{ 'wrong-number': row.wrong_answers > 0 }">{{ row.wrong_answers }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="正确率" width="104">
+                <template #default="{ row }">
+                  <span :class="['accuracy-pill', accuracyTone(row.accuracy)]">{{ row.accuracy }}%</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="提问" width="70" align="center">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click.stop="openStudentDetail(row, 'questions')">
+                    {{ row.question_count }}
+                  </el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="最近活跃" width="145">
+                <template #default="{ row }">
+                  <span class="last-active-text">{{ row.last_active_at ? formatTime(row.last_active_at, timeRange) : '暂无活动' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="明细" width="82" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click.stop="openStudentDetail(row)">查看</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </article>
+
+          <article class="wrong-question-card">
+            <div class="insight-card-heading">
+              <div>
+                <span class="insight-card-index is-red">02</span>
+                <h3>全班高频错题</h3>
+              </div>
+              <span class="section-meta">Top 10</span>
+            </div>
+            <div v-if="learningInsights?.wrong_questions.length" class="wrong-question-list">
+              <div
+                v-for="(question, index) in learningInsights.wrong_questions"
+                :key="`${question.doc_id}-${question.question_index}`"
+                class="wrong-question-item"
+              >
+                <span class="wrong-question-rank">{{ String(index + 1).padStart(2, '0') }}</span>
+                <div class="wrong-question-copy">
+                  <strong>{{ question.question }}</strong>
+                  <span>{{ question.document_name }}</span>
+                  <small>正确答案：{{ question.correct_answer }}</small>
+                </div>
+                <div class="wrong-question-score">
+                  <strong>{{ question.wrong_rate }}%</strong>
+                  <span>{{ question.wrong_count }}/{{ question.attempt_count }} 次答错</span>
+                  <small>{{ question.wrong_student_count }} 名学生</small>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="82" description="当前时间范围内还没有错题记录" />
+          </article>
+        </div>
+      </section>
+
       <section class="chart-grid two-columns">
         <article class="chart-card panel-card">
           <header class="section-header">
@@ -614,7 +827,7 @@ onMounted(() => {
               <p class="section-eyebrow">Students</p>
               <h3 class="section-title">活跃学生趋势</h3>
             </div>
-            <span class="section-meta">{{ rangeLabelMap[timeRange] }}</span>
+            <el-button link type="primary" :icon="ArrowRight" @click="focusLearningInsights">查看学生明细</el-button>
           </header>
           <v-chart class="chart-view" :option="activeStudentsOption" autoresize />
         </article>
@@ -625,7 +838,7 @@ onMounted(() => {
               <p class="section-eyebrow">Conversations</p>
               <h3 class="section-title">会话趋势</h3>
             </div>
-            <span class="section-meta">{{ rangeLabelMap[timeRange] }}</span>
+            <el-button link type="primary" :icon="ArrowRight" @click="openConversationManagement">查看提问内容</el-button>
           </header>
           <v-chart class="chart-view" :option="conversationTrendOption" autoresize />
         </article>
@@ -655,6 +868,78 @@ onMounted(() => {
         </article>
       </section>
     </div>
+
+    <el-drawer
+      v-model="studentDetailVisible"
+      class="student-detail-drawer"
+      size="min(760px, 94vw)"
+      :with-header="false"
+      destroy-on-close
+    >
+      <div v-loading="studentDetailLoading" class="student-detail-shell">
+        <template v-if="selectedStudentDetail">
+          <header class="student-detail-header">
+            <div class="detail-student-avatar">{{ selectedStudentDetail.student.student_name.slice(0, 1) }}</div>
+            <div class="detail-student-copy">
+              <p>{{ selectedStudentDetail.student.class_names }}</p>
+              <h2>{{ selectedStudentDetail.student.student_name }}</h2>
+              <span>{{ selectedStudentDetail.student.student_email }}</span>
+            </div>
+            <el-button text @click="studentDetailVisible = false">关闭</el-button>
+          </header>
+
+          <div class="student-detail-summary">
+            <div><strong>{{ selectedStudentDetail.summary.quiz_attempt_count }}</strong><span>答题次数</span></div>
+            <div><strong>{{ selectedStudentDetail.summary.correct_answer_count }}</strong><span>答对</span></div>
+            <div class="is-wrong"><strong>{{ selectedStudentDetail.summary.wrong_answer_count }}</strong><span>答错</span></div>
+            <div><strong>{{ selectedStudentDetail.summary.accuracy }}%</strong><span>正确率</span></div>
+            <div><strong>{{ selectedStudentDetail.summary.question_count }}</strong><span>提问次数</span></div>
+          </div>
+
+          <el-tabs v-model="detailActiveTab" class="student-detail-tabs">
+            <el-tab-pane :label="`答题明细 ${selectedStudentDetail.quiz_attempts.length}`" name="quiz">
+              <div v-if="selectedStudentDetail.quiz_attempts.length" class="detail-record-list">
+                <article
+                  v-for="(attempt, index) in selectedStudentDetail.quiz_attempts"
+                  :key="attempt.id"
+                  :class="['quiz-attempt-item', attempt.is_correct ? 'is-correct' : 'is-wrong']"
+                >
+                  <div class="record-marker">
+                    <CircleCheck v-if="attempt.is_correct" />
+                    <CircleClose v-else />
+                  </div>
+                  <div class="record-main">
+                    <div class="record-meta">
+                      <span>{{ attempt.document_name }}</span>
+                      <small>{{ formatTime(attempt.answered_at, timeRange) }} · 第 {{ index + 1 }} 条</small>
+                    </div>
+                    <h4>{{ attempt.question }}</h4>
+                    <div class="answer-comparison">
+                      <span>学生作答 <strong>{{ attempt.student_answer }}</strong></span>
+                      <span v-if="!attempt.is_correct">正确答案 <strong>{{ attempt.correct_answer }}</strong></span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <el-empty v-else :image-size="96" description="该学生暂时没有答题记录" />
+            </el-tab-pane>
+            <el-tab-pane :label="`提问记录 ${selectedStudentDetail.questions.length}`" name="questions">
+              <div v-if="selectedStudentDetail.questions.length" class="detail-question-list">
+                <article v-for="question in selectedStudentDetail.questions" :key="question.id" class="detail-question-item">
+                  <div class="question-bubble-icon"><QuestionFilled /></div>
+                  <div>
+                    <p>{{ question.content }}</p>
+                    <span>{{ question.assistant_name }} · {{ question.conversation_name }}</span>
+                    <small>{{ formatTime(question.asked_at, timeRange) }}</small>
+                  </div>
+                </article>
+              </div>
+              <el-empty v-else :image-size="96" description="该学生暂时没有提问记录" />
+            </el-tab-pane>
+          </el-tabs>
+        </template>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -1146,9 +1431,604 @@ onMounted(() => {
   height: 360px;
 }
 
+.learning-insight-panel {
+  padding: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 96% 0, rgba(37, 99, 235, 0.07), transparent 30%),
+    rgba(255, 255, 255, 0.96);
+  scroll-margin-top: 92px;
+}
+
+.learning-insight-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.insight-eyebrow {
+  color: #2563eb;
+}
+
+.learning-insight-title {
+  margin: 0;
+  color: #172033;
+  font-size: 24px;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+.learning-insight-description {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.insight-class-select {
+  width: 210px;
+
+  :deep(.el-select__wrapper) {
+    min-height: 42px;
+    border-radius: 13px;
+  }
+}
+
+.insight-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 20px;
+}
+
+.insight-summary-item {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #e8edf4;
+  border-radius: 16px;
+  color: #475569;
+  background: #fbfcfe;
+  text-align: left;
+
+  .el-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    background: #edf4ff;
+    color: #2563eb;
+    font-size: 17px;
+  }
+
+  > span {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #172033;
+    font-size: 23px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  small {
+    color: #94a3b8;
+    font-size: 11px;
+  }
+
+  &.is-slate .el-icon {
+    color: #334155;
+    background: #eef1f5;
+  }
+
+  &.is-red .el-icon {
+    color: #c24135;
+    background: #fff0ed;
+  }
+
+  &.is-amber .el-icon {
+    color: #b77914;
+    background: #fff7e2;
+  }
+
+  &.is-action {
+    appearance: none;
+    cursor: pointer;
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+
+    &:hover {
+      border-color: #f1cf83;
+      box-shadow: 0 10px 24px rgba(151, 103, 17, 0.09);
+      transform: translateY(-1px);
+    }
+  }
+}
+
+.learning-insight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(330px, 0.8fr);
+  gap: 18px;
+}
+
+.student-activity-card,
+.wrong-question-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e8edf4;
+  border-radius: 19px;
+  background: rgba(251, 252, 254, 0.86);
+}
+
+.insight-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+
+  > div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h3 {
+    margin: 0;
+    color: #25324a;
+    font-size: 15px;
+    font-weight: 680;
+  }
+}
+
+.insight-card-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  color: #2563eb;
+  background: #eaf2ff;
+  font-size: 10px;
+  font-weight: 800;
+
+  &.is-red {
+    color: #c24135;
+    background: #fff0ed;
+  }
+}
+
+.student-insight-table {
+  --el-table-border-color: #edf0f5;
+  --el-table-header-bg-color: #f5f7fa;
+  --el-table-row-hover-bg-color: #f2f7ff;
+  border-radius: 13px;
+  cursor: pointer;
+
+  :deep(th.el-table__cell) {
+    height: 42px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  :deep(td.el-table__cell) {
+    padding: 10px 0;
+  }
+}
+
+.student-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  > span:last-child {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #273349;
+    font-size: 13px;
+  }
+
+  small {
+    margin-top: 2px;
+    color: #94a3b8;
+    font-size: 10px;
+  }
+}
+
+.student-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  border-radius: 10px;
+  color: #215cc5;
+  background: #e8f0ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wrong-number {
+  color: #c24135;
+  font-weight: 750;
+}
+
+.accuracy-pill {
+  display: inline-flex;
+  min-width: 50px;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+
+  &.is-good {
+    color: #14754d;
+    background: #e9f8f0;
+  }
+
+  &.is-medium {
+    color: #9a6510;
+    background: #fff5db;
+  }
+
+  &.is-risk {
+    color: #b13b31;
+    background: #ffefec;
+  }
+}
+
+.last-active-text {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.wrong-question-list {
+  display: flex;
+  height: 430px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.wrong-question-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 13px;
+  border: 1px solid #edf0f5;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.wrong-question-rank {
+  padding-top: 2px;
+  color: #c24135;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.wrong-question-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  strong {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #273349;
+    font-size: 12px;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  span,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    margin-top: 6px;
+    color: #8491a5;
+    font-size: 10px;
+  }
+
+  small {
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 10px;
+  }
+}
+
+.wrong-question-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 72px;
+
+  strong {
+    color: #c24135;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  span,
+  small {
+    margin-top: 3px;
+    color: #94a3b8;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+}
+
+.student-detail-shell {
+  min-height: 100%;
+  color: #172033;
+}
+
+.student-detail-header {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.detail-student-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  color: #fff;
+  background: #2563eb;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.detail-student-copy {
+  min-width: 0;
+
+  p,
+  h2 {
+    margin: 0;
+  }
+
+  p {
+    color: #2563eb;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+  }
+
+  h2 {
+    margin-top: 3px;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+
+  span {
+    display: block;
+    overflow: hidden;
+    margin-top: 3px;
+    color: #94a3b8;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.student-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0 10px;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    border-radius: 13px;
+    background: #f5f7fa;
+  }
+
+  strong {
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  span {
+    margin-top: 4px;
+    color: #8491a5;
+    font-size: 10px;
+  }
+
+  .is-wrong strong {
+    color: #c24135;
+  }
+}
+
+.student-detail-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 14px;
+  }
+}
+
+.detail-record-list,
+.detail-question-list {
+  display: flex;
+  max-height: calc(100vh - 250px);
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 2px 4px 18px 1px;
+}
+
+.quiz-attempt-item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid #e7edf4;
+  border-radius: 15px;
+  background: #fbfcfe;
+
+  &.is-wrong {
+    border-color: #f3d4ce;
+    background: #fff9f7;
+  }
+}
+
+.record-marker {
+  padding-top: 2px;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #16a36a;
+  }
+
+  .is-wrong & svg {
+    color: #c24135;
+  }
+}
+
+.record-main {
+  min-width: 0;
+
+  h4 {
+    margin: 8px 0 10px;
+    color: #273349;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.record-meta,
+.answer-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.record-meta {
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 700;
+
+  small {
+    color: #94a3b8;
+    font-weight: 500;
+  }
+}
+
+.answer-comparison {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+
+  span {
+    padding: 6px 9px;
+    border-radius: 9px;
+    color: #64748b;
+    background: #eef2f7;
+    font-size: 10px;
+  }
+
+  strong {
+    margin-left: 4px;
+    color: #273349;
+  }
+}
+
+.detail-question-item {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e5ebf3;
+  border-radius: 15px;
+  background: #fbfcfe;
+
+  p {
+    margin: 0 0 9px;
+    color: #273349;
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+
+  span,
+  small {
+    display: block;
+    color: #7b8799;
+    font-size: 10px;
+  }
+
+  small {
+    margin-top: 4px;
+    color: #a0aabb;
+  }
+}
+
+.question-bubble-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #b77914;
+  background: #fff5db;
+
+  svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
 @media (max-width: 1440px) {
   .metrics-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .learning-insight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-question-list {
+    height: auto;
+    max-height: 430px;
   }
 }
 
@@ -1170,6 +2050,10 @@ onMounted(() => {
     width: 100%;
     flex-wrap: wrap;
   }
+
+  .insight-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -1186,6 +2070,22 @@ onMounted(() => {
 
   .progress-reminder-grid {
     grid-template-columns: 1fr;
+  }
+
+  .learning-insight-panel {
+    padding: 20px;
+  }
+
+  .learning-insight-header {
+    flex-direction: column;
+  }
+
+  .insight-class-select {
+    width: 100%;
+  }
+
+  .student-detail-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .chart-view {
@@ -1212,6 +2112,14 @@ onMounted(() => {
 
   .metrics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .insight-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-summary-item {
+    grid-template-columns: 36px 1fr auto auto;
   }
 
   .section-header {

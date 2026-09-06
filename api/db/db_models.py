@@ -896,6 +896,22 @@ class DocumentGeneration(DataBaseModel):
         )
 
 
+class KnowledgePointVideoBinding(DataBaseModel):
+    """知识点视频挂载表 - 视频仍是独立文档，只记录其所属课件和知识点。"""
+    id = CharField(max_length=32, primary_key=True)
+    video_doc_id = CharField(max_length=32, null=False, unique=True, help_text="视频文档 ID")
+    courseware_doc_id = CharField(max_length=32, null=False, index=True, help_text="课件文档 ID")
+    knowledge_point_id = CharField(max_length=64, null=False, index=True, help_text="思维导图节点 ID")
+    sort_order = IntegerField(default=0, help_text="同一知识点下的视频顺序")
+    created_by = CharField(max_length=32, null=False, index=True, help_text="创建挂载的老师 ID")
+
+    class Meta:
+        db_table = "knowledge_point_video_binding"
+        indexes = (
+            (('courseware_doc_id', 'knowledge_point_id', 'sort_order'), False),
+        )
+
+
 class StudentCardProgress(DataBaseModel):
     """学生闪卡学习进度表"""
     id = CharField(max_length=32, primary_key=True)

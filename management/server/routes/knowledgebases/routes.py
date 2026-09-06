@@ -3,6 +3,7 @@ import traceback
 from flask import request
 from services.knowledgebases.service import KnowledgebaseService
 from services.knowledgebases import generation
+from services.knowledgebases import video_binding
 from utils import error_response, success_response
 
 from .. import knowledgebase_bp
@@ -137,6 +138,94 @@ def get_knowledgebase_documents(kb_id):
         return error_response("参数类型错误", code=400)
     except Exception as e:
         return error_response(str(e))
+
+
+@knowledgebase_bp.route("/<string:kb_id>/video-binding-options", methods=["GET"])
+@require_superuser
+def get_video_binding_options_route(kb_id):
+    """获取当前知识库内可作为视频挂载目标的课件和知识点。"""
+    try:
+        current_user = get_current_user()
+        result = video_binding.get_binding_options(kb_id, current_user["user_id"])
+        return success_response(data=result)
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except Exception as e:
+        return error_response(str(e), code=500)
+
+
+@knowledgebase_bp.route("/<string:kb_id>/video-bindings", methods=["GET"])
+@require_superuser
+def get_knowledgebase_video_bindings_route(kb_id):
+    """获取知识库内全部视频及其挂载位置。"""
+    try:
+        current_user = get_current_user()
+        result = video_binding.get_knowledgebase_video_bindings(kb_id, current_user["user_id"])
+        return success_response(data=result)
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except Exception as e:
+        return error_response(str(e), code=500)
+
+
+@knowledgebase_bp.route(
+    "/documents/<string:video_doc_id>/knowledge-point-binding",
+    methods=["GET", "PUT", "DELETE"],
+)
+@require_superuser
+def video_knowledge_point_binding_route(video_doc_id):
+    """查询、保存或解除现有视频的知识点挂载。"""
+    try:
+        current_user = get_current_user()
+        user_id = current_user["user_id"]
+        if request.method == "GET":
+            return success_response(data=video_binding.get_video_binding(video_doc_id, user_id))
+        if request.method == "DELETE":
+            deleted = video_binding.delete_video_binding(video_doc_id, user_id)
+            message = "已解除挂载，视频和学生观看记录均已保留" if deleted else "该视频尚未挂载"
+            return success_response(data={"deleted": deleted}, message=message)
+
+        data = request.json or {}
+        result = video_binding.save_video_binding(
+            video_doc_id=video_doc_id,
+            courseware_doc_id=str(data.get("courseware_doc_id") or "").strip(),
+            knowledge_point_id=str(data.get("knowledge_point_id") or "").strip(),
+            user_id=user_id,
+        )
+        return success_response(data=result, message="视频已挂载到知识点")
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        print(f"维护视频知识点挂载失败: {str(e)}")
+        traceback.print_exc()
+        return error_response(str(e), code=500)
+
+
+@knowledgebase_bp.route(
+    "/documents/<string:courseware_doc_id>/knowledge-point-videos/order",
+    methods=["PUT"],
+)
+@require_superuser
+def reorder_knowledge_point_videos_route(courseware_doc_id):
+    """调整同一知识点下的视频顺序。"""
+    try:
+        data = request.json or {}
+        current_user = get_current_user()
+        result = video_binding.reorder_knowledge_point_videos(
+            courseware_doc_id=courseware_doc_id,
+            knowledge_point_id=str(data.get("knowledge_point_id") or "").strip(),
+            video_doc_ids=[str(item) for item in data.get("video_doc_ids") or []],
+            user_id=current_user["user_id"],
+        )
+        return success_response(data=result, message="视频顺序已保存")
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        return error_response(str(e), code=500)
 
 
 @knowledgebase_bp.route("/<string:kb_id>/documents", methods=["POST"])

@@ -1,6 +1,7 @@
 import { IDocumentInfo } from '@/interfaces/database/document';
 import { ITestingChunk } from '@/interfaces/database/knowledge';
 import kbService from '@/services/knowledge-service';
+import learningService from '@/services/learning-service';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'umi';
@@ -11,6 +12,10 @@ import { useSearchParams } from 'umi';
 
 export interface DocumentOption extends IDocumentInfo {
   kbName: string;
+  knowledgePointBinding?: {
+    courseware_doc_id: string;
+    knowledge_point_id: string;
+  };
 }
 
 export interface ChunkPage {
@@ -21,11 +26,29 @@ export interface ChunkPage {
   docId: string;
 }
 
+const EMPTY_VIDEO_BINDINGS: Record<
+  string,
+  DocumentOption['knowledgePointBinding']
+> = {};
+
+const useFetchVideoBindings = (kbIds: string[]) =>
+  useQuery<Record<string, DocumentOption['knowledgePointBinding']>>({
+    queryKey: ['fetchKnowledgePointVideoBindings', kbIds],
+    queryFn: async () => {
+      const response: any = await learningService.getVideoBindings(kbIds);
+      return response?.code === 0 ? response?.data?.bindings || {} : {};
+    },
+    enabled: kbIds.length > 0,
+  });
+
 // ============================================================================
 // useFetchDocumentListByKbIds
 // ============================================================================
 
 export const useFetchDocumentListByKbIds = (kbIds: string[]) => {
+  const { data: bindingData, isFetching: bindingsLoading } =
+    useFetchVideoBindings(kbIds);
+  const videoBindings = bindingData || EMPTY_VIDEO_BINDINGS;
   const results = useQueries({
     queries: kbIds.map((kbId) => ({
       queryKey: ['fetchDocumentListForLearning', kbId],
@@ -51,11 +74,12 @@ export const useFetchDocumentListByKbIds = (kbIds: string[]) => {
       return docs.map((doc: IDocumentInfo) => ({
         ...doc,
         kbName: `KB ${index + 1}`,
+        knowledgePointBinding: videoBindings[doc.id],
       }));
     });
-  }, [results, kbIds]);
+  }, [results, kbIds, videoBindings]);
 
-  const loading = results.some((r) => r.isFetching);
+  const loading = bindingsLoading || results.some((r) => r.isFetching);
 
   return { documentList, loading };
 };
@@ -68,6 +92,9 @@ export const useFetchDocumentListByKbIdsWithNames = (
   kbIds: string[],
   kbNames: string[],
 ) => {
+  const { data: bindingData, isFetching: bindingsLoading } =
+    useFetchVideoBindings(kbIds);
+  const videoBindings = bindingData || EMPTY_VIDEO_BINDINGS;
   const results = useQueries({
     queries: kbIds.map((kbId) => ({
       queryKey: ['fetchDocumentListForLearning', kbId],
@@ -94,11 +121,12 @@ export const useFetchDocumentListByKbIdsWithNames = (
       return docs.map((doc: IDocumentInfo) => ({
         ...doc,
         kbName,
+        knowledgePointBinding: videoBindings[doc.id],
       }));
     });
-  }, [results, kbIds, kbNames]);
+  }, [results, kbIds, kbNames, videoBindings]);
 
-  const loading = results.some((r) => r.isFetching);
+  const loading = bindingsLoading || results.some((r) => r.isFetching);
 
   return { documentList, loading };
 };

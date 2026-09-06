@@ -13,6 +13,8 @@ export interface StudentProgressDoc {
   quiz_passed: boolean;
   has_notes: boolean;
   is_completed: boolean;
+  courseware_doc_id?: string;
+  knowledge_point_id?: string;
 }
 
 export interface StudentProgressItem {
