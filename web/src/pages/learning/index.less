@@ -2,7 +2,7 @@
   height: 100%;
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-rows: 1fr;
   overflow: hidden;
   transition: grid-template-columns 0.25s ease;
@@ -10,7 +10,12 @@
 
 // Collapsed: chat hidden → courseware takes full width
 .chatCollapsed {
-  grid-template-columns: 1fr auto 0fr;
+  grid-template-columns: minmax(0, 1fr) auto 42px;
+}
+
+// Collapsed: courseware hidden → chat takes full width
+.coursewareCollapsed {
+  grid-template-columns: 42px auto minmax(0, 1fr);
 }
 
 // Right column: conversation header + chat
@@ -82,7 +87,9 @@
   border-radius: 50%;
   background: var(--ant-color-bg-container, #fff);
   border: 1px solid var(--ant-color-border-secondary, #e8e8e8);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.03),
+    0 2px 6px rgba(0, 0, 0, 0.06);
   font-size: 13px;
   color: #999;
   cursor: pointer;
@@ -91,7 +98,9 @@
   &:hover {
     color: var(--ant-color-text, #333);
     border-color: #d9d9d9;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 4px 12px rgba(0, 0, 0, 0.1);
     transform: translate(-50%, -50%) scale(1.08);
   }
 
@@ -100,16 +109,61 @@
   }
 }
 
+.toggleGroup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+  border-radius: 18px;
+  background: var(--ant-color-bg-container, #fff);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.03),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+
+  .toggleBtn {
+    position: static;
+    width: 26px;
+    height: 26px;
+    transform: none;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+
+    &:hover {
+      color: var(--ant-color-primary, #1677ff);
+      background: var(--ant-color-primary-bg, #e6f4ff);
+      transform: none;
+      box-shadow: none;
+    }
+
+    &:active {
+      transform: scale(0.94);
+    }
+  }
+}
+
 // Collapsed tab strip on the right edge
 .collapsedTab {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   background: var(--ant-color-bg-container, #fff);
+  border: 0;
   border-left: 1px solid var(--ant-color-border-secondary, #e8e8e8);
   transition: all 0.25s ease;
   user-select: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
 
   &:hover {
     background: var(--ant-color-bg-layout, #fafafa);
@@ -118,6 +172,19 @@
 
   &:active {
     background: var(--ant-color-bg-layout, #f0f0f0);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--ant-color-primary, #1677ff);
+  }
+}
+
+.coursewareTab {
+  border-right: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+  border-left: 0;
+
+  &:hover {
+    box-shadow: inset -2px 0 8px rgba(0, 0, 0, 0.04);
   }
 }
 
@@ -176,6 +243,12 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
 
+  .toggleGroup {
+    background: var(--ant-color-bg-container, #141414);
+    border-color: var(--ant-color-border-secondary, #303030);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  }
+
   .collapsedTab {
     background: var(--ant-color-bg-container, #141414);
     border-left-color: var(--ant-color-border-secondary, #303030);
@@ -183,6 +256,11 @@
     &:hover {
       background: var(--ant-color-bg-layout, #1f1f1f);
     }
+  }
+
+  .coursewareTab {
+    border-right-color: var(--ant-color-border-secondary, #303030);
+    border-left: 0;
   }
 }
 
@@ -194,6 +272,48 @@
   .learningWrapper {
     grid-template-columns: 1fr;
     grid-template-rows: 50vh auto 1fr;
+  }
+
+  .chatCollapsed,
+  .coursewareCollapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .coursewareCollapsed {
+    grid-template-rows: 42px auto 1fr;
+  }
+
+  .chatCollapsed {
+    grid-template-rows: 1fr auto 42px;
+  }
+
+  .dividerBar {
+    width: 100%;
+    height: 1px;
+  }
+
+  .collapsedTab {
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    border-top: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+    border-left: 0;
+  }
+
+  .coursewareTab {
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--ant-color-border-secondary, #e8e8e8);
+  }
+
+  .collapsedTabInner {
+    flex-direction: row;
+    padding: 8px 16px;
+  }
+
+  .collapsedTabText {
+    writing-mode: horizontal-tb;
+    letter-spacing: 2px;
   }
 
   .chatColumn {

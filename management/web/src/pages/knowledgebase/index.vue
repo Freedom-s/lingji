@@ -328,6 +328,75 @@ const batchParsingLoading = ref(false) // 批量解析加载状态
 const currentKnowledgeBase = ref<KnowledgeBaseData | null>(null)
 const documentLoading = ref(false)
 const documentList = ref<any[]>([])
+const regeneratingDocIds = reactive<Record<string, boolean>>({})
+
+type GenerationType = "mindmap" | "flashcards" | "quiz"
+type GenerationStatusValue = "loading" | "complete" | "partial" | "missing" | "not_ready" | "not_applicable" | "check_failed"
+
+interface GenerationStatus {
+  status: GenerationStatusValue
+  generated_types: GenerationType[]
+  missing_types: GenerationType[]
+}
+
+const generationTypeLabels: Record<GenerationType, string> = {
+  mindmap: "思维导图",
+  flashcards: "概念速记",
+  quiz: "随堂测验"
+}
+
+function isVideoDocument(row: any) {
+  return String(row?.type || "").toLowerCase() === "video"
+}
+
+function createInitialGenerationStatus(run: string, documentType?: string): GenerationStatus {
+  if (String(documentType || "").toLowerCase() === "video") {
+    return {
+      status: "not_applicable",
+      generated_types: [],
+      missing_types: []
+    }
+  }
+
+  const parsed = run === "3"
+  return {
+    status: parsed ? "loading" : "not_ready",
+    generated_types: [],
+    missing_types: parsed ? ["mindmap", "flashcards", "quiz"] : []
+  }
+}
+
+async function loadGenerationStatuses(rows = documentList.value) {
+  const parsedIds = rows
+    .filter((row: any) => row.run === "3" && !isVideoDocument(row))
+    .map((row: any) => String(row.id))
+  documentList.value = rows.map((row: any) => ({
+    ...row,
+    generation_status: createInitialGenerationStatus(String(row.run), row.type)
+  }))
+  if (parsedIds.length === 0) return
+
+  try {
+    const response = await request<{ code: number, data: Record<string, GenerationStatus> }>({
+      url: "/api/v1/knowledgebases/documents/generation/status",
+      method: "post",
+      data: { doc_ids: parsedIds },
+      hideMessage: true
+    })
+    documentList.value = documentList.value.map((row: any) => ({
+      ...row,
+      generation_status: response.data[String(row.id)] || row.generation_status
+    }))
+  } catch (error) {
+    console.error("检查文档学习内容状态失败:", error)
+    documentList.value = documentList.value.map((row: any) => ({
+      ...row,
+      generation_status: row.run === "3" && !isVideoDocument(row)
+        ? { ...row.generation_status, status: "check_failed" }
+        : row.generation_status
+    }))
+  }
+}
 
 // 顺序批量任务轮询相关状态
 const batchPollingInterval = ref<NodeJS.Timeout | null>(null) // 定时器 ID
@@ -377,7 +446,7 @@ function getDocumentList() {
     sort_order: docSortData.sortOrder
   }).then((response) => {
     const result = response as ApiResponse<ListResponse>
-    documentList.value = result.data.list
+    void loadGenerationStatuses(result.data.list)
     docPaginationData.total = result.data.total
   }).catch((error) => {
     ElMessage.error(`获取文档列表失败: ${error?.message || "未知错误"}`)
@@ -429,6 +498,76 @@ function getParseStatusType(progress: number) {
   if (progress === 0) return "info"
   if (progress === 1) return "success"
   return "warning"
+}
+
+function formatGenerationStatus(status?: GenerationStatusValue) {
+  const labels: Record<GenerationStatusValue, string> = {
+    loading: "检查中",
+    complete: "内容齐全",
+    partial: "部分缺失",
+    missing: "全部缺失",
+    not_ready: "待解析",
+    not_applicable: "视频无需生成",
+    check_failed: "检查失败"
+  }
+  return labels[status || "loading"]
+}
+
+function getGenerationStatusType(status?: GenerationStatusValue) {
+  if (status === "complete") return "success"
+  if (status === "partial") return "warning"
+  if (status === "missing" || status === "check_failed") return "danger"
+  return "info"
+}
+
+function getMissingGenerationText(status?: GenerationStatus) {
+  return (status?.missing_types || [])
+    .map(type => generationTypeLabels[type])
+    .join("、")
+}
+
+async function handleRetryGeneration(row: any) {
+  if (isVideoDocument(row)) {
+    ElMessage.info("视频文件不生成思维导图、概念速记和随堂测验")
+    return
+  }
+
+  const missingText = getMissingGenerationText(row.generation_status) || "缺失的学习内容"
+  try {
+    await ElMessageBox.confirm(
+      `将使用已解析的文档内容重新生成：${missingText}。确定继续吗？`,
+      "重新生成确认",
+      {
+        confirmButtonText: "开始生成",
+        cancelButtonText: "取消",
+        type: "warning"
+      }
+    )
+  } catch {
+    return
+  }
+
+  const docId = String(row.id)
+  regeneratingDocIds[docId] = true
+  try {
+    const response = await request<{ code: number, message: string, data: GenerationStatus }>({
+      url: `/api/v1/knowledgebases/documents/${docId}/generation/retry`,
+      method: "post",
+      timeout: 60000000,
+      hideMessage: true
+    })
+    if (response.data.status === "complete") {
+      ElMessage.success("思维导图、概念速记和随堂测验已全部生成")
+    } else {
+      const remaining = getMissingGenerationText(response.data)
+      ElMessage.warning(`本次生成后仍缺少：${remaining}，请检查模型服务或后端日志`)
+    }
+    await loadGenerationStatuses(documentList.value)
+  } catch (error: any) {
+    ElMessage.error(`重新生成失败：${error?.message || "未知错误"}`)
+  } finally {
+    regeneratingDocIds[docId] = false
+  }
 }
 
 // handleParseDocument 方法
@@ -1395,7 +1534,28 @@ function loadingEmbeddingModels(){
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="200" align="center">
+              <el-table-column label="学习内容" width="210" align="center">
+                <template #default="scope">
+                  <div class="generation-status-cell">
+                    <el-tooltip
+                      :disabled="!getMissingGenerationText(scope.row.generation_status)"
+                      :content="`缺少：${getMissingGenerationText(scope.row.generation_status)}`"
+                      placement="top"
+                    >
+                      <el-tag :type="getGenerationStatusType(scope.row.generation_status?.status)">
+                        {{ formatGenerationStatus(scope.row.generation_status?.status) }}
+                      </el-tag>
+                    </el-tooltip>
+                    <span
+                      v-if="['partial', 'missing'].includes(scope.row.generation_status?.status)"
+                      class="generation-missing-text"
+                    >
+                      缺：{{ getMissingGenerationText(scope.row.generation_status) }}
+                    </span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="310" align="center">
                 <template #default="scope">
                   <div class="operation-buttons">
                     <el-button
@@ -1409,6 +1569,20 @@ function loadingEmbeddingModels(){
                     >
                       解析
                     </el-button>
+                    <template v-if="scope.row.run === '3' && !isVideoDocument(scope.row) && !['complete', 'loading'].includes(scope.row.generation_status?.status)">
+                      <el-divider direction="vertical" />
+                      <el-button
+                        type="warning"
+                        text
+                        bg
+                        size="small"
+                        :icon="Refresh"
+                        :loading="regeneratingDocIds[String(scope.row.id)]"
+                        @click="handleRetryGeneration(scope.row)"
+                      >
+                        重新生成
+                      </el-button>
+                    </template>
                     <el-divider direction="vertical" />
                     <el-button
                       type="danger"
@@ -1772,6 +1946,22 @@ function loadingEmbeddingModels(){
 
 .document-table-wrapper {
   margin-top: 20px;
+
+  .generation-status-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .generation-missing-text {
+    max-width: 190px;
+    overflow: hidden;
+    color: var(--el-color-warning-dark-2);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .document-table-header {

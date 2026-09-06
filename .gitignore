@@ -39,6 +39,7 @@ ENV/
 .env
 .env.local
 .env.*.local
+.deploy.env
 
 # =====================
 # IDE / Editor
@@ -139,3 +140,7 @@ IMPLEMENTATION_SUMMARY.md
 [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
 .gstack/
 experiments/
+output/
+diagrams/
+deploy.sh
+work/

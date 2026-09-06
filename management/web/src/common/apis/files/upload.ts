@@ -17,7 +17,7 @@ export function uploadFileApiV2(
   formData: FormData,
   config: UploadConfig = {}
 ) {
-  const { onProgress, timeout = 300000 } = config
+  const { onProgress, timeout = 3600000 } = config
 
   return uploadRequest<{
     code: number

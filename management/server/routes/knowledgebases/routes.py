@@ -2,10 +2,11 @@ import traceback
 
 from flask import request
 from services.knowledgebases.service import KnowledgebaseService
+from services.knowledgebases import generation
 from utils import error_response, success_response
 
 from .. import knowledgebase_bp
-from auth import require_superuser
+from auth import get_current_user, require_superuser
 
 
 @knowledgebase_bp.route("", methods=["GET"])
@@ -350,6 +351,50 @@ def get_knowledgebase_embedding_config():
 # ============================================================
 # 课件内容生成相关 API
 # ============================================================
+
+
+@knowledgebase_bp.route("/documents/generation/status", methods=["POST"])
+@require_superuser
+def get_document_generation_status_route():
+    """批量检查文档的思维导图、概念速记和随堂测验是否齐全。"""
+    try:
+        data = request.json or {}
+        doc_ids = data.get("doc_ids")
+        if not isinstance(doc_ids, list):
+            return error_response("doc_ids 必须是文档 ID 数组", code=400)
+
+        current_user = get_current_user()
+        result = generation.get_generation_statuses(doc_ids, current_user["user_id"])
+        return success_response(data=result)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        logger_message = f"检查文档生成状态失败: {str(e)}"
+        print(logger_message)
+        return error_response(logger_message, code=500)
+
+
+@knowledgebase_bp.route("/documents/<string:doc_id>/generation/retry", methods=["POST"])
+@require_superuser
+def retry_document_generation_route(doc_id):
+    """使用已解析文本补生成文档缺失的学习内容。"""
+    try:
+        current_user = get_current_user()
+        result = generation.regenerate_missing_for_document(doc_id, current_user["user_id"])
+        if result["status"] == "complete":
+            message = "学习内容已全部生成"
+        else:
+            message = "部分内容仍未生成，请检查模型服务或后端日志后重试"
+        return success_response(data=result, message=message)
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        print(f"重新生成文档学习内容失败: {str(e)}")
+        traceback.print_exc()
+        return error_response(f"重新生成失败: {str(e)}", code=500)
+
 
 @knowledgebase_bp.route("/documents/<string:doc_id>/mindmap", methods=["GET"])
 @require_superuser

@@ -6,7 +6,8 @@ from datetime import datetime
 
 import mysql.connector
 import requests
-from database import DB_CONFIG, get_es_client
+from database import DB_CONFIG
+from services.document_cleanup import delete_document_rows, delete_es_chunks
 from utils import generate_uuid
 from services.files.utils import FileType
 
@@ -400,6 +401,8 @@ class KnowledgebaseService:
     @classmethod
     def delete_knowledgebase(cls, kb_id):
         """删除知识库"""
+        conn = None
+        cursor = None
         try:
             # 获取当前登录用户ID
             from auth import get_current_user
@@ -410,31 +413,63 @@ class KnowledgebaseService:
             user_id = current_user['user_id']
 
             conn = cls._get_db_connection()
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
 
             # 先检查知识库是否存在（且属于当前用户）
-            check_query = "SELECT id FROM knowledgebase WHERE id = %s AND tenant_id = %s"
-            cursor.execute(check_query, (kb_id, user_id))
-            if not cursor.fetchone():
+            cursor.execute(
+                "SELECT id, created_by FROM knowledgebase WHERE id = %s AND tenant_id = %s",
+                (kb_id, user_id),
+            )
+            knowledgebase = cursor.fetchone()
+            if not knowledgebase:
                 raise Exception("知识库不存在或无权访问")
 
-            # 执行删除（添加租户过滤）
-            delete_query = "DELETE FROM knowledgebase WHERE id = %s AND tenant_id = %s"
-            cursor.execute(delete_query, (kb_id, user_id))
-            conn.commit()
+            cursor.execute(
+                """
+                SELECT
+                    d.id AS document_id,
+                    d.kb_id,
+                    d.chunk_num,
+                    kb.created_by AS es_tenant_id
+                FROM document d
+                JOIN knowledgebase kb ON kb.id = d.kb_id
+                WHERE d.kb_id = %s AND kb.tenant_id = %s
+                """,
+                (kb_id, user_id),
+            )
+            documents = cursor.fetchall()
 
-            cursor.close()
-            conn.close()
+            delete_es_chunks(documents)
+
+            cursor.execute("START TRANSACTION")
+            delete_document_rows(cursor, documents, update_knowledgebase_counts=False)
+            cursor.execute(
+                "DELETE FROM knowledgebase WHERE id = %s AND tenant_id = %s",
+                (kb_id, user_id),
+            )
+            conn.commit()
 
             return True
         except Exception as e:
+            if conn:
+                conn.rollback()
             print(f"删除知识库失败: {str(e)}")
             raise Exception(f"删除知识库失败: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     @classmethod
     def batch_delete_knowledgebase(cls, kb_ids):
         """批量删除知识库"""
+        conn = None
+        cursor = None
         try:
+            if not kb_ids:
+                return 0
+
             # 获取当前登录用户ID
             from auth import get_current_user
             current_user = get_current_user()
@@ -444,30 +479,53 @@ class KnowledgebaseService:
             user_id = current_user['user_id']
 
             conn = cls._get_db_connection()
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
 
             # 检查所有ID是否存在（且属于当前用户）
             placeholders = ','.join(['%s'] * len(kb_ids))
-            check_query = f"SELECT id FROM knowledgebase WHERE id IN ({placeholders}) AND tenant_id = %s"
+            check_query = f"SELECT id, created_by FROM knowledgebase WHERE id IN ({placeholders}) AND tenant_id = %s"
             cursor.execute(check_query, kb_ids + [user_id])
-            existing_ids = [row[0] for row in cursor.fetchall()]
+            knowledgebases = cursor.fetchall()
+            existing_ids = [row["id"] for row in knowledgebases]
 
             if len(existing_ids) != len(kb_ids):
                 missing_ids = set(kb_ids) - set(existing_ids)
                 raise Exception(f"以下知识库不存在或无权访问: {', '.join(missing_ids)}")
 
-            # 执行批量删除（添加租户过滤）
+            cursor.execute(
+                f"""
+                SELECT
+                    d.id AS document_id,
+                    d.kb_id,
+                    d.chunk_num,
+                    kb.created_by AS es_tenant_id
+                FROM document d
+                JOIN knowledgebase kb ON kb.id = d.kb_id
+                WHERE d.kb_id IN ({placeholders}) AND kb.tenant_id = %s
+                """,
+                kb_ids + [user_id],
+            )
+            documents = cursor.fetchall()
+
+            delete_es_chunks(documents)
+
+            cursor.execute("START TRANSACTION")
+            delete_document_rows(cursor, documents, update_knowledgebase_counts=False)
             delete_query = f"DELETE FROM knowledgebase WHERE id IN ({placeholders}) AND tenant_id = %s"
             cursor.execute(delete_query, kb_ids + [user_id])
             conn.commit()
 
-            cursor.close()
-            conn.close()
-
             return len(kb_ids)
         except Exception as e:
+            if conn:
+                conn.rollback()
             print(f"批量删除知识库失败: {str(e)}")
             raise Exception(f"批量删除知识库失败: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     @classmethod
     def get_knowledgebase_documents(cls, kb_id, page=1, size=10, name="", sort_by="create_time", sort_order="desc"):
@@ -757,85 +815,57 @@ class KnowledgebaseService:
 
     @classmethod
     def delete_document(cls, doc_id):
-        """删除文档"""
+        """从知识库移除文档，保留原始文件和 MinIO 页面。"""
+        conn = None
+        cursor = None
         try:
+            from auth import get_current_user
+
+            current_user = get_current_user()
+            if not current_user:
+                raise Exception("获取用户信息失败")
+
             conn = cls._get_db_connection()
             cursor = conn.cursor(dictionary=True)
 
-            # 先检查文档是否存在
-            # check_query = """
-            #     SELECT 
-            #         d.kb_id, 
-            #         kb.created_by AS tenant_id  -- 获取 tenant_id (knowledgebase的创建者)
-            #     FROM document d
-            #     JOIN knowledgebase kb ON d.kb_id = kb.id -- JOIN knowledgebase 表
-            #     WHERE d.id = %s
-            # """
-            check_query = """
-                SELECT 
-                    d.kb_id, 
-                    d.created_by AS tenant_id
+            cursor.execute(
+                """
+                SELECT
+                    d.id AS document_id,
+                    d.kb_id,
+                    d.chunk_num,
+                    kb.created_by AS es_tenant_id
                 FROM document d
-                WHERE d.id = %s
-            """
-            cursor.execute(check_query, (doc_id,))
-            doc_data = cursor.fetchone()
+                JOIN knowledgebase kb ON kb.id = d.kb_id
+                WHERE d.id = %s AND kb.tenant_id = %s
+                """,
+                (doc_id, current_user["user_id"]),
+            )
+            document = cursor.fetchone()
 
-            if not doc_data:
+            if not document:
                 print(f"[INFO] 文档 {doc_id} 在数据库中未找到。")
                 return False
 
-            kb_id = doc_data["kb_id"]
+            # 先删 ES。若 ES 失败，不再删 MySQL，避免留下指向已删数据的孤儿分块。
+            delete_es_chunks([document])
 
-            # 删除文件到文档的映射
-            f2d_query = "DELETE FROM file2document WHERE document_id = %s"
-            cursor.execute(f2d_query, (doc_id,))
-
-            # 删除文档
-            doc_query = "DELETE FROM document WHERE id = %s"
-            cursor.execute(doc_query, (doc_id,))
-
-            # 更新知识库文档数量
-            update_query = """
-                UPDATE knowledgebase 
-                SET doc_num = doc_num - 1,
-                    update_date = %s
-                WHERE id = %s
-            """
-            current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute(update_query, (current_date, kb_id))
-
+            cursor.execute("START TRANSACTION")
+            delete_document_rows(cursor, [document])
             conn.commit()
-            cursor.close()
-            conn.close()
-
-            es_client = get_es_client()
-            tenant_id_for_cleanup = doc_data["tenant_id"]
-
-            # 删除 Elasticsearch 中的相关文档块
-            if es_client and tenant_id_for_cleanup:
-                es_index_name = f"ragflow_{tenant_id_for_cleanup}"
-                try:
-                    if es_client.indices.exists(index=es_index_name):
-                        query_body = {"query": {"term": {"doc_id": doc_id}}}
-                        resp = es_client.delete_by_query(
-                            index=es_index_name,
-                            body=query_body,
-                            refresh=True,  # 确保立即生效
-                            ignore_unavailable=True,  # 如果索引在此期间被删除
-                        )
-                        deleted_count = resp.get("deleted", 0)
-                        print(f"[ES-SUCCESS] 从索引 {es_index_name} 中删除 {deleted_count} 个与 doc_id {doc_id} 相关的块。")
-                    else:
-                        print(f"[ES-INFO] 索引 {es_index_name} 不存在，跳过 ES 清理 for doc_id {doc_id}。")
-                except Exception as es_err:
-                    print(f"[ES-ERROR] 清理 ES 块 for doc_id {doc_id} (index {es_index_name}) 失败: {str(es_err)}")
 
             return True
 
         except Exception as e:
+            if conn:
+                conn.rollback()
             print(f"[ERROR] 删除文档失败: {str(e)}")
             raise Exception(f"删除文档失败: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     @classmethod
     def parse_document(cls, doc_id):

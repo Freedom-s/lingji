@@ -777,7 +777,7 @@ class Document(DataBaseModel):
         null=True,
         help_text="where dose it store",
         index=True)
-    size = IntegerField(default=0, index=True)
+    size = BigIntegerField(default=0, index=True)
     token_num = IntegerField(default=0, index=True)
     chunk_num = IntegerField(default=0, index=True)
     progress = FloatField(default=0, index=True)
@@ -835,7 +835,7 @@ class File(DataBaseModel):
         null=True,
         help_text="where dose it store",
         index=True)
-    size = IntegerField(default=0, index=True)
+    size = BigIntegerField(default=0, index=True)
     type = CharField(max_length=32, null=False, help_text="file extension", index=True)
     source_type = CharField(
         max_length=128,

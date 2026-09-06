@@ -15,7 +15,7 @@ function createUploadInstance() {
     (config) => {
       // 为大文件上传设置更长的超时时间
       if (!config.timeout) {
-        config.timeout = 300000 // 5分钟
+        config.timeout = 3600000 // 1小时，匹配 nginx proxy 超时
       }
       return config
     },
@@ -52,7 +52,7 @@ function createUploadRequest(instance: AxiosInstance) {
       headers: {
         Authorization: token ? `Bearer ${token}` : undefined
       },
-      timeout: config.timeout || 300000, // 默认5分钟
+      timeout: config.timeout || 3600000, // 默认1小时
       withCredentials: false,
       // 上传进度回调
       onUploadProgress: config.onUploadProgress

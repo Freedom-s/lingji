@@ -13,6 +13,7 @@ import json
 import re
 import sys
 import os
+import threading
 import traceback
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -23,9 +24,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from api.db.services.llm_service import LLMBundle
 from api.db import LLMType
-from database import get_db_connection
+from database import get_db_connection, get_es_client
 from utils import generate_uuid
 from . import logger
+
+
+GENERATION_TYPES = ("mindmap", "flashcards", "quiz")
+VIDEO_DOCUMENT_TYPE = "video"
+_REGENERATION_LOCK = threading.Lock()
+_REGENERATING_DOCS = set()
 
 
 # ============================================================
@@ -165,9 +172,11 @@ def _save_generation(doc_id: str, generation_type: str, content: dict | list, pa
         )
         conn.commit()
         logger.info(f"[Gen-INFO] {generation_type} 生成内容已保存，doc_id={doc_id}")
+        return True
 
     except Exception:
         logger.error(f"[Gen-ERROR] 保存 {generation_type} 失败: {traceback.format_exc()}")
+        return False
     finally:
         if cursor:
             cursor.close()
@@ -222,9 +231,10 @@ def generate_mindmap(doc_id: str, full_content: str, tenant_id: str) -> dict | N
 
         mindmap_data = extract_json(result)
         if mindmap_data:
-            _save_generation(doc_id, "mindmap", mindmap_data, 0)
-            logger.info(f"[Gen-INFO] 思维导图生成成功，doc_id={doc_id}")
-            return mindmap_data
+            if _save_generation(doc_id, "mindmap", mindmap_data, 0):
+                logger.info(f"[Gen-INFO] 思维导图生成成功，doc_id={doc_id}")
+                return mindmap_data
+            return None
         else:
             logger.error(f"[Gen-ERROR] 思维导图解析失败，doc_id={doc_id}，原始返回: {result[:500]}")
             return None
@@ -282,8 +292,10 @@ def generate_flashcards(doc_id: str, full_content: str, page_count: int, tenant_
                 if isinstance(card, dict) and card.get("question") and card.get("answer"):
                     valid_cards.append(card)
             if valid_cards:
-                _save_generation(doc_id, "flashcards", valid_cards, page_count)
-                logger.info(f"[Gen-INFO] 闪卡生成成功，doc_id={doc_id}，共{len(flashcards_data)}项中有效{len(valid_cards)}项")
+                saved = _save_generation(doc_id, "flashcards", valid_cards, page_count)
+                if saved:
+                    logger.info(f"[Gen-INFO] 闪卡生成成功，doc_id={doc_id}，共{len(flashcards_data)}项中有效{len(valid_cards)}项")
+                return saved
             else:
                 logger.error(f"[Gen-ERROR] 闪卡全部无效，doc_id={doc_id}，原始返回: {result[:500]}")
         else:
@@ -291,6 +303,7 @@ def generate_flashcards(doc_id: str, full_content: str, page_count: int, tenant_
 
     except Exception:
         logger.error(f"[Gen-ERROR] 闪卡生成异常: {traceback.format_exc()}")
+    return False
 
 
 def generate_quiz(doc_id: str, full_content: str, page_count: int, tenant_id: str, mindmap_data: dict | None = None):
@@ -342,8 +355,10 @@ def generate_quiz(doc_id: str, full_content: str, page_count: int, tenant_id: st
                 if isinstance(q, dict) and q.get("question") and q.get("options") and q.get("correct") and q.get("explanations"):
                     valid_questions.append(q)
             if valid_questions:
-                _save_generation(doc_id, "quiz", valid_questions, page_count)
-                logger.info(f"[Gen-INFO] 测验生成成功，doc_id={doc_id}，共{len(quiz_data)}项中有效{len(valid_questions)}项")
+                saved = _save_generation(doc_id, "quiz", valid_questions, page_count)
+                if saved:
+                    logger.info(f"[Gen-INFO] 测验生成成功，doc_id={doc_id}，共{len(quiz_data)}项中有效{len(valid_questions)}项")
+                return saved
             else:
                 logger.error(f"[Gen-ERROR] 测验全部无效，doc_id={doc_id}，原始返回: {result[:500]}")
         else:
@@ -351,6 +366,7 @@ def generate_quiz(doc_id: str, full_content: str, page_count: int, tenant_id: st
 
     except Exception:
         logger.error(f"[Gen-ERROR] 测验生成异常: {traceback.format_exc()}")
+    return False
 
 
 def generate_all_for_document(doc_id: str, full_content: str, page_count: int, tenant_id: str):
@@ -372,13 +388,211 @@ def generate_all_for_document(doc_id: str, full_content: str, page_count: int, t
 
     # Phase 1: 先生成思维导图（quiz 需要用其节点 ID 做 knowledge_point_ids）
     mindmap_data = generate_mindmap(doc_id, truncated_content, tenant_id)
+    results = {"mindmap": mindmap_data is not None}
 
     # Phase 2: 并行生成闪卡和测验（测验带上思维导图节点信息）
     with ThreadPoolExecutor(max_workers=2) as executor:
-        executor.submit(generate_flashcards, doc_id, truncated_content, page_count, tenant_id, mindmap_data)
-        executor.submit(generate_quiz, doc_id, truncated_content, page_count, tenant_id, mindmap_data)
+        futures = {
+            "flashcards": executor.submit(generate_flashcards, doc_id, truncated_content, page_count, tenant_id, mindmap_data),
+            "quiz": executor.submit(generate_quiz, doc_id, truncated_content, page_count, tenant_id, mindmap_data),
+        }
+        for generation_type, future in futures.items():
+            results[generation_type] = bool(future.result())
 
     logger.info(f"[Gen-INFO] 文档 {doc_id} 生成任务全部完成")
+    return results
+
+
+def _build_generation_status(run: str, generated_types, document_type: str | None = None) -> dict:
+    """根据解析状态和已生成类型构建前端可直接展示的状态。"""
+    if str(document_type or "").lower() == VIDEO_DOCUMENT_TYPE:
+        return {
+            "status": "not_applicable",
+            "generated_types": [],
+            "missing_types": [],
+        }
+
+    generated = [item for item in GENERATION_TYPES if item in set(generated_types or [])]
+    missing = [item for item in GENERATION_TYPES if item not in generated]
+
+    if str(run) != "3":
+        status = "not_ready"
+    elif not missing:
+        status = "complete"
+    elif not generated:
+        status = "missing"
+    else:
+        status = "partial"
+
+    return {
+        "status": status,
+        "generated_types": generated,
+        "missing_types": missing,
+    }
+
+
+def get_generation_statuses(doc_ids: list[str], user_id: str) -> dict[str, dict]:
+    """批量获取当前教师名下文档的衍生内容完整性。"""
+    normalized_ids = list(dict.fromkeys(str(doc_id).strip() for doc_id in doc_ids if str(doc_id).strip()))
+    if not normalized_ids:
+        return {}
+    if len(normalized_ids) > 100:
+        raise ValueError("一次最多检查 100 个文档")
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        placeholders = ", ".join(["%s"] * len(normalized_ids))
+        cursor.execute(
+            f"""
+            SELECT d.id, d.run, d.type, dg.generation_type
+            FROM document d
+            JOIN knowledgebase kb ON kb.id = d.kb_id
+            LEFT JOIN document_generation dg
+                ON dg.doc_id = d.id
+                AND dg.generation_type IN ('mindmap', 'flashcards', 'quiz')
+                AND dg.content IS NOT NULL
+                AND dg.content != ''
+            WHERE d.id IN ({placeholders}) AND kb.tenant_id = %s
+            """,
+            (*normalized_ids, user_id),
+        )
+
+        documents = {}
+        for row in cursor.fetchall():
+            doc_id = str(row["id"])
+            document = documents.setdefault(
+                doc_id,
+                {"run": row.get("run"), "type": row.get("type"), "generated": set()},
+            )
+            if row.get("generation_type") in GENERATION_TYPES:
+                document["generated"].add(row["generation_type"])
+
+        return {
+            doc_id: _build_generation_status(
+                document["run"], document["generated"], document["type"]
+            )
+            for doc_id, document in documents.items()
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def _load_parsed_content(doc_id: str, tenant_id: str, page_count: int) -> str:
+    """从 Elasticsearch 中按页码恢复已解析的文档文本，避免重新做 OCR 和向量化。"""
+    es_client = get_es_client()
+    index_name = f"ragflow_{tenant_id}"
+    if not es_client.indices.exists(index=index_name):
+        raise ValueError("未找到文档的解析索引，请先重新解析文档")
+
+    result = es_client.search(
+        index=index_name,
+        body={
+            "_source": ["content_with_weight", "page_num_int"],
+            "query": {"term": {"doc_id": doc_id}},
+            "sort": [{"page_num_int": {"order": "asc", "unmapped_type": "long"}}],
+            "size": min(max(int(page_count or 1), 100), 10000),
+        },
+    )
+    page_contents = [
+        hit.get("_source", {}).get("content_with_weight", "")
+        for hit in result.get("hits", {}).get("hits", [])
+    ]
+    full_content = "\n\n".join(content for content in page_contents if content).strip()
+    if len(full_content) <= 100:
+        raise ValueError("已解析文本过少，无法生成学习内容，请先重新解析文档")
+    return full_content
+
+
+def _regenerate_missing_for_document(doc_id: str, user_id: str) -> dict:
+    """仅重新生成缺失的思维导图、概念速记或随堂测验。"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT d.id, d.run, d.type, d.chunk_num, kb.created_by AS tenant_id
+            FROM document d
+            JOIN knowledgebase kb ON kb.id = d.kb_id
+            WHERE d.id = %s AND kb.tenant_id = %s
+            """,
+            (doc_id, user_id),
+        )
+        document = cursor.fetchone()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+    if not document:
+        raise PermissionError("文档不存在或无权访问")
+    if str(document.get("type") or "").lower() == VIDEO_DOCUMENT_TYPE:
+        raise ValueError("视频文件不生成思维导图、概念速记和随堂测验")
+    if str(document.get("run")) != "3":
+        raise ValueError("文档尚未解析完成，暂时不能生成学习内容")
+
+    current_status = get_generation_statuses([doc_id], user_id)[str(doc_id)]
+    missing_types = current_status["missing_types"]
+    if not missing_types:
+        return {**current_status, "regenerated_types": []}
+
+    page_count = int(document.get("chunk_num") or 0)
+    tenant_id = document["tenant_id"]
+    full_content = _load_parsed_content(doc_id, tenant_id, page_count)
+
+    estimated_tokens = _estimate_tokens(full_content)
+    if estimated_tokens > 40000:
+        full_content = full_content[:int(len(full_content) * 40000 / estimated_tokens)]
+
+    regenerated = []
+    mindmap_data = get_generation(doc_id, "mindmap")
+    if "mindmap" in missing_types:
+        mindmap_data = generate_mindmap(doc_id, full_content, tenant_id)
+        if mindmap_data is not None:
+            regenerated.append("mindmap")
+
+    futures = {}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        if "flashcards" in missing_types:
+            futures["flashcards"] = executor.submit(
+                generate_flashcards, doc_id, full_content, page_count, tenant_id, mindmap_data
+            )
+        if "quiz" in missing_types:
+            futures["quiz"] = executor.submit(
+                generate_quiz, doc_id, full_content, page_count, tenant_id, mindmap_data
+            )
+        for generation_type, future in futures.items():
+            if future.result():
+                regenerated.append(generation_type)
+
+    final_status = get_generation_statuses([doc_id], user_id)[str(doc_id)]
+    logger.info(
+        f"[Gen-INFO] 文档 {doc_id} 补生成完成，"
+        f"成功={regenerated}，仍缺失={final_status['missing_types']}"
+    )
+    return {**final_status, "regenerated_types": regenerated}
+
+
+def regenerate_missing_for_document(doc_id: str, user_id: str) -> dict:
+    """防止同一进程内对同一文档重复提交生成任务。"""
+    with _REGENERATION_LOCK:
+        if doc_id in _REGENERATING_DOCS:
+            raise ValueError("该文档正在重新生成学习内容，请稍后")
+        _REGENERATING_DOCS.add(doc_id)
+
+    try:
+        return _regenerate_missing_for_document(doc_id, user_id)
+    finally:
+        with _REGENERATION_LOCK:
+            _REGENERATING_DOCS.discard(doc_id)
 
 
 # ============================================================

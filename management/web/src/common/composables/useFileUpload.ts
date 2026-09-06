@@ -54,10 +54,10 @@ export interface FileUploadConfig {
  * 默认配置
  */
 const DEFAULT_CONFIG: Required<FileUploadConfig> = {
-  maxConcurrent: 3,
+  maxConcurrent: 2,
   largeFileThreshold: 10 * 1024 * 1024, // 10MB
   chunkSize: 5 * 1024 * 1024, // 5MB
-  timeout: 300000, // 5分钟
+  timeout: 3600000, // 1小时
   autoUpload: false,
   onSuccess: () => {},
   onError: () => {},
@@ -213,7 +213,7 @@ export function useFileUpload(config: FileUploadConfig = {}) {
       const formData = new FormData()
       formData.append("files", fileItem.file)
 
-      // 统一走普通上传（Gotenberg 4 容器 + 300s 超时已足够）
+      // 统一走普通上传（nginx 已放开 10G / 3600s，超时改为 1 小时）
       await uploadFileApiV2(formData, {
         timeout: finalConfig.timeout,
         onProgress: (progress) => {

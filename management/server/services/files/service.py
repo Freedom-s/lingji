@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from database import get_db_connection, get_minio_client, get_redis_connection
+from services.document_cleanup import delete_document_rows, delete_es_chunks
 
 from .utils import FileSource, FileType, get_uuid
 
@@ -272,9 +273,15 @@ def delete_file(file_id):
         # 查询关联的document记录
         cursor.execute(
             """
-            SELECT f2d.document_id, d.kb_id, d.location
+            SELECT
+                f2d.document_id,
+                d.kb_id,
+                d.location,
+                d.chunk_num,
+                COALESCE(kb.created_by, d.created_by) AS es_tenant_id
             FROM file2document f2d
             JOIN document d ON f2d.document_id = d.id
+            LEFT JOIN knowledgebase kb ON kb.id = d.kb_id
             WHERE f2d.file_id = %s
         """,
             (file_id,),
@@ -299,20 +306,21 @@ def delete_file(file_id):
 
         # 开始事务
         try:
+            # 必须先清理 ES；失败时中止，不删 MySQL 和 MinIO。
+            delete_es_chunks(document_mappings)
             cursor.execute("START TRANSACTION")
 
-            # 1. 先删除file表中的记录
-            cursor.execute("DELETE FROM file WHERE id = %s", (file_id,))
+            # 1. 删除文档派生数据、文档和知识库计数
+            delete_document_rows(cursor, document_mappings)
 
-            # 2. 删除关联的file2document记录
+            # 2. 清理可能没有对应 document 的孤儿映射
             cursor.execute("DELETE FROM file2document WHERE file_id = %s", (file_id,))
 
             # 3. 删除关联的file_page记录（页面图片）
             cursor.execute("DELETE FROM file_page WHERE file_id = %s", (file_id,))
 
-            # 4. 删除关联的document记录
-            for doc_mapping in document_mappings:
-                cursor.execute("DELETE FROM document WHERE id = %s", (doc_mapping["document_id"],))
+            # 4. 删除file表中的记录
+            cursor.execute("DELETE FROM file WHERE id = %s", (file_id,))
 
             # 提交事务
             cursor.execute("COMMIT")
@@ -423,9 +431,15 @@ def batch_delete_files(file_ids):
             # 查询关联的document记录
             cursor.execute(
                 """
-                SELECT f2d.document_id, d.kb_id, d.location
+                SELECT
+                    f2d.document_id,
+                    d.kb_id,
+                    d.location,
+                    d.chunk_num,
+                    COALESCE(kb.created_by, d.created_by) AS es_tenant_id
                 FROM file2document f2d
                 JOIN document d ON f2d.document_id = d.id
+                LEFT JOIN knowledgebase kb ON kb.id = d.kb_id
                 WHERE f2d.file_id = %s
             """,
                 (file_id,),
@@ -449,25 +463,30 @@ def batch_delete_files(file_ids):
                 "pages": page_mappings
             })
 
+        all_documents = [
+            document
+            for file_info in files_to_delete
+            for document in file_info["documents"]
+        ]
+
         # 第二步：开始事务删除数据库记录
         try:
+            # 必须先清理 ES；任何一个索引删除失败都中止批量删除。
+            delete_es_chunks(all_documents)
             cursor.execute("START TRANSACTION")
+
+            # 统一删除文档派生数据、文档记录并更新知识库计数
+            delete_document_rows(cursor, all_documents)
 
             for file_info in files_to_delete:
                 file_id = file_info["file"]["id"]
 
-                # 1. 删除file表中的记录
-                cursor.execute("DELETE FROM file WHERE id = %s", (file_id,))
-
-                # 2. 删除关联的file2document记录
+                # 清理可能没有对应 document 的孤儿映射
                 cursor.execute("DELETE FROM file2document WHERE file_id = %s", (file_id,))
 
-                # 3. 删除关联的file_page记录
+                # 删除页面和文件记录
                 cursor.execute("DELETE FROM file_page WHERE file_id = %s", (file_id,))
-
-                # 4. 删除关联的document记录
-                for doc_mapping in file_info["documents"]:
-                    cursor.execute("DELETE FROM document WHERE id = %s", (doc_mapping["document_id"],))
+                cursor.execute("DELETE FROM file WHERE id = %s", (file_id,))
 
             # 提交事务
             cursor.execute("COMMIT")

@@ -92,6 +92,13 @@ const formData = reactive<CreateProgressData>({
 const availableDocs = ref<ClassDocument[]>([])
 const docSelection = reactive<Record<string, boolean>>({})
 const docThresholds = reactive<Record<string, number>>({})
+const fileNameCollator = new Intl.Collator("zh-CN", {
+  numeric: true,
+  sensitivity: "base"
+})
+const sortedAvailableDocs = computed(() =>
+  [...availableDocs.value].sort((a, b) => fileNameCollator.compare(a.name, b.name))
+)
 const selectedDocCount = computed(
   () => availableDocs.value.filter(doc => docSelection[doc.id]).length
 )
@@ -749,7 +756,7 @@ function getStudentInitial(name: string) {
               </div>
               <template v-else>
                 <div
-                  v-for="doc in availableDocs"
+                  v-for="doc in sortedAvailableDocs"
                   :key="doc.id"
                   class="doc-row" :class="[{ 'is-selected': docSelection[doc.id] }]"
                 >
