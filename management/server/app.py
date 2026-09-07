@@ -1,11 +1,21 @@
 import logging
 import os
+import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import jwt
 from dotenv import load_dotenv
 from flask import Flask, request
 from flask_cors import CORS
+
+# Werkzeug 会在解析大文件请求时先写临时文件。生产环境把临时目录放到
+# 大容量 /data 盘，避免视频上传占满系统盘；本地开发仍使用系统默认目录。
+production_temp_root = Path("/data/ragflow-video-transcode-work/http-tmp")
+if production_temp_root.parent.is_dir() and os.access(production_temp_root.parent, os.W_OK):
+    production_temp_root.mkdir(parents=True, exist_ok=True)
+    tempfile.tempdir = str(production_temp_root)
+
 from routes import register_routes
 
 # 加载环境变量

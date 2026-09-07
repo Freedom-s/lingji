@@ -33,7 +33,8 @@ const {
   clearCompleted
 } = useFileUpload({
   autoUpload: false,
-  maxConcurrent: 4,
+  // 视频转码由服务器串行执行；限制并发可避免同时堆积过多长连接。
+  maxConcurrent: 2,
   onSuccess: () => {
     getTableData()
   },
@@ -362,6 +363,16 @@ function formatFileSize(size: number) {
   }
 }
 
+function isVideoUpload(filename: string) {
+  return /\.(mp4|mov|webm)$/i.test(filename)
+}
+
+function isServerOptimizingVideo(fileItem: { name: string, status: UploadStatus, progress: number }) {
+  return fileItem.status === UploadStatus.UPLOADING
+    && fileItem.progress >= 100
+    && isVideoUpload(fileItem.name)
+}
+
 function handleSortChange({ prop }: { prop: string, order: string | null }) {
   if (sortData.sortBy === prop) {
     sortData.sortOrder = sortData.sortOrder === "asc" ? "desc" : "asc"
@@ -453,6 +464,9 @@ function closeUploadDialog() {
         v-model="uploadDialogVisible"
         title="上传文件或文件夹"
         width="50%"
+        :close-on-click-modal="!isUploading"
+        :close-on-press-escape="!isUploading"
+        :show-close="!isUploading"
         @close="closeUploadDialog"
       >
         <el-alert
@@ -487,6 +501,7 @@ function closeUploadDialog() {
                 点击此处选择文件夹
               </el-link>
               <span v-if="uploadFileList.length > 0">当前已选择 {{ uploadFileList.length }} 个项目。</span>
+              <span> 视频上传完成后会由服务器自动优化，期间请不要关闭窗口。</span>
             </div>
           </template>
         </el-upload>
@@ -518,7 +533,12 @@ function closeUploadDialog() {
                   :show-text="false"
                   :stroke-width="4"
                 />
-                <span class="progress-text">{{ fileItem.progress }}%</span>
+                <span
+                  class="progress-text"
+                  :class="{ 'is-processing': isServerOptimizingVideo(fileItem) }"
+                >
+                  {{ isServerOptimizingVideo(fileItem) ? "服务器优化中" : `${fileItem.progress}%` }}
+                </span>
               </div>
               <div class="file-actions">
                 <el-button
@@ -544,7 +564,7 @@ function closeUploadDialog() {
           </div>
         </div>
         <template #footer>
-          <el-button @click="closeUploadDialog">
+          <el-button :disabled="isUploading" @click="closeUploadDialog">
             取消
           </el-button>
           <el-button
@@ -771,6 +791,12 @@ function closeUploadDialog() {
   color: var(--color-text-tertiary);
   font-size: 11px;
   text-align: right;
+
+  &.is-processing {
+    min-width: 78px;
+    color: var(--el-color-primary);
+    font-weight: 600;
+  }
 }
 
 .file-actions {

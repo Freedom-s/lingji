@@ -30,8 +30,12 @@ def upload_file():
     # parent_id和user_id都使用当前登录用户ID
     upload_result = upload_files_to_server(files, parent_id=user_id, user_id=user_id)
 
-    # 返回标准格式
-    return jsonify({"code": 0, "message": "上传成功", "data": upload_result["data"]})
+    failures = [item for item in upload_result["data"] if item.get("status") == "failed"]
+    if failures:
+        detail = "；".join(f"{item.get('name', '文件')}: {item.get('error', '处理失败')}" for item in failures)
+        return jsonify({"code": 422, "message": detail, "data": upload_result["data"]}), 422
+
+    return jsonify({"code": 0, "message": upload_result["message"], "data": upload_result["data"]})
 
 
 @files_bp.route("", methods=["GET", "OPTIONS"])
@@ -149,7 +153,8 @@ def upload_chunk():
     total_chunks = request.form.get("totalChunks")
     upload_id = request.form.get("uploadId")
     file_name = request.form.get("fileName")
-    parent_id = request.form.get("parent_id")
+    current_user = get_current_user()
+    parent_id = current_user['user_id']
 
     if not all([chunk_index, total_chunks, upload_id, file_name]):
         return jsonify({"code": 400, "message": "缺少必要参数", "data": None}), 400
@@ -177,12 +182,14 @@ def merge_upload():
     upload_id = data.get("uploadId")
     file_name = data.get("fileName")
     total_chunks = data.get("totalChunks")
-    parent_id = data.get("parentId")
+    current_user = get_current_user()
+    user_id = current_user['user_id']
+    parent_id = user_id
 
     if not all([upload_id, file_name, total_chunks]):
         return jsonify({"code": 400, "message": "缺少必要参数", "data": None}), 400
 
-    result = merge_chunks(upload_id, file_name, total_chunks, parent_id)
+    result = merge_chunks(upload_id, file_name, total_chunks, parent_id, user_id)
 
     # 检查结果中是否有错误信息
     if result.get("code", 0) != 0:

@@ -9,13 +9,19 @@ from database import get_db_connection, get_minio_client, get_redis_connection
 from services.document_cleanup import delete_document_rows, delete_es_chunks
 
 from .utils import FileSource, FileType, get_uuid
+from .video_transcoder import optimize_video_for_web
 
-# redis配置参数
-UPLOAD_TEMP_DIR = os.getenv("UPLOAD_TEMP_DIR", tempfile.gettempdir())
+# 大视频转码需要同时容纳原片和输出文件。生产机的 /data 是大容量数据盘，
+# 优先使用它，避免把系统盘 /tmp 写满；本地开发环境仍回退到系统临时目录。
+DEFAULT_UPLOAD_WORK_ROOT = (
+    "/data/ragflow-video-transcode-work"
+    if os.path.isdir("/data/ragflow-video-transcode-work")
+    else tempfile.gettempdir()
+)
+UPLOAD_TEMP_DIR = os.getenv("UPLOAD_TEMP_DIR", DEFAULT_UPLOAD_WORK_ROOT)
 CHUNK_EXPIRY_SECONDS = 3600 * 24  # 分块24小时过期
 
-temp_dir = tempfile.gettempdir()
-UPLOAD_FOLDER = os.path.join(temp_dir, "uploads")
+UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", os.path.join(UPLOAD_TEMP_DIR, "uploads"))
 ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "jpg", "jpeg", "png", "bmp", "txt", "md", "html", "csv", "mp4", "webm", "mov"}
 IMAGE_EXTES = {"jpg", "jpeg", "png", "bmp"}
 VIDEO_EXTES = {"mp4", "webm", "mov"}
@@ -331,21 +337,18 @@ def delete_file(file_id):
                 parent_id = file.get("parent_id")
                 if parent_id and minio_client.bucket_exists(parent_id):
                     try:
-                        # 删除原始文件（source）
-                        minio_client.remove_object(parent_id, file["location"])
-                        print(f"从MinIO删除原始文件成功: {parent_id}/{file['location']}")
+                        # 按 file_id 清理整个目录，确保 source、pages、视频原片备份
+                        # 和其他派生对象不会成为 MinIO 孤儿数据。
+                        objects = minio_client.list_objects(
+                            parent_id,
+                            prefix=f"{file_id}/",
+                            recursive=True,
+                        )
+                        for obj in objects:
+                            minio_client.remove_object(parent_id, obj.object_name)
+                            print(f"从MinIO删除文件对象成功: {parent_id}/{obj.object_name}")
                     except Exception as e:
-                        print(f"从MinIO删除原始文件失败: {parent_id}/{file['location']} - {str(e)}")
-
-                    # 删除所有页面图片（pages）
-                    for page_mapping in page_mappings:
-                        page_location = page_mapping.get("location")
-                        if page_location:
-                            try:
-                                minio_client.remove_object(parent_id, page_location)
-                                print(f"从MinIO删除页面图片成功: {parent_id}/{page_location}")
-                            except Exception as e:
-                                print(f"从MinIO删除页面图片失败: {parent_id}/{page_location} - {str(e)}")
+                        print(f"从MinIO删除文件目录失败: {parent_id}/{file_id}/ - {str(e)}")
                 else:
                     print(f"存储桶不存在，跳过MinIO删除操作: {parent_id}")
 
@@ -498,21 +501,16 @@ def batch_delete_files(file_ids):
 
                 if parent_id and minio_client.bucket_exists(parent_id):
                     try:
-                        # 删除原始文件（source）
-                        minio_client.remove_object(parent_id, file["location"])
-                        print(f"从MinIO删除原始文件成功: {parent_id}/{file['location']}")
+                        objects = minio_client.list_objects(
+                            parent_id,
+                            prefix=f"{file['id']}/",
+                            recursive=True,
+                        )
+                        for obj in objects:
+                            minio_client.remove_object(parent_id, obj.object_name)
+                            print(f"从MinIO批量删除文件对象成功: {parent_id}/{obj.object_name}")
                     except Exception as e:
-                        print(f"从MinIO删除原始文件失败: {parent_id}/{file['location']} - {str(e)}")
-
-                    # 删除所有页面图片（pages）
-                    for page_mapping in file_info["pages"]:
-                        page_location = page_mapping.get("location")
-                        if page_location:
-                            try:
-                                minio_client.remove_object(parent_id, page_location)
-                                print(f"从MinIO删除页面图片成功: {parent_id}/{page_location}")
-                            except Exception as e:
-                                print(f"从MinIO删除页面图片失败: {parent_id}/{page_location} - {str(e)}")
+                        print(f"从MinIO批量删除文件目录失败: {parent_id}/{file['id']}/ - {str(e)}")
 
                 # 删除document存储的文件
                 for doc_mapping in file_info["documents"]:
@@ -585,11 +583,15 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 safe_name = f"file_{get_uuid()[:8]}"
 
             filename = safe_name + ext.lower()
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file_id = None
+            minio_client = None
+            upload_work_dir = None
 
             try:
-                # 1. 保存文件到本地临时目录
+                # 每个文件使用独立临时目录，避免两个老师同时上传同名文件时互相覆盖。
                 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                upload_work_dir = tempfile.mkdtemp(prefix="ragflow-upload-", dir=UPLOAD_FOLDER)
+                filepath = os.path.join(upload_work_dir, filename)
                 file.save(filepath)
                 print(f"文件已保存到临时目录: {filepath}")
 
@@ -597,10 +599,20 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 file_ext = ext.lower().lstrip('.')
                 is_image = file_ext in IMAGE_EXTES
                 is_video = file_ext in VIDEO_EXTES
+                stored_filepath = filepath
+                video_optimization = None
 
                 if is_video:
-                    # 视频文件：直接存储原始文件，不做转换
-                    print(f"检测到视频文件: {filename}，跳过 PDF/图片转换")
+                    # 视频必须先在服务器端完成转码和校验，再写入 MinIO/数据库。
+                    # optimize_video_for_web 不会修改原文件，原文件稍后会作为备份保存。
+                    print(f"检测到视频文件: {filename}，开始优化浏览器播放格式")
+                    video_optimization = optimize_video_for_web(Path(filepath), filename)
+                    stored_filepath = str(video_optimization.path)
+                    filename = video_optimization.filename
+                    print(
+                        f"视频优化完成: {filename}, encoder={video_optimization.encoder or '无需转码'}, "
+                        f"size={video_optimization.original_size}->{video_optimization.optimized_size}"
+                    )
                     page_images = []  # 视频没有页面图片
 
                 elif is_image:
@@ -666,7 +678,25 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                     minio_client.set_bucket_policy(parent_id, json.dumps(policy))
                     print(f"设置 MinIO 存储桶公共访问权限: {parent_id}")
 
-                # 5.1 上传原始文件到 source/
+                # 5.1 对发生转码的视频保留原文件，便于以后恢复更高清版本。
+                if video_optimization and video_optimization.transcoded:
+                    original_backup_location = f"{file_id}/source-original/{safe_name}{ext.lower()}"
+                    original_content_type = {
+                        '.mp4': 'video/mp4',
+                        '.webm': 'video/webm',
+                        '.mov': 'video/quicktime',
+                    }.get(ext.lower(), 'application/octet-stream')
+                    with open(filepath, "rb") as original_data:
+                        minio_client.put_object(
+                            bucket_name=parent_id,
+                            object_name=original_backup_location,
+                            data=original_data,
+                            length=os.path.getsize(filepath),
+                            content_type=original_content_type,
+                        )
+                    print(f"视频原文件备份已上传: {parent_id}/{original_backup_location}")
+
+                # 5.2 上传正式文件到 source/（视频为校验通过后的 MP4）
                 source_location = f"{file_id}/source/{filename}"
 
                 # 根据文件扩展名确定 Content-Type
@@ -685,18 +715,18 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 }
                 content_type = content_type_map.get(ext, 'application/octet-stream')
 
-                with open(filepath, "rb") as file_data:
+                with open(stored_filepath, "rb") as file_data:
                     minio_client.put_object(
                         bucket_name=parent_id,
                         object_name=source_location,
                         data=file_data,
-                        length=os.path.getsize(filepath),
+                        length=os.path.getsize(stored_filepath),
                         content_type=content_type,
                         metadata={'Content-Disposition': 'inline'}  # 设置为inline，浏览器会预览
                     )
                 print(f"原始文件已上传: {parent_id}/{source_location}, Content-Type: {content_type}")
 
-                # 5.2 上传页面图片到 pages/
+                # 5.3 上传页面图片到 pages/
                 from io import BytesIO
                 page_records = []
                 for idx, (img_bytes, width, height) in enumerate(page_images, start=1):
@@ -743,7 +773,7 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                     "created_by": user_id,
                     "name": filename,
                     "type": filetype,
-                    "size": os.path.getsize(filepath),
+                    "size": os.path.getsize(stored_filepath),
                     "location": source_location,
                     "source_type": FileSource.LOCAL.value,
                     "create_time": current_time,
@@ -753,6 +783,7 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 }
 
                 conn = get_db_connection()
+                cursor = None
                 try:
                     cursor = conn.cursor()
 
@@ -781,6 +812,7 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                         "size": file_record["size"],
                         "type": filetype,
                         "pages": len(page_images),
+                        "video_optimized": bool(video_optimization and video_optimization.transcoded),
                         "status": "success"
                     })
 
@@ -788,15 +820,18 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                     conn.rollback()
                     print(f"数据库操作失败: {str(e)}")
                     
-                    # 清理 MinIO 中已上传的文件
-                    cleanup_minio_files(minio_client, parent_id, file_id)
-                    
                     raise
                 finally:
-                    cursor.close()
-                    conn.close()
+                    if cursor:
+                        cursor.close()
+                    if conn:
+                        conn.close()
 
             except Exception as e:
+                # file_id 是随机且唯一的，失败时删除整个前缀，可同时清掉正式文件、
+                # 页面、原始视频备份以及未来可能增加的派生文件。
+                if file_id and minio_client and parent_id:
+                    cleanup_minio_files(minio_client, parent_id, file_id)
                 results.append({
                     "name": filename,
                     "error": str(e),
@@ -804,9 +839,9 @@ def upload_files_to_server(files, parent_id=None, user_id=None):
                 })
                 print(f"文件上传过程中出错: {filename}, 错误: {str(e)}")
             finally:
-                # 删除临时文件
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+                # 删除本次上传的独立临时目录（含原文件及转码文件）。
+                if upload_work_dir and os.path.isdir(upload_work_dir):
+                    shutil.rmtree(upload_work_dir, ignore_errors=True)
         else:
             results.append({
                 "name": file.filename if file else "unknown",
@@ -831,14 +866,8 @@ def cleanup_minio_files(minio_client, bucket, file_id):
         file_id: 文件ID
     """
     try:
-        # 删除 source 目录
-        objects = minio_client.list_objects(bucket, prefix=f"{file_id}/source/", recursive=True)
-        for obj in objects:
-            minio_client.remove_object(bucket, obj.object_name)
-            print(f"已清理: {bucket}/{obj.object_name}")
-        
-        # 删除 pages 目录
-        objects = minio_client.list_objects(bucket, prefix=f"{file_id}/pages/", recursive=True)
+        # 删除该文件的整个对象前缀，包括 source、pages、source-original 等。
+        objects = minio_client.list_objects(bucket, prefix=f"{file_id}/", recursive=True)
         for obj in objects:
             minio_client.remove_object(bucket, obj.object_name)
             print(f"已清理: {bucket}/{obj.object_name}")
@@ -895,7 +924,7 @@ def handle_chunk_upload(chunk_file, chunk_index, total_chunks, upload_id, file_n
         return {"code": 500, "message": f"分块上传失败: {str(e)}"}
 
 
-def merge_chunks(upload_id, file_name, total_chunks, parent_id=None):
+def merge_chunks(upload_id, file_name, total_chunks, parent_id=None, user_id=None):
     """
     合并文件分块
 
@@ -956,7 +985,11 @@ def merge_chunks(upload_id, file_name, total_chunks, parent_id=None):
                         self.file.seek(0)  # 重置文件指针
 
             mock_file = MockFileStorage(file_obj, file_name)
-            result = upload_files_to_server([mock_file])
+            result = upload_files_to_server(
+                [mock_file],
+                parent_id=parent_id or upload_info.get("parent_id") or user_id,
+                user_id=user_id,
+            )
 
         # 更新状态为已完成
         r.hset(f"upload:{upload_id}:info", "status", "completed")
