@@ -1,6 +1,6 @@
 # 部署说明（RAGFlow-Plus 生产环境）
 
-本文档说明如何把本仓库的代码部署到生产节点 **songsen**（10.18.21.55）。
+本文档说明如何把本仓库的代码部署到生产节点 **shiyanshi**（10.18.21.47）。
 
 > 适用对象：需要发布代码、排查线上问题、或把环境迁移到新机器的维护者。
 > 本地开发启动方式见 `CLAUDE.md` 的「Development Commands」章节，本文只讲**生产部署**。
@@ -12,10 +12,10 @@
 ```
 开发机 (Mac)
    │  ./deploy.sh <组件>
-   │  ssh songsen (10.18.21.55, 用户 user)
+   │  ssh shiyanshi (10.18.21.47, 用户 user)
    ▼
-songsen —— 应用 + 数据节点，代码在 /home/user/jianhuasuo/lingji
-   ├─ 后端  conda 环境 lingji (/home/user/anaconda3/envs/lingji, Python 3.10)
+shiyanshi —— 应用 + 数据节点，代码在 /home/user/jianhuasuo/lingji
+   ├─ 后端  conda 环境 lingji (/home/user/gsl/miniconda3/envs/lingji, Python 3.10)
    │     ├─ ragflow-api         (9380)  systemd 守护 → python -m api.ragflow_server
    │     └─ ragflow-management  (5000)  systemd 守护 → python app.py (management/server)
    ├─ 前端  nginx 托管
@@ -40,26 +40,27 @@ songsen —— 应用 + 数据节点，代码在 /home/user/jianhuasuo/lingji
 
 这些只需配置一次，之后日常部署不用再管。
 
-### 1. SSH 免密别名 `songsen`
+### 1. SSH 免密别名 `shiyanshi`
 
-在本机 `~/.ssh/config` 里加：
+本机 `~/.ssh/config` 已配置别名：
 
 ```
-Host songsen
-    HostName 10.18.21.55
+Host shiyanshi
+    HostName 10.18.21.47
     User user
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/id_ed25519_shiyanshi
+    IdentitiesOnly yes
 ```
 
-验证：`ssh songsen "echo ok"` 能直接返回，不要求输密码。
+验证：`ssh shiyanshi "echo ok"` 能直接返回，不要求输密码。
 
 ### 2. sudo 密码文件 `.deploy.env`（已 git 忽略）
 
 `deploy.sh` 重启 systemd / reload nginx 需要 root 权限，通过 `sudo -S` 从 ssh 远程执行。
-把 sudo 密码写进仓库根目录的 `.deploy.env`：
+把 shiyanshi 的 sudo 密码写进仓库根目录的 `.deploy.env`：
 
 ```bash
-echo 'SONGSEN_SUDO_PASS=你的sudo密码' > .deploy.env
+echo 'SHIYANSHI_SUDO_PASS=你的sudo密码' > .deploy.env
 ```
 
 > ⚠️ 该文件已加入 `.gitignore`，**绝不能提交到仓库**，也别把明文密码写进任何文档。
@@ -67,10 +68,10 @@ echo 'SONGSEN_SUDO_PASS=你的sudo密码' > .deploy.env
 
 ### 3. 后端 Python 依赖
 
-新增 pip 依赖时，`deploy.sh` **不会**自动装。需要在 songsen 上手动执行：
+新增 pip 依赖时，`deploy.sh` **不会**自动装。需要在 shiyanshi 上手动执行：
 
 ```bash
-ssh songsen "source /home/user/anaconda3/etc/profile.d/conda.sh && conda activate lingji && pip install <包名>"
+ssh shiyanshi "/home/user/gsl/miniconda3/envs/lingji/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ <包名>"
 ```
 
 ### 4. 数据库 / 存储凭据
@@ -79,7 +80,7 @@ ssh songsen "source /home/user/anaconda3/etc/profile.d/conda.sh && conda activat
 需要查库时用（MySQL 走容器）：
 
 ```bash
-ssh songsen "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow -e '<SQL>'"
+ssh shiyanshi "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow -e '<SQL>'"
 ```
 
 ---
@@ -93,6 +94,8 @@ ssh songsen "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow 
 ./deploy.sh mgmt-web     # 后台前端：npm build → 推 management/web/dist → reload nginx
 ./deploy.sh api          # 前台后端：推 api/ → restart ragflow-api
 ./deploy.sh mgmt-server  # 后台后端：推 management/server/ → restart ragflow-management
+./deploy.sh services     # 安装/更新两个 systemd service、启动脚本并重启后端
+./deploy.sh nginx        # 上传 Nginx 配置 → nginx -t → reload nginx
 ./deploy.sh infra        # 依赖目录 rag/ graphrag/ conf/ → restart ragflow-api（改了才需要）
 ./deploy.sh all          # 以上四个一起（web + mgmt-web + api + mgmt-server）
 ```
@@ -110,7 +113,9 @@ ssh songsen "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow 
 ### 脚本做了什么
 
 - **前端**（`web` / `mgmt-web`）：本地 `npm run build` → `rsync --delete` 推 dist（`--delete` 会清掉旧的 hash 文件名）→ `systemctl reload nginx`。
+- **Nginx**（`nginx`）：上传 `deploy/nginx/ragflow-plus.conf` → 备份旧配置 → `nginx -t` → reload；检查失败时自动恢复旧配置。
 - **后端**（`api` / `mgmt-server`）：`rsync` 增量覆盖代码（排除 `__pycache__` / `*.pyc`，mgmt-server 另排除 `logs`）→ `systemctl restart`。
+- **后端日志**：每次 systemd 启动都会创建一个带时间戳的新日志文件，分别写入 `api/logs/start_*.log` 和 `management/server/logs/start_*.log`；部署 API 代码时会排除远端 `api/logs`，避免覆盖日志。
 - **infra**：`rsync` 推 `rag/` `graphrag/` `conf/` → `restart ragflow-api`（api 运行时依赖这三处 import + 读配置，日常不必重推）。
 
 脚本带 `set -euo pipefail`，任何一步失败会立即停止并返回非零退出码。
@@ -123,18 +128,18 @@ ssh songsen "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow 
 
 ```bash
 # 1. 服务是否 active
-ssh songsen "systemctl is-active ragflow-api ragflow-management nginx"
+ssh shiyanshi "systemctl is-active ragflow-api ragflow-management nginx"
 
 # 2. 后端 HTTP 是否真的在响应
-ssh songsen "curl -s -o /dev/null -w '%{http_code}' http://localhost:9380/v1/system/version"  # 期望 200
-ssh songsen "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/"                    # 期望 404（无根路由，能响应即表示 Flask 起来了）
+ssh shiyanshi "curl -s -o /dev/null -w '%{http_code}' http://localhost:9380/v1/system/version"  # 期望 200
+ssh shiyanshi "curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/"                    # 期望 404（无根路由，能响应即表示 Flask 起来了）
 
 # 3. 看启动日志有无 Traceback
-ssh songsen "ls -t /home/user/jianhuasuo/lingji/logs/ | head"
-ssh songsen "tail -n 30 /home/user/jianhuasuo/lingji/logs/ragflow_api_<最新时间戳>.log"
+ssh shiyanshi "journalctl -u ragflow-api -n 50 --no-pager"
+ssh shiyanshi "journalctl -u ragflow-management -n 50 --no-pager"
 ```
 
-- api 正常启动会打印 `Running on http://10.18.21.55:9380`。
+- api 正常启动会打印 `Running on http://10.18.21.47:9380`。
 - 日志尾部出现 `401 Unauthorized` 是正常的鉴权拒绝，不是启动错误。
 
 ---
@@ -143,22 +148,22 @@ ssh songsen "tail -n 30 /home/user/jianhuasuo/lingji/logs/ragflow_api_<最新时
 
 ```bash
 # 查看服务状态 / 日志
-ssh songsen "systemctl status ragflow-api ragflow-management"
-ssh songsen "journalctl -u ragflow-api -n 50 --no-pager"
+ssh shiyanshi "systemctl status ragflow-api ragflow-management"
+ssh shiyanshi "journalctl -u ragflow-api -n 50 --no-pager"
 
 # 手动重启（等价于 deploy.sh 里做的）
-ssh songsen "echo '密码' | sudo -S systemctl restart ragflow-api"
+ssh shiyanshi "sudo systemctl restart ragflow-api"
 
 # 看数据库 / ES / MinIO
-ssh songsen "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow -e '<SQL>'"
-ssh songsen "curl -s -u elastic:infini_rag_flow 'http://localhost:1200/_cat/indices?v'"
+ssh shiyanshi "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flow -e '<SQL>'"
+ssh shiyanshi "curl -s -u elastic:infini_rag_flow 'http://localhost:1200/_cat/indices?v'"
 ```
 
 ---
 
 ## 六、注意事项
 
-1. **后端依赖不随部署走**：新增 pip 包必须在 songsen 手动装（见「二、3」）。
+1. **后端依赖不随部署走**：新增 pip 包必须在 shiyanshi 手动装，并使用清华 PyPI 镜像（见「二、3」）。
 2. **infra 不常用**：`api` 运行时依赖 `rag/` `graphrag/` `conf/`，日常改业务代码不需要重推这三处，只有改了解析器、检索逻辑或配置模板时才用 `./deploy.sh infra`。
 3. **前端要清旧产物**：dist 用 `--delete` 清旧 hash，避免浏览器缓存命中的旧 JS；后端增量覆盖**不加** `--delete`，避免误删日志等本地文件。
 4. **GPU / LLM 服务不在本次部署范围**：embedding / rerank / OCR 跑在另一台 `lingji`（10.15.25.201），chat 走 siliconflow 外网 API。改这些要在对应机器上操作。

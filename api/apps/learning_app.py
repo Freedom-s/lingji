@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import time
+from datetime import datetime
 from flask import request
 from flask_login import login_required, current_user
 
@@ -256,10 +257,20 @@ def update_flashcard_progress(doc_id):
 
         if existing:
             existing.status = status
+            now = datetime.now()
+            existing.update_time = int(now.timestamp())
+            existing.update_date = now.strftime("%Y-%m-%d %H:%M:%S")
             existing.save()
         else:
+            now = datetime.now()
+            now_timestamp = int(now.timestamp())
+            now_date = now.strftime("%Y-%m-%d %H:%M:%S")
             StudentCardProgress.create(
                 id=get_uuid(),
+                create_time=now_timestamp,
+                create_date=now_date,
+                update_time=now_timestamp,
+                update_date=now_date,
                 student_id=current_user.id,
                 doc_id=doc_id,
                 card_index=card_index,
@@ -340,8 +351,15 @@ def submit_quiz_result(doc_id):
         explanations = question.get("explanations", {})
 
         # 记录作答
+        now = datetime.now()
+        now_timestamp = int(now.timestamp())
+        now_date = now.strftime("%Y-%m-%d %H:%M:%S")
         StudentQuizResult.create(
             id=get_uuid(),
+            create_time=now_timestamp,
+            create_date=now_date,
+            update_time=now_timestamp,
+            update_date=now_date,
             student_id=current_user.id,
             doc_id=doc_id,
             question_index=question_index,
@@ -815,10 +833,20 @@ def save_note(doc_id):
 
         if existing:
             existing.content = content
+            now = datetime.now()
+            existing.update_time = int(now.timestamp())
+            existing.update_date = now.strftime("%Y-%m-%d %H:%M:%S")
             existing.save()
         else:
+            now = datetime.now()
+            now_timestamp = int(now.timestamp())
+            now_date = now.strftime("%Y-%m-%d %H:%M:%S")
             StudentNote.create(
                 id=get_uuid(),
+                create_time=now_timestamp,
+                create_date=now_date,
+                update_time=now_timestamp,
+                update_date=now_date,
                 student_id=current_user.id,
                 doc_id=doc_id,
                 page_number=page_number,

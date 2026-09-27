@@ -56,6 +56,16 @@ def _answer_text(question, answer):
     return f"{answer}. {option_text}" if option_text else str(answer)
 
 
+def _answer_explanation(question, answer):
+    if not isinstance(question, dict) or not answer:
+        return ""
+    explanations = question.get("explanations")
+    if not isinstance(explanations, dict):
+        return ""
+    answer_key = str(answer).strip().upper()
+    return str(explanations.get(answer_key) or explanations.get(str(answer)) or "")
+
+
 def _format_dashboard_time(value):
     if not value:
         return ""
@@ -159,29 +169,76 @@ def get_active_students_chart(tenant_id: str, time_range: str = "24h"):
 
         # 构建时间筛选条件
         if time_range == "24h":
-            time_filter = f"DATE_FORMAT(c.create_date, '{time_unit}')"
-            date_condition = f"c.create_date >= DATE_SUB(NOW(), INTERVAL {hours} HOUR)"
-            start_time = datetime.now() - timedelta(hours=hours)
+            activity_date_condition = f"activity.activity_time >= DATE_SUB(NOW(), INTERVAL {hours} HOUR)"
+            start_time = datetime.now().replace(minute=0, second=0, microsecond=0) - timedelta(hours=hours - 1)
         else:
-            time_filter = f"DATE_FORMAT(c.create_date, '{time_unit}')"
-            date_condition = f"c.create_date >= DATE_SUB(CURDATE(), INTERVAL {days} DAY)"
+            activity_date_condition = f"activity.activity_time >= DATE_SUB(CURDATE(), INTERVAL {days - 1} DAY)"
             start_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days-1)
 
-        # 查询活跃学生数（按时间分组）- 改为按conversation统计
+        # 查询活跃学生数（按时间分组）。当天看过视频、记过笔记、答过闪卡、
+        # 完成答题或产生过对话，均算活跃；同一时间桶内重复活动只计 1 人。
         query = f"""
             SELECT
-                {time_filter} as time_label,
-                COUNT(DISTINCT c.user_id) as active_count
-            FROM conversation c
-            JOIN user_tenant ut ON c.user_id = ut.user_id
-            WHERE ut.tenant_id = %s
-                AND ut.role = 'normal'
-                AND ut.status = '1'
-                AND {date_condition}
+                DATE_FORMAT(activity.activity_time, '{time_unit}') AS time_label,
+                COUNT(DISTINCT activity.user_id) as active_count
+            FROM (
+                SELECT
+                    sqr.student_id AS user_id,
+                    COALESCE(sqr.create_date, FROM_UNIXTIME(sqr.create_time)) AS activity_time
+                FROM student_quiz_result sqr
+                JOIN document doc ON doc.id = sqr.doc_id
+                JOIN knowledgebase kb ON kb.id = doc.kb_id
+                WHERE kb.tenant_id = %s
+
+                UNION ALL
+
+                SELECT
+                    conv.user_id AS user_id,
+                    COALESCE(conv.update_date, conv.create_date, FROM_UNIXTIME(conv.update_time), FROM_UNIXTIME(conv.create_time)) AS activity_time
+                FROM conversation conv
+                JOIN dialog d ON d.id = conv.dialog_id
+                WHERE d.tenant_id = %s
+
+                UNION ALL
+
+                SELECT
+                    svp.student_id AS user_id,
+                    COALESCE(svp.update_date, svp.create_date, FROM_UNIXTIME(svp.update_time), FROM_UNIXTIME(svp.create_time)) AS activity_time
+                FROM student_video_progress svp
+                JOIN document doc ON doc.id = svp.doc_id
+                JOIN knowledgebase kb ON kb.id = doc.kb_id
+                WHERE kb.tenant_id = %s
+
+                UNION ALL
+
+                SELECT
+                    sn.student_id AS user_id,
+                    COALESCE(sn.update_date, sn.create_date, FROM_UNIXTIME(sn.update_time), FROM_UNIXTIME(sn.create_time)) AS activity_time
+                FROM student_note sn
+                JOIN document doc ON doc.id = sn.doc_id
+                JOIN knowledgebase kb ON kb.id = doc.kb_id
+                WHERE kb.tenant_id = %s
+
+                UNION ALL
+
+                SELECT
+                    scp.student_id AS user_id,
+                    COALESCE(scp.update_date, scp.create_date, FROM_UNIXTIME(scp.update_time), FROM_UNIXTIME(scp.create_time)) AS activity_time
+                FROM student_card_progress scp
+                JOIN document doc ON doc.id = scp.doc_id
+                JOIN knowledgebase kb ON kb.id = doc.kb_id
+                WHERE kb.tenant_id = %s
+            ) activity
+            JOIN user_tenant ut
+              ON ut.user_id = activity.user_id
+             AND ut.tenant_id = %s
+             AND ut.role = 'normal'
+             AND ut.status = '1'
+            WHERE {activity_date_condition}
             GROUP BY time_label
             ORDER BY time_label
         """
-        cursor.execute(query, (tenant_id,))
+        cursor.execute(query, (tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, tenant_id))
         results = cursor.fetchall()
 
         # 将查询结果转为字典，方便查找
@@ -410,7 +467,13 @@ def get_class_activity_ranking(tenant_id: str, limit: int = 10, time_range: str 
         conn.close()
 
 
-def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str = "", limit: int = 10):
+def get_learning_insights(
+    tenant_id: str,
+    time_range: str = "7d",
+    class_id: str = "",
+    progress_id: str = "",
+    limit: int = 10,
+):
     """教师端学习洞察：学生答题/提问活跃度与高频错题。"""
     normalized_range = _normalize_time_range(time_range)
     limit = min(max(int(limit), 1), 50)
@@ -418,6 +481,23 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
     cursor = conn.cursor(dictionary=True)
 
     try:
+        selected_progress = None
+        if progress_id:
+            cursor.execute(
+                """
+                SELECT wp.id, wp.class_id, wp.name, wp.week_start, wp.week_end, c.name AS class_name
+                FROM weekly_progress wp
+                JOIN class c ON c.id = wp.class_id
+                WHERE wp.id = %s AND c.tenant_id = %s AND c.status = '1' AND wp.status = '1'
+                """,
+                (progress_id, tenant_id),
+            )
+            selected_progress = cursor.fetchone()
+            if not selected_progress:
+                return False, "周进度不存在或不属于当前老师"
+            # 学习洞察按周统计，不再把周进度所属班级作为额外限制。
+            class_id = ""
+
         cursor.execute(
             """
             SELECT id, name
@@ -463,9 +543,34 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
         })
 
         wrong_questions = []
+        all_questions = []
         if student_ids:
             placeholders = ",".join(["%s"] * len(student_ids))
-            quiz_date_condition = _date_condition("sqr.create_date", normalized_range)
+            quiz_scope_condition = ""
+            quiz_scope_params = []
+            if selected_progress:
+                quiz_scope_condition = """
+                  AND EXISTS (
+                      SELECT 1
+                      FROM weekly_progress_doc wpd
+                      JOIN weekly_progress wp ON wp.id = wpd.progress_id
+                      JOIN class c ON c.id = wp.class_id
+                      WHERE wpd.doc_id = sqr.doc_id
+                        AND c.tenant_id = %s
+                        AND c.status = '1'
+                        AND wp.status = '1'
+                        AND wp.week_start = %s
+                        AND wp.week_end = %s
+                  )
+                """
+                quiz_scope_params.extend([
+                    tenant_id,
+                    selected_progress["week_start"],
+                    selected_progress["week_end"],
+                ])
+                quiz_date_condition = "1 = 1"
+            else:
+                quiz_date_condition = _date_condition("sqr.create_date", normalized_range)
             cursor.execute(
                 f"""
                 SELECT
@@ -479,10 +584,11 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
                 JOIN knowledgebase kb ON kb.id = doc.kb_id
                 WHERE kb.tenant_id = %s
                   AND sqr.student_id IN ({placeholders})
+                  {quiz_scope_condition}
                   AND {quiz_date_condition}
                 GROUP BY sqr.student_id
                 """,
-                (tenant_id, *student_ids),
+                (tenant_id, *student_ids, *quiz_scope_params),
             )
             for row in cursor.fetchall():
                 stats = student_stats[row["student_id"]]
@@ -491,7 +597,15 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
                 stats["wrong_answers"] = int(row.get("wrong_answers") or 0)
                 stats["last_active_at"] = row.get("last_active_at")
 
-            conversation_date_condition = _date_condition("conv.update_date", normalized_range)
+            conversation_params = []
+            if selected_progress:
+                conversation_date_condition = "conv.update_date >= %s AND conv.update_date < DATE_ADD(%s, INTERVAL 1 DAY)"
+                conversation_params.extend([
+                    selected_progress["week_start"],
+                    selected_progress["week_end"],
+                ])
+            else:
+                conversation_date_condition = _date_condition("conv.update_date", normalized_range)
             cursor.execute(
                 f"""
                 SELECT conv.user_id, conv.message, conv.update_date
@@ -501,7 +615,7 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
                   AND conv.user_id IN ({placeholders})
                   AND {conversation_date_condition}
                 """,
-                (tenant_id, *student_ids),
+                (tenant_id, *student_ids, *conversation_params),
             )
             for row in cursor.fetchall():
                 stats = student_stats[row["user_id"]]
@@ -513,6 +627,11 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
                 if active_at and (not stats["last_active_at"] or active_at > stats["last_active_at"]):
                     stats["last_active_at"] = active_at
 
+            question_having = "" if selected_progress else "HAVING wrong_count > 0"
+            question_limit = "" if selected_progress else "LIMIT %s"
+            question_params = (tenant_id, *student_ids, *quiz_scope_params)
+            if not selected_progress:
+                question_params += (limit,)
             cursor.execute(
                 f"""
                 SELECT
@@ -527,28 +646,87 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
                 JOIN knowledgebase kb ON kb.id = doc.kb_id
                 WHERE kb.tenant_id = %s
                   AND sqr.student_id IN ({placeholders})
+                  {quiz_scope_condition}
                   AND {quiz_date_condition}
                 GROUP BY sqr.doc_id, sqr.question_index, doc.name
-                HAVING wrong_count > 0
+                {question_having}
                 ORDER BY wrong_count DESC, attempt_count DESC
-                LIMIT %s
+                {question_limit}
                 """,
-                (tenant_id, *student_ids, limit),
+                question_params,
             )
-            wrong_rows = cursor.fetchall()
-            wrong_doc_ids = list({str(row["doc_id"]) for row in wrong_rows})
+            question_rows = cursor.fetchall()
+            wrong_rows = (
+                [row for row in question_rows if int(row.get("wrong_count") or 0) > 0][:limit]
+                if selected_progress
+                else question_rows
+            )
             quiz_lookup = {}
-            if wrong_doc_ids:
-                doc_placeholders = ",".join(["%s"] * len(wrong_doc_ids))
+            if selected_progress:
                 cursor.execute(
-                    f"""
-                    SELECT doc_id, content
-                    FROM document_generation
-                    WHERE generation_type = 'quiz' AND doc_id IN ({doc_placeholders})
+                    """
+                    SELECT wpd.doc_id, d.name AS document_name, dg.content
+                    FROM weekly_progress_doc wpd
+                    JOIN weekly_progress wp ON wp.id = wpd.progress_id
+                    JOIN class c ON c.id = wp.class_id
+                    JOIN document d ON d.id = wpd.doc_id
+                    JOIN document_generation dg
+                      ON dg.doc_id = wpd.doc_id AND dg.generation_type = 'quiz'
+                    WHERE c.tenant_id = %s
+                      AND c.status = '1'
+                      AND wp.status = '1'
+                      AND wp.week_start = %s
+                      AND wp.week_end = %s
+                    GROUP BY wpd.doc_id, d.name, dg.content
+                    ORDER BY d.name ASC
                     """,
-                    tuple(wrong_doc_ids),
+                    (
+                        tenant_id,
+                        selected_progress["week_start"],
+                        selected_progress["week_end"],
+                    ),
                 )
-                quiz_lookup = _build_quiz_lookup(cursor.fetchall())
+                progress_doc_rows = cursor.fetchall()
+                quiz_lookup = _build_quiz_lookup(progress_doc_rows)
+                stats_lookup = {
+                    (str(row["doc_id"]), str(row["question_index"])): row
+                    for row in question_rows
+                }
+                for doc_row in progress_doc_rows:
+                    for position, question in enumerate(_decode_json_list(doc_row.get("content"))):
+                        if not isinstance(question, dict):
+                            continue
+                        question_id = str(question.get("id", position))
+                        stat = stats_lookup.get((str(doc_row["doc_id"]), question_id))
+                        if not stat:
+                            stat = stats_lookup.get((str(doc_row["doc_id"]), str(position)))
+                        attempt_count = int(stat.get("attempt_count") or 0) if stat else 0
+                        wrong_count = int(stat.get("wrong_count") or 0) if stat else 0
+                        correct = question.get("correct", "")
+                        all_questions.append({
+                            "doc_id": doc_row["doc_id"],
+                            "document_name": doc_row.get("document_name") or "未命名课件",
+                            "question_index": stat["question_index"] if stat else question.get("id", position),
+                            "question": question.get("question") or f"第 {position + 1} 题",
+                            "correct_answer": _answer_text(question, correct) if correct else "暂无答案",
+                            "attempt_count": attempt_count,
+                            "wrong_count": wrong_count,
+                            "wrong_student_count": int(stat.get("wrong_student_count") or 0) if stat else 0,
+                            "wrong_rate": round(wrong_count / attempt_count * 100) if attempt_count else 0,
+                        })
+            else:
+                wrong_doc_ids = list({str(row["doc_id"]) for row in wrong_rows})
+                if wrong_doc_ids:
+                    doc_placeholders = ",".join(["%s"] * len(wrong_doc_ids))
+                    cursor.execute(
+                        f"""
+                        SELECT doc_id, content
+                        FROM document_generation
+                        WHERE generation_type = 'quiz' AND doc_id IN ({doc_placeholders})
+                        """,
+                        tuple(wrong_doc_ids),
+                    )
+                    quiz_lookup = _build_quiz_lookup(cursor.fetchall())
 
             for row in wrong_rows:
                 question = quiz_lookup.get((str(row["doc_id"]), str(row["question_index"])), {})
@@ -599,6 +777,7 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
             },
             "students": students,
             "wrong_questions": wrong_questions,
+            "all_questions": all_questions,
             "range": normalized_range,
         }
     except Exception as error:
@@ -608,7 +787,12 @@ def get_learning_insights(tenant_id: str, time_range: str = "7d", class_id: str 
         conn.close()
 
 
-def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str = "7d"):
+def get_student_learning_detail(
+    tenant_id: str,
+    student_id: str,
+    time_range: str = "7d",
+    progress_id: str = "",
+):
     """获取一名学生的逐题答题记录与实际提问内容。"""
     normalized_range = _normalize_time_range(time_range)
     conn = get_db_connection()
@@ -635,7 +819,50 @@ def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str
         if not student:
             return False, "学生不存在或不属于当前老师"
 
-        quiz_date_condition = _date_condition("sqr.create_date", normalized_range)
+        quiz_scope_condition = ""
+        quiz_scope_params = []
+        conversation_scope_params = []
+        if progress_id:
+            cursor.execute(
+                """
+                SELECT wp.id, wp.class_id, wp.week_start, wp.week_end
+                FROM weekly_progress wp
+                JOIN class c ON c.id = wp.class_id
+                WHERE wp.id = %s AND c.tenant_id = %s AND c.status = '1' AND wp.status = '1'
+                """,
+                (progress_id, tenant_id),
+            )
+            selected_progress = cursor.fetchone()
+            if not selected_progress:
+                return False, "周进度不存在或不属于当前老师"
+            quiz_scope_condition = """
+              AND EXISTS (
+                  SELECT 1
+                  FROM weekly_progress_doc wpd
+                  JOIN weekly_progress wp ON wp.id = wpd.progress_id
+                  JOIN class c ON c.id = wp.class_id
+                  WHERE wpd.doc_id = sqr.doc_id
+                    AND c.tenant_id = %s
+                    AND c.status = '1'
+                    AND wp.status = '1'
+                    AND wp.week_start = %s
+                    AND wp.week_end = %s
+              )
+            """
+            quiz_scope_params.extend([
+                tenant_id,
+                selected_progress["week_start"],
+                selected_progress["week_end"],
+            ])
+            quiz_date_condition = "1 = 1"
+            conversation_date_condition = "conv.update_date >= %s AND conv.update_date < DATE_ADD(%s, INTERVAL 1 DAY)"
+            conversation_scope_params.extend([
+                selected_progress["week_start"],
+                selected_progress["week_end"],
+            ])
+        else:
+            quiz_date_condition = _date_condition("sqr.create_date", normalized_range)
+            conversation_date_condition = _date_condition("conv.update_date", normalized_range)
         cursor.execute(
             f"""
             SELECT
@@ -651,11 +878,12 @@ def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str
             JOIN knowledgebase kb ON kb.id = doc.kb_id
             WHERE sqr.student_id = %s
               AND kb.tenant_id = %s
+              {quiz_scope_condition}
               AND {quiz_date_condition}
             ORDER BY sqr.create_date DESC
             LIMIT 300
             """,
-            (student_id, tenant_id),
+            (student_id, tenant_id, *quiz_scope_params),
         )
         attempt_rows = cursor.fetchall()
         doc_ids = list({str(row["doc_id"]) for row in attempt_rows})
@@ -688,7 +916,6 @@ def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str
                 "answered_at": _format_dashboard_time(row.get("create_date")),
             })
 
-        conversation_date_condition = _date_condition("conv.update_date", normalized_range)
         cursor.execute(
             f"""
             SELECT
@@ -704,7 +931,7 @@ def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str
               AND {conversation_date_condition}
             ORDER BY conv.update_date DESC
             """,
-            (student_id, tenant_id),
+            (student_id, tenant_id, *conversation_scope_params),
         )
         questions = []
         for conversation in cursor.fetchall():
@@ -741,6 +968,165 @@ def get_student_learning_detail(tenant_id: str, student_id: str, time_range: str
             },
             "quiz_attempts": quiz_attempts,
             "questions": questions,
+            "range": normalized_range,
+        }
+    except Exception as error:
+        return False, str(error)
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_wrong_question_detail(
+    tenant_id: str,
+    doc_id: str,
+    question_index: str,
+    class_id: str = "",
+    progress_id: str = "",
+    time_range: str = "7d",
+):
+    """获取一道错题的完整题目、聚合统计和学生作答明细。"""
+    normalized_range = _normalize_time_range(time_range)
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        selected_progress = None
+        if progress_id:
+            cursor.execute(
+                """
+                SELECT wp.id, wp.class_id, wp.week_start, wp.week_end
+                FROM weekly_progress wp
+                JOIN class c ON c.id = wp.class_id
+                WHERE wp.id = %s AND c.tenant_id = %s AND c.status = '1' AND wp.status = '1'
+                """,
+                (progress_id, tenant_id),
+            )
+            selected_progress = cursor.fetchone()
+            if not selected_progress:
+                return False, "周进度不存在或不属于当前老师"
+            # 错题详情与学习洞察保持一致，只按周统计所有班级的记录。
+            class_id = ""
+
+        membership_conditions = [
+            "uc.user_id = sqr.student_id",
+            "uc.role = 'student'",
+            "uc.status = '1'",
+            "c.tenant_id = %s",
+            "c.status = '1'",
+        ]
+        membership_params = [tenant_id]
+        if class_id:
+            membership_conditions.append("c.id = %s")
+            membership_params.append(class_id)
+
+        quiz_scope_params = []
+        quiz_scope_condition = ""
+        if selected_progress:
+            quiz_scope_condition = """
+              AND EXISTS (
+                  SELECT 1
+                  FROM weekly_progress_doc wpd
+                  JOIN weekly_progress wp ON wp.id = wpd.progress_id
+                  JOIN class c ON c.id = wp.class_id
+                  WHERE wpd.doc_id = sqr.doc_id
+                    AND c.tenant_id = %s
+                    AND c.status = '1'
+                    AND wp.status = '1'
+                    AND wp.week_start = %s
+                    AND wp.week_end = %s
+              )
+            """
+            quiz_scope_params.extend([
+                tenant_id,
+                selected_progress["week_start"],
+                selected_progress["week_end"],
+            ])
+            quiz_date_condition = "1 = 1"
+        else:
+            quiz_date_condition = _date_condition("sqr.create_date", normalized_range)
+        cursor.execute(
+            f"""
+            SELECT
+                sqr.id,
+                sqr.student_id,
+                u.nickname AS student_name,
+                u.email AS student_email,
+                sqr.student_answer,
+                sqr.is_correct,
+                sqr.create_date,
+                doc.name AS document_name
+            FROM student_quiz_result sqr
+            JOIN user u ON u.id = sqr.student_id
+            JOIN document doc ON doc.id = sqr.doc_id
+            JOIN knowledgebase kb ON kb.id = doc.kb_id
+            WHERE kb.tenant_id = %s
+              AND sqr.doc_id = %s
+              AND sqr.question_index = %s
+              {quiz_scope_condition}
+              AND {quiz_date_condition}
+              AND EXISTS (
+                  SELECT 1
+                  FROM user_class uc
+                  JOIN class c ON c.id = uc.class_id
+                  WHERE {' AND '.join(membership_conditions)}
+              )
+            ORDER BY sqr.create_date DESC
+            """,
+            (tenant_id, doc_id, question_index, *quiz_scope_params, *membership_params),
+        )
+        attempt_rows = cursor.fetchall()
+        if not attempt_rows:
+            return False, "错题不存在或不属于当前老师"
+
+        cursor.execute(
+            """
+            SELECT doc_id, content
+            FROM document_generation
+            WHERE generation_type = 'quiz' AND doc_id = %s
+            """,
+            (doc_id,),
+        )
+        quiz_lookup = _build_quiz_lookup(cursor.fetchall())
+        question = quiz_lookup.get((str(doc_id), str(question_index)), {})
+        question_data = question if isinstance(question, dict) else {}
+        correct = question_data.get("correct", "")
+        question_index_value = attempt_rows[0].get("question_index", question_index)
+        attempt_count = len(attempt_rows)
+        wrong_count = sum(1 for row in attempt_rows if not row.get("is_correct"))
+        wrong_student_ids = {
+            str(row["student_id"])
+            for row in attempt_rows
+            if not row.get("is_correct")
+        }
+
+        attempts = [
+            {
+                "id": row["id"],
+                "student_id": row["student_id"],
+                "student_name": row.get("student_name") or row.get("student_email") or "未命名学生",
+                "student_email": row.get("student_email") or "",
+                "student_answer": _answer_text(question_data, row.get("student_answer")),
+                "answer_explanation": _answer_explanation(question_data, row.get("student_answer")),
+                "is_correct": bool(row.get("is_correct")),
+                "answered_at": _format_dashboard_time(row.get("create_date")),
+            }
+            for row in attempt_rows
+        ]
+
+        return True, {
+            "doc_id": doc_id,
+            "document_name": attempt_rows[0].get("document_name") or "未命名课件",
+            "question_index": question_index_value,
+            "question": question_data.get("question") or f"历史题目 #{question_index}（题目内容已调整）",
+            "options": question_data.get("options") if isinstance(question_data.get("options"), dict) else {},
+            "explanations": question_data.get("explanations") if isinstance(question_data.get("explanations"), dict) else {},
+            "correct_answer": _answer_text(question_data, correct) if correct else "题目内容已调整",
+            "attempt_count": attempt_count,
+            "wrong_count": wrong_count,
+            "wrong_student_count": len(wrong_student_ids),
+            "wrong_rate": round(wrong_count / attempt_count * 100) if attempt_count else 0,
+            "attempts": attempts,
             "range": normalized_range,
         }
     except Exception as error:

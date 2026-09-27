@@ -97,10 +97,59 @@ export interface TeacherProgressReminderResult {
   summary: {
     total_progresses: number
     attention_progresses: number
-    overdue_progresses: number
     total_incomplete_students: number
   }
   items: TeacherProgressReminderItem[]
+}
+
+export type TeacherStudentProgressStatus = "completed" | "partial" | "not_started" | "upcoming"
+
+export interface TeacherStudentProgressWeek {
+  progress_id: string
+  name: string
+  week_start: string
+  week_end: string
+  state: "upcoming" | "active" | "overdue" | "unassigned"
+  status: "completed" | "partial" | "not_started" | "unassigned"
+  completed_docs: number
+  total_docs: number
+}
+
+export interface TeacherStudentProgressOverviewStudent {
+  student_id: string
+  student_name: string
+  class_id: string
+  class_name: string
+  status: TeacherStudentProgressStatus
+  total_progresses: number
+  tracked_progresses: number
+  completed_progresses: number
+  partial_progresses: number
+  not_started_progresses: number
+  overdue_progresses: number
+  consecutive_incomplete_progresses: number
+  completion_rate: number
+  progresses: TeacherStudentProgressWeek[]
+}
+
+export interface TeacherStudentProgressOverviewResult {
+  summary: {
+    total_students: number
+    completed_students: number
+    partial_students: number
+    not_started_students: number
+    upcoming_students: number
+    overdue_incomplete_students: number
+    total_progresses: number
+  }
+  progresses: Array<{
+    id: string
+    name: string
+    week_start: string
+    week_end: string
+    state: "upcoming" | "active" | "overdue"
+  }>
+  students: TeacherStudentProgressOverviewStudent[]
 }
 
 export type WeeklyProgressListResponseData = ApiResponseData<WeeklyProgressItem[]>
@@ -109,3 +158,4 @@ export type ProgressMutationResponseData = ApiResponseData<null>
 export type ClassDocumentListResponseData = ApiResponseData<ClassDocument[]>
 export type ProgressStatusResponseData = ApiResponseData<ProgressStatusResult>
 export type TeacherProgressReminderResponseData = ApiResponseData<TeacherProgressReminderResult>
+export type TeacherStudentProgressOverviewResponseData = ApiResponseData<TeacherStudentProgressOverviewResult>

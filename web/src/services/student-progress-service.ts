@@ -9,6 +9,10 @@ export interface StudentProgressDoc {
   dialog_id: string;
   quiz_threshold: number;
   quiz_rate: number;
+  answered_questions?: number;
+  correct_questions?: number;
+  total_questions?: number;
+  completion_reason?: string;
   video_completed: boolean;
   quiz_passed: boolean;
   has_notes: boolean;

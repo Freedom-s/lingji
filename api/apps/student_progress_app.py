@@ -9,7 +9,6 @@ import logging
 from datetime import date, datetime
 
 from flask_login import current_user, login_required
-from peewee import fn
 
 from api.db.db_models import (
     Class,
@@ -50,6 +49,47 @@ def _progress_state(week_start, week_end):
     return "active", (end - today).days if end else 0
 
 
+def _completion_reason(
+    *,
+    is_video,
+    has_quiz,
+    video_completed,
+    has_notes,
+    total_questions,
+    answered_questions,
+    correct_questions,
+    quiz_rate,
+    quiz_threshold,
+):
+    """Return a student-facing explanation for an incomplete document."""
+    if is_video:
+        return "" if video_completed else "视频还没有看完（需要观看至 90%）"
+
+    if has_quiz:
+        if total_questions <= 0:
+            return "测验题目还没有准备好"
+        unanswered_questions = max(total_questions - answered_questions, 0)
+        progress_text = (
+            f"已答 {answered_questions}/{total_questions} 题，"
+            f"答对 {correct_questions} 题，正确率 {quiz_rate:g}%"
+        )
+        target_text = (
+            f"目标是答完 {total_questions} 题且正确率达到 {quiz_threshold:g}%"
+        )
+        if unanswered_questions:
+            return (
+                f"测验进度：{progress_text}；{target_text}，"
+                f"还差 {unanswered_questions} 道题未作答"
+            )
+        if quiz_rate < quiz_threshold:
+            return (
+                f"测验进度：{progress_text}；题目已答完，但{target_text}"
+            )
+        return ""
+
+    return "" if has_notes else "还没有记录笔记"
+
+
 def _dialog_map_for_classes(class_ids):
     """Return {(class_id, kb_id): dialog_id} for direct learning links."""
     result = {}
@@ -83,10 +123,11 @@ def _dialog_map_for_classes(class_ids):
 def _learning_state(student_id, doc_ids):
     video_completed = set()
     quiz_stats = {}
+    quiz_question_counts = {}
     noted_docs = set()
     quiz_docs = set()
     if not doc_ids:
-        return video_completed, quiz_stats, noted_docs, quiz_docs
+        return video_completed, quiz_stats, quiz_question_counts, noted_docs, quiz_docs
 
     for row in StudentVideoProgress.select().where(
         (StudentVideoProgress.student_id == student_id)
@@ -95,23 +136,30 @@ def _learning_state(student_id, doc_ids):
     ):
         video_completed.add(row.doc_id)
 
-    quiz_query = (
+    quiz_rows = (
         StudentQuizResult.select(
             StudentQuizResult.doc_id,
-            fn.COUNT(StudentQuizResult.id).alias("total"),
-            fn.SUM(StudentQuizResult.is_correct).alias("correct"),
+            StudentQuizResult.question_index,
+            StudentQuizResult.is_correct,
         )
         .where(
             (StudentQuizResult.student_id == student_id)
             & (StudentQuizResult.doc_id.in_(doc_ids))
         )
-        .group_by(StudentQuizResult.doc_id)
     )
-    for row in quiz_query.dicts():
-        quiz_stats[row["doc_id"]] = {
-            "total": int(row["total"] or 0),
-            "correct": int(row["correct"] or 0),
-        }
+    for row in quiz_rows:
+        stats = quiz_stats.setdefault(
+            row.doc_id,
+            {"total": 0, "answered_question_ids": set(), "correct_question_ids": set()},
+        )
+        stats["total"] += 1
+        stats["answered_question_ids"].add(row.question_index)
+        if row.is_correct:
+            stats["correct_question_ids"].add(row.question_index)
+
+    for stats in quiz_stats.values():
+        stats["answered_questions"] = len(stats.pop("answered_question_ids"))
+        stats["correct_questions"] = len(stats.pop("correct_question_ids"))
 
     for row in (
         StudentNote.select(StudentNote.doc_id)
@@ -123,7 +171,7 @@ def _learning_state(student_id, doc_ids):
         noted_docs.add(row.doc_id)
 
     for row in (
-        DocumentGeneration.select(DocumentGeneration.doc_id)
+        DocumentGeneration.select(DocumentGeneration.doc_id, DocumentGeneration.content)
         .where(
             (DocumentGeneration.doc_id.in_(doc_ids))
             & (DocumentGeneration.generation_type == "quiz")
@@ -131,8 +179,13 @@ def _learning_state(student_id, doc_ids):
         .distinct()
     ):
         quiz_docs.add(row.doc_id)
+        try:
+            questions = json.loads(row.content) if row.content else []
+            quiz_question_counts[row.doc_id] = len(questions) if isinstance(questions, list) else 0
+        except (TypeError, json.JSONDecodeError):
+            quiz_question_counts[row.doc_id] = 0
 
-    return video_completed, quiz_stats, noted_docs, quiz_docs
+    return video_completed, quiz_stats, quiz_question_counts, noted_docs, quiz_docs
 
 
 def _save_status(student_id, progress_id, doc_status):
@@ -240,7 +293,7 @@ def progress_reminders():
                 .dicts()
             )
         } if doc_ids else {}
-        video_completed, quiz_stats, noted_docs, quiz_docs = _learning_state(
+        video_completed, quiz_stats, quiz_question_counts, noted_docs, quiz_docs = _learning_state(
             student_id, doc_ids
         )
         dialog_map = _dialog_map_for_classes(class_ids)
@@ -256,22 +309,38 @@ def progress_reminders():
                 doc_id = link["doc_id"]
                 is_video = link["doc_type"] == "video"
                 has_quiz = doc_id in quiz_docs
-                stats = quiz_stats.get(doc_id, {"total": 0, "correct": 0})
+                stats = quiz_stats.get(
+                    doc_id,
+                    {"total": 0, "answered_questions": 0, "correct_questions": 0},
+                )
+                total_questions = quiz_question_counts.get(doc_id, 0)
                 quiz_rate = (
-                    round(stats["correct"] / stats["total"] * 100, 1)
-                    if stats["total"]
+                    round(stats["correct_questions"] / total_questions * 100, 1)
+                    if total_questions
                     else 0.0
                 )
                 video_done = doc_id in video_completed
                 quiz_passed = (
                     has_quiz
-                    and stats["total"] > 0
+                    and total_questions > 0
+                    and stats["answered_questions"] >= total_questions
                     and quiz_rate >= link["quiz_threshold"]
                 )
                 has_notes = doc_id in noted_docs
                 binding = video_bindings.get(doc_id, {}) if is_video else {}
                 is_completed = (
                     video_done if is_video else quiz_passed if has_quiz else has_notes
+                )
+                completion_reason = _completion_reason(
+                    is_video=is_video,
+                    has_quiz=has_quiz,
+                    video_completed=video_done,
+                    has_notes=has_notes,
+                    total_questions=total_questions,
+                    answered_questions=stats["answered_questions"],
+                    correct_questions=stats["correct_questions"],
+                    quiz_rate=quiz_rate,
+                    quiz_threshold=link["quiz_threshold"],
                 )
                 doc_status = {
                     "doc_id": doc_id,
@@ -280,6 +349,10 @@ def progress_reminders():
                     "dialog_id": dialog_map.get((progress.class_id, link["kb_id"]), ""),
                     "quiz_threshold": link["quiz_threshold"],
                     "quiz_rate": quiz_rate,
+                    "answered_questions": stats["answered_questions"],
+                    "correct_questions": stats["correct_questions"],
+                    "total_questions": total_questions,
+                    "completion_reason": completion_reason,
                     "video_completed": video_done,
                     "quiz_passed": quiz_passed,
                     "has_notes": has_notes,

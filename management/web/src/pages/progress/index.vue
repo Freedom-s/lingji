@@ -253,8 +253,7 @@ async function loadStatus() {
   }
 }
 
-onMounted(async () => {
-  await loadClasses()
+async function applyRouteSelection() {
   const classId
     = typeof route.query.class_id === "string" ? route.query.class_id : ""
   const progressId
@@ -268,6 +267,9 @@ onMounted(async () => {
   if (!initialClassId) return
 
   if (!hasRequestedClass || !progressId) {
+    activeTab.value = "list"
+    selectedProgressId.value = ""
+    statusResult.value = null
     selectedClassId.value = initialClassId
     return
   }
@@ -275,10 +277,26 @@ onMounted(async () => {
   activeTab.value = "status"
   selectedClassId.value = initialClassId
   await loadProgressOptions()
-  if (!progressOptions.value.some(item => item.id === progressId)) return
+  if (!progressOptions.value.some(item => item.id === progressId)) {
+    selectedProgressId.value = ""
+    statusResult.value = null
+    return
+  }
   selectedProgressId.value = progressId
   await loadStatus()
+}
+
+onMounted(async () => {
+  await loadClasses()
+  await applyRouteSelection()
 })
+
+watch(
+  () => [route.query.class_id, route.query.progress_id],
+  () => {
+    if (classOptions.value.length) void applyRouteSelection()
+  }
+)
 
 const filteredStudents = ref<StudentProgressStatus[]>([])
 watch(

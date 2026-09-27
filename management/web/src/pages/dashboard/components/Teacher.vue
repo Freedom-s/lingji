@@ -23,12 +23,15 @@ import {
   getConversationTrendApi,
   getLearningInsightsApi,
   getOverviewApi,
-  getStudentLearningDetailApi
+  getStudentLearningDetailApi,
+  getWrongQuestionDetailApi
 } from "@/common/apis/dashboard"
 import type {
   LearningInsightsData,
   LearningInsightStudent,
-  StudentLearningDetailData
+  StudentLearningDetailData,
+  WrongQuestionDetailData,
+  WrongQuestionInsight
 } from "@/common/apis/dashboard"
 import type {
   AssistantRankingItem,
@@ -36,8 +39,17 @@ import type {
   ClassRankingItem,
   OverviewData
 } from "@/common/apis/dashboard/type"
-import { getTeacherProgressRemindersApi } from "@/common/apis/progress"
-import type { TeacherProgressReminderItem, TeacherProgressReminderResult } from "@/common/apis/progress/type"
+import {
+  getTeacherProgressRemindersApi,
+  getTeacherStudentProgressOverviewApi
+} from "@/common/apis/progress"
+import type {
+  TeacherProgressReminderItem,
+  TeacherProgressReminderResult,
+  TeacherStudentProgressOverviewStudent,
+  TeacherStudentProgressOverviewResult,
+  TeacherStudentProgressWeek
+} from "@/common/apis/progress/type"
 import { use } from "echarts/core"
 import { BarChart, LineChart } from "echarts/charts"
 import { GridComponent, TooltipComponent } from "echarts/components"
@@ -63,14 +75,23 @@ const displayedValues = ref<Record<string, number>>({})
 const lastUpdatedAt = ref("--")
 const progressReminderData = ref<TeacherProgressReminderResult | null>(null)
 const progressReminderLoading = ref(false)
+const progressReminderClassId = ref("")
+const progressReminderProgressId = ref("")
+const allProgressReminderItems = ref<TeacherProgressReminderItem[]>([])
+const studentProgressOverview = ref<TeacherStudentProgressOverviewResult | null>(null)
+const studentProgressOverviewLoading = ref(false)
 const learningInsights = ref<LearningInsightsData | null>(null)
 const learningInsightsLoading = ref(false)
-const insightClassId = ref("")
+const insightProgressId = ref("")
+const insightQuestionTab = ref<"wrong" | "all">("wrong")
 const insightSection = ref<HTMLElement | null>(null)
 const studentDetailVisible = ref(false)
 const studentDetailLoading = ref(false)
 const selectedStudentDetail = ref<StudentLearningDetailData | null>(null)
 const detailActiveTab = ref<"quiz" | "questions">("quiz")
+const wrongQuestionDetailVisible = ref(false)
+const wrongQuestionDetailLoading = ref(false)
+const selectedWrongQuestion = ref<WrongQuestionDetailData | null>(null)
 
 const metricIcons = {
   students: markRaw(UserFilled),
@@ -86,6 +107,46 @@ const rangeLabelMap: Record<"24h" | "7d" | "30d", string> = {
   "7d": "7 天",
   "30d": "30 天"
 }
+
+const progressReminderClassOptions = computed(() => {
+  const classMap = new Map<string, string>()
+  for (const item of allProgressReminderItems.value) {
+    if (item.class_id && item.class_name) classMap.set(item.class_id, item.class_name)
+  }
+  return [...classMap.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"))
+})
+
+const progressReminderProgressOptions = computed(() => {
+  return allProgressReminderItems.value
+    .filter(item => !progressReminderClassId.value || item.class_id === progressReminderClassId.value)
+    .map(item => ({
+      id: item.id,
+      label: `${item.name}（${item.week_start} ~ ${item.week_end}）`
+    }))
+})
+
+const insightProgressOptions = computed(() => {
+  const weekMap = new Map<string, { id: string; label: string }>()
+  for (const item of allProgressReminderItems.value) {
+    const key = `${item.week_start}|${item.week_end}`
+    if (!weekMap.has(key)) {
+      weekMap.set(key, {
+        id: item.id,
+        label: `${item.name}（${item.week_start} ~ ${item.week_end}）`
+      })
+    }
+  }
+  return [...weekMap.values()]
+})
+
+const insightPeriodLabel = computed(() => {
+  const selected = allProgressReminderItems.value.find(item => item.id === insightProgressId.value)
+  return selected
+    ? `${selected.name}（${selected.week_start} ~ ${selected.week_end}）`
+    : rangeLabelMap[timeRange.value]
+})
 
 const overviewCards = computed(() => [
   {
@@ -454,9 +515,15 @@ async function fetchTrendData() {
 async function fetchProgressReminders() {
   progressReminderLoading.value = true
   try {
-    const res = await getTeacherProgressRemindersApi()
+    const res = await getTeacherProgressRemindersApi({
+      class_id: progressReminderClassId.value || undefined,
+      progress_id: progressReminderProgressId.value || undefined
+    })
     if (res.code === 0 && res.data) {
       progressReminderData.value = res.data
+      if (!progressReminderClassId.value && !progressReminderProgressId.value) {
+        allProgressReminderItems.value = res.data.items
+      }
     }
   } catch (error) {
     console.error("获取周进度提醒失败:", error)
@@ -465,12 +532,42 @@ async function fetchProgressReminders() {
   }
 }
 
+async function fetchStudentProgressOverview() {
+  studentProgressOverviewLoading.value = true
+  try {
+    const res = await getTeacherStudentProgressOverviewApi({
+      class_id: progressReminderClassId.value || undefined
+    })
+    if (res.code === 0 && res.data) {
+      studentProgressOverview.value = res.data
+    }
+  } catch (error) {
+    console.error("获取学生整体进度失败:", error)
+  } finally {
+    studentProgressOverviewLoading.value = false
+  }
+}
+
+function handleProgressReminderClassChange() {
+  progressReminderProgressId.value = ""
+  fetchProgressReminders()
+  fetchStudentProgressOverview()
+}
+
+function handleProgressReminderProgressChange() {
+  fetchProgressReminders()
+}
+
+function handleInsightProgressChange() {
+  fetchLearningInsights()
+}
+
 async function fetchLearningInsights() {
   learningInsightsLoading.value = true
   try {
     const res = await getLearningInsightsApi({
       range: timeRange.value,
-      class_id: insightClassId.value || undefined,
+      progress_id: insightProgressId.value || undefined,
       limit: 10
     })
     if (res.code === 0 && res.data) {
@@ -489,7 +586,10 @@ async function openStudentDetail(student: LearningInsightStudent, tab: "quiz" | 
   studentDetailLoading.value = true
   selectedStudentDetail.value = null
   try {
-    const res = await getStudentLearningDetailApi(student.student_id, { range: timeRange.value })
+    const res = await getStudentLearningDetailApi(student.student_id, {
+      range: timeRange.value,
+      progress_id: insightProgressId.value || undefined
+    })
     if (res.code === 0 && res.data) {
       selectedStudentDetail.value = res.data
     }
@@ -497,6 +597,25 @@ async function openStudentDetail(student: LearningInsightStudent, tab: "quiz" | 
     console.error("获取学生学习明细失败:", error)
   } finally {
     studentDetailLoading.value = false
+  }
+}
+
+async function openWrongQuestionDetail(question: WrongQuestionInsight) {
+  wrongQuestionDetailVisible.value = true
+  wrongQuestionDetailLoading.value = true
+  selectedWrongQuestion.value = null
+  try {
+    const res = await getWrongQuestionDetailApi(question.doc_id, question.question_index, {
+      range: timeRange.value,
+      progress_id: insightProgressId.value || undefined
+    })
+    if (res.code === 0 && res.data) {
+      selectedWrongQuestion.value = res.data
+    }
+  } catch (error) {
+    console.error("获取错题详情失败:", error)
+  } finally {
+    wrongQuestionDetailLoading.value = false
   }
 }
 
@@ -521,6 +640,45 @@ function progressStateLabel(item: TeacherProgressReminderItem) {
   return `剩余 ${item.day_count} 天`
 }
 
+function overallProgressStatusLabel(status: TeacherStudentProgressOverviewStudent["status"]) {
+  const labels = {
+    completed: "全部完成",
+    partial: "部分完成",
+    not_started: "未开始",
+    upcoming: "待开始"
+  }
+  return labels[status]
+}
+
+function overviewWeekText(week: TeacherStudentProgressWeek) {
+  if (week.status === "unassigned") return "—"
+  if (week.state === "upcoming") return "待"
+  if (week.status === "completed") return "√"
+  if (week.status === "partial") return `${week.completed_docs}/${week.total_docs}`
+  return "—"
+}
+
+function overviewWeekTitle(week: TeacherStudentProgressWeek) {
+  if (week.status === "unassigned") return `${week.name}：该周进度未安排给此学生所在班级`
+  const state = week.state === "overdue" ? "已逾期" : week.state === "active" ? "进行中" : "尚未开始"
+  return `${week.name}：${week.completed_docs}/${week.total_docs} 个课件，${state}`
+}
+
+function overviewStudentKey(student: TeacherStudentProgressOverviewStudent) {
+  return `${student.class_id}-${student.student_id}`
+}
+
+function openOverviewProgress(
+  student: TeacherStudentProgressOverviewStudent,
+  week: TeacherStudentProgressWeek
+) {
+  if (!week.progress_id) return
+  router.push({
+    path: "/progress/index",
+    query: { class_id: student.class_id, progress_id: week.progress_id }
+  })
+}
+
 function openProgressDetail(item?: TeacherProgressReminderItem) {
   if (!item) {
     router.push("/progress/index")
@@ -542,6 +700,7 @@ onMounted(() => {
   fetchOverviewData()
   fetchTrendData()
   fetchProgressReminders()
+  fetchStudentProgressOverview()
   fetchLearningInsights()
 })
 </script>
@@ -578,6 +737,127 @@ onMounted(() => {
         </div>
       </section>
 
+      <section v-loading="studentProgressOverviewLoading" class="student-overview-panel panel-card">
+        <header class="student-overview-header">
+          <div>
+            <p class="section-eyebrow overview-eyebrow">Student progress</p>
+            <h2 class="progress-reminder-title">学生整体进度</h2>
+            <p class="progress-reminder-description">
+              从全局查看每名学生跨周的完成情况，优先发现连续掉队的学生。
+            </p>
+          </div>
+          <el-select
+            v-model="progressReminderClassId"
+            class="progress-filter-select"
+            clearable
+            placeholder="全部班级"
+            @change="handleProgressReminderClassChange"
+          >
+            <el-option
+              v-for="item in progressReminderClassOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </header>
+
+        <template v-if="studentProgressOverview">
+          <div class="student-overview-summary">
+            <div class="overview-stat is-slate">
+              <span>全部学生</span>
+              <strong>{{ studentProgressOverview.summary.total_students }}</strong>
+              <small>当前纳入统计</small>
+            </div>
+            <div class="overview-stat is-green">
+              <span>全部完成</span>
+              <strong>{{ studentProgressOverview.summary.completed_students }}</strong>
+              <small>所有已到期周进度</small>
+            </div>
+            <div class="overview-stat is-amber">
+              <span>部分完成</span>
+              <strong>{{ studentProgressOverview.summary.partial_students }}</strong>
+              <small>仍有周进度缺口</small>
+            </div>
+            <div class="overview-stat is-red">
+              <span>未开始</span>
+              <strong>{{ studentProgressOverview.summary.not_started_students }}</strong>
+              <small>已到期但尚未完成</small>
+            </div>
+            <div class="overview-stat is-alert">
+              <span>逾期未完成</span>
+              <strong>{{ studentProgressOverview.summary.overdue_incomplete_students }}</strong>
+              <small>需要优先跟进</small>
+            </div>
+          </div>
+
+          <div v-if="studentProgressOverview.students.length" class="student-overview-table-shell">
+            <div
+              class="student-overview-table"
+              :style="{ '--overview-week-count': studentProgressOverview.progresses.length }"
+            >
+              <div class="student-overview-row overview-table-head">
+                <span>学生</span>
+                <span>整体状态</span>
+                <span>完成率</span>
+                <div class="overview-week-matrix">
+                  <span v-for="week in studentProgressOverview.progresses" :key="week.id" :title="week.name">
+                    {{ week.name }}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                v-for="student in studentProgressOverview.students"
+                :key="overviewStudentKey(student)"
+                class="student-overview-row"
+                :class="`is-${student.status}`"
+              >
+                <div class="overview-student-identity">
+                  <span class="overview-student-avatar">{{ student.student_name.slice(0, 1) }}</span>
+                  <span>
+                    <strong>{{ student.student_name }}</strong>
+                    <small>{{ student.class_name }} · {{ student.completed_progresses }}/{{ student.tracked_progresses }} 周</small>
+                  </span>
+                </div>
+                <div class="overview-status-copy">
+                  <span class="overview-status-pill" :class="`is-${student.status}`">
+                    {{ overallProgressStatusLabel(student.status) }}
+                  </span>
+                  <small v-if="student.consecutive_incomplete_progresses > 1">
+                    连续 {{ student.consecutive_incomplete_progresses }} 周未完成
+                  </small>
+                </div>
+                <div class="overview-rate-copy">
+                  <strong>{{ student.completion_rate }}%</strong>
+                  <el-progress
+                    :percentage="student.completion_rate"
+                    :show-text="false"
+                    :stroke-width="5"
+                    :color="student.status === 'completed' ? '#16a36a' : student.status === 'not_started' ? '#dc5a3a' : '#d89920'"
+                  />
+                </div>
+                <div class="overview-week-matrix">
+                  <button
+                    v-for="week in student.progresses"
+                    :key="week.progress_id"
+                    type="button"
+                    class="overview-week-cell"
+                    :class="[`is-${week.status}`, { 'is-overdue': week.state === 'overdue', 'is-upcoming': week.state === 'upcoming' }]"
+                    :disabled="week.status === 'unassigned'"
+                    :title="overviewWeekTitle(week)"
+                    @click="openOverviewProgress(student, week)"
+                  >
+                    {{ overviewWeekText(week) }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="当前没有可统计的学生进度" :image-size="76" />
+        </template>
+      </section>
+
       <section v-loading="progressReminderLoading" class="progress-reminder-panel panel-card">
         <header class="progress-reminder-header">
           <div>
@@ -588,13 +868,23 @@ onMounted(() => {
             </p>
           </div>
           <div class="progress-reminder-actions">
+            <el-select
+              v-model="progressReminderProgressId"
+              class="progress-filter-select progress-filter-select-wide"
+              clearable
+              placeholder="全部周进度"
+              @change="handleProgressReminderProgressChange"
+            >
+              <el-option
+                v-for="item in progressReminderProgressOptions"
+                :key="item.id"
+                :label="item.label"
+                :value="item.id"
+              />
+            </el-select>
             <div class="reminder-summary-chip is-attention">
               <strong>{{ progressReminderData?.summary.total_incomplete_students ?? 0 }}</strong>
               <span>人次未完成</span>
-            </div>
-            <div class="reminder-summary-chip">
-              <strong>{{ progressReminderData?.summary.overdue_progresses ?? 0 }}</strong>
-              <span>项已逾期</span>
             </div>
             <el-button type="primary" plain :icon="ArrowRight" @click="openProgressDetail()">
               全部进度
@@ -604,7 +894,7 @@ onMounted(() => {
 
         <div v-if="progressReminderData?.items.length" class="progress-reminder-grid">
           <article
-            v-for="item in progressReminderData.items.slice(0, 4)"
+            v-for="item in progressReminderData.items"
             :key="item.id"
             :class="['progress-reminder-card', `is-${item.state}`]"
           >
@@ -686,18 +976,17 @@ onMounted(() => {
             </p>
           </div>
           <el-select
-            v-model="insightClassId"
-            class="insight-class-select"
-            placeholder="全部班级"
+            v-model="insightProgressId"
+            class="insight-progress-select"
+            placeholder="全部周进度"
             clearable
-            @change="fetchLearningInsights"
+            @change="handleInsightProgressChange"
           >
-            <el-option label="全部班级" value="" />
             <el-option
-              v-for="classItem in learningInsights?.classes || []"
-              :key="classItem.id"
-              :label="classItem.name"
-              :value="classItem.id"
+              v-for="item in insightProgressOptions"
+              :key="item.id"
+              :label="item.label"
+              :value="item.id"
             />
           </el-select>
         </header>
@@ -736,7 +1025,7 @@ onMounted(() => {
                 <span class="insight-card-index">01</span>
                 <h3>每个学生做了什么</h3>
               </div>
-              <span class="section-meta">{{ rangeLabelMap[timeRange] }}</span>
+              <span class="section-meta">{{ insightPeriodLabel }}</span>
             </div>
             <el-table
               :data="learningInsights?.students || []"
@@ -792,15 +1081,39 @@ onMounted(() => {
             <div class="insight-card-heading">
               <div>
                 <span class="insight-card-index is-red">02</span>
-                <h3>全班高频错题</h3>
+                <h3>{{ insightQuestionTab === "wrong" ? "全班高频错题" : "本周全部题目" }}</h3>
               </div>
-              <span class="section-meta">Top 10</span>
+              <div class="insight-question-heading-tools">
+                <div class="insight-question-tabs" role="tablist" aria-label="题目统计视图">
+                  <button
+                    type="button"
+                    :class="{ 'is-active': insightQuestionTab === 'wrong' }"
+                    @click="insightQuestionTab = 'wrong'"
+                  >
+                    高频错题
+                  </button>
+                  <button
+                    type="button"
+                    :class="{ 'is-active': insightQuestionTab === 'all' }"
+                    @click="insightQuestionTab = 'all'"
+                  >
+                    全部题目
+                  </button>
+                </div>
+                <span class="section-meta">
+                  {{ insightQuestionTab === "wrong" ? "Top 10" : `${learningInsights?.all_questions.length ?? 0} 题` }}
+                </span>
+              </div>
             </div>
-            <div v-if="learningInsights?.wrong_questions.length" class="wrong-question-list">
+            <div v-if="insightQuestionTab === 'wrong' && learningInsights?.wrong_questions.length" class="wrong-question-list">
               <div
                 v-for="(question, index) in learningInsights.wrong_questions"
                 :key="`${question.doc_id}-${question.question_index}`"
                 class="wrong-question-item"
+                role="button"
+                tabindex="0"
+                @click="openWrongQuestionDetail(question)"
+                @keydown.enter="openWrongQuestionDetail(question)"
               >
                 <span class="wrong-question-rank">{{ String(index + 1).padStart(2, '0') }}</span>
                 <div class="wrong-question-copy">
@@ -815,7 +1128,35 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <el-empty v-else :image-size="82" description="当前时间范围内还没有错题记录" />
+            <el-empty
+              v-else-if="insightQuestionTab === 'wrong'"
+              :image-size="82"
+              description="当前筛选范围内还没有错题记录"
+            />
+            <div v-else-if="learningInsights?.all_questions.length" class="wrong-question-list all-question-list">
+              <div
+                v-for="(question, index) in learningInsights.all_questions"
+                :key="`${question.doc_id}-${question.question_index}`"
+                :class="['wrong-question-item', 'all-question-item', { 'is-answerable': question.attempt_count > 0 }]"
+                :role="question.attempt_count > 0 ? 'button' : undefined"
+                :tabindex="question.attempt_count > 0 ? 0 : undefined"
+                @click="question.attempt_count > 0 && openWrongQuestionDetail(question)"
+                @keydown.enter="question.attempt_count > 0 && openWrongQuestionDetail(question)"
+              >
+                <span class="wrong-question-rank">{{ String(index + 1).padStart(2, '0') }}</span>
+                <div class="wrong-question-copy">
+                  <strong>{{ question.question }}</strong>
+                  <span>{{ question.document_name }}</span>
+                  <small>正确答案：{{ question.correct_answer }}</small>
+                </div>
+                <div class="wrong-question-score">
+                  <strong>{{ question.attempt_count }} 次</strong>
+                  <span>{{ question.wrong_count }} 次答错</span>
+                  <small>{{ question.wrong_rate }}% 错误率</small>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="82" description="请选择周进度查看本周全部题目" />
           </article>
         </div>
       </section>
@@ -940,6 +1281,75 @@ onMounted(() => {
         </template>
       </div>
     </el-drawer>
+
+    <el-drawer
+      v-model="wrongQuestionDetailVisible"
+      class="wrong-question-detail-drawer"
+      size="min(820px, 94vw)"
+      :with-header="false"
+      destroy-on-close
+    >
+      <div v-loading="wrongQuestionDetailLoading" class="wrong-question-detail-shell">
+        <template v-if="selectedWrongQuestion">
+          <header class="wrong-question-detail-header">
+            <div>
+              <p class="detail-eyebrow">Top 10 错题 · 第 {{ selectedWrongQuestion.question_index }} 题</p>
+              <h2>{{ selectedWrongQuestion.document_name }}</h2>
+            </div>
+            <el-button text @click="wrongQuestionDetailVisible = false">关闭</el-button>
+          </header>
+
+          <div class="wrong-question-detail-summary">
+            <div><strong>{{ selectedWrongQuestion.wrong_rate }}%</strong><span>错误率</span></div>
+            <div><strong>{{ selectedWrongQuestion.wrong_count }}</strong><span>答错次数</span></div>
+            <div><strong>{{ selectedWrongQuestion.attempt_count }}</strong><span>答题次数</span></div>
+            <div><strong>{{ selectedWrongQuestion.wrong_student_count }}</strong><span>涉及学生</span></div>
+          </div>
+
+          <section class="wrong-question-detail-section">
+            <span class="detail-section-label">完整题目</span>
+            <p class="wrong-question-full-text">{{ selectedWrongQuestion.question }}</p>
+            <div v-if="Object.keys(selectedWrongQuestion.options).length" class="wrong-question-options">
+              <div v-for="(option, key) in selectedWrongQuestion.options" :key="key" class="wrong-question-option">
+                <strong>{{ key }}. {{ option }}</strong>
+                <p>{{ selectedWrongQuestion.explanations[key] || '暂无该选项解析' }}</p>
+              </div>
+            </div>
+            <div class="wrong-question-correct-answer">
+              <span>正确答案</span>
+              <strong>{{ selectedWrongQuestion.correct_answer }}</strong>
+            </div>
+          </section>
+
+          <section class="wrong-question-detail-section">
+            <div class="detail-section-heading">
+              <span class="detail-section-label">学生作答明细</span>
+              <small>按最近作答时间排序</small>
+            </div>
+            <div v-if="selectedWrongQuestion.attempts.length" class="wrong-question-attempt-list">
+              <article
+                v-for="attempt in selectedWrongQuestion.attempts"
+                :key="attempt.id"
+                :class="['wrong-question-attempt', attempt.is_correct ? 'is-correct' : 'is-wrong']"
+              >
+                <div class="wrong-question-attempt-avatar">{{ attempt.student_name.slice(0, 1) }}</div>
+                <div class="wrong-question-attempt-main">
+                  <div class="wrong-question-attempt-meta">
+                    <strong>{{ attempt.student_name }}</strong>
+                    <span>{{ attempt.student_email }}</span>
+                    <small>{{ formatTime(attempt.answered_at, timeRange) }}</small>
+                  </div>
+                  <p>{{ attempt.student_answer }}</p>
+                  <small v-if="attempt.answer_explanation">答案解析：{{ attempt.answer_explanation }}</small>
+                </div>
+                <span class="wrong-question-attempt-status">{{ attempt.is_correct ? '答对' : '答错' }}</span>
+              </article>
+            </div>
+            <el-empty v-else :image-size="96" description="当前时间范围内没有作答记录" />
+          </section>
+        </template>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -970,6 +1380,305 @@ onMounted(() => {
   gap: 32px;
   padding: 32px;
   align-items: center;
+}
+
+.student-overview-panel {
+  padding: 26px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0 0, rgba(37, 99, 235, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.94);
+}
+
+.student-overview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.overview-eyebrow {
+  color: #2563eb;
+}
+
+.student-overview-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.overview-stat {
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 15px;
+  border: 1px solid #edf0f5;
+  border-radius: 15px;
+  background: #fafbfe;
+
+  span {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  strong {
+    margin-top: 8px;
+    color: #172033;
+    font-size: 24px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  small {
+    margin-top: 7px;
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  &.is-green {
+    background: #f4fbf7;
+
+    strong {
+      color: #168256;
+    }
+  }
+
+  &.is-amber {
+    background: #fffaf0;
+
+    strong {
+      color: #b77914;
+    }
+  }
+
+  &.is-red,
+  &.is-alert {
+    background: #fff8f6;
+
+    strong {
+      color: #c24135;
+    }
+  }
+}
+
+.student-overview-table-shell {
+  margin-top: 20px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.student-overview-table {
+  min-width: 1080px;
+  --overview-week-count: 1;
+}
+
+.student-overview-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.35fr) 132px 112px minmax(390px, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf0f5;
+
+  &:not(.overview-table-head):hover {
+    background: #fbfcff;
+  }
+}
+
+.overview-table-head {
+  min-height: 38px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+
+  > span:nth-child(3) {
+    text-align: center;
+  }
+}
+
+.overview-student-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  > span:last-child {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #273349;
+    font-size: 12px;
+  }
+
+  small {
+    color: #94a3b8;
+    font-size: 10px;
+  }
+}
+
+.overview-student-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  color: #2563eb;
+  background: #e8f0ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.overview-status-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  small {
+    color: #b77914;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
+
+.overview-status-pill {
+  width: fit-content;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f1f5f9;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+
+  &.is-completed {
+    color: #168256;
+    background: #eaf8f1;
+  }
+
+  &.is-partial {
+    color: #a66c08;
+    background: #fff3d4;
+  }
+
+  &.is-not_started {
+    color: #c24135;
+    background: #ffefec;
+  }
+
+  &.is-upcoming {
+    color: #64748b;
+    background: #eef2f7;
+  }
+}
+
+.overview-rate-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  strong {
+    color: #334155;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  :deep(.el-progress-bar__outer) {
+    background: #edf1f5;
+  }
+}
+
+.overview-week-matrix {
+  display: grid;
+  grid-template-columns: repeat(var(--overview-week-count), minmax(70px, 1fr));
+  gap: 6px;
+}
+
+.overview-table-head .overview-week-matrix span {
+  overflow: hidden;
+  color: #94a3b8;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-week-cell {
+  min-height: 38px;
+  padding: 0 7px;
+  border: 1px solid #e5eaf0;
+  border-radius: 9px;
+  color: #94a3b8;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 5px 12px rgba(37, 99, 235, 0.12);
+    transform: translateY(-1px);
+  }
+
+  &.is-completed {
+    border-color: #ccebdc;
+    color: #168256;
+    background: #eefaf4;
+  }
+
+  &.is-partial {
+    border-color: #f3dfad;
+    color: #a66c08;
+    background: #fff9e9;
+  }
+
+  &.is-not_started {
+    border-color: #f3d6d1;
+    color: #c24135;
+    background: #fff5f3;
+  }
+
+  &.is-upcoming {
+    border-style: dashed;
+    color: #94a3b8;
+    background: #f8fafc;
+  }
+
+  &.is-unassigned {
+    border-style: dotted;
+    color: #cbd5e1;
+    background: #fbfcfe;
+    cursor: default;
+  }
+
+  &:disabled {
+    box-shadow: none;
+    opacity: 0.82;
+    transform: none;
+  }
+
+  &.is-overdue {
+    box-shadow: inset 0 -2px 0 #dc5a3a;
+  }
 }
 
 .progress-reminder-panel {
@@ -1012,6 +1721,14 @@ onMounted(() => {
   gap: 10px;
 }
 
+.progress-filter-select {
+  width: 140px;
+}
+
+.progress-filter-select-wide {
+  width: 230px;
+}
+
 .reminder-summary-chip {
   min-width: 96px;
   display: flex;
@@ -1046,6 +1763,10 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
 }
 
 .progress-reminder-card {
@@ -1466,8 +2187,8 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.insight-class-select {
-  width: 210px;
+.insight-progress-select {
+  width: 250px;
 
   :deep(.el-select__wrapper) {
     min-height: 42px;
@@ -1584,6 +2305,44 @@ onMounted(() => {
     color: #25324a;
     font-size: 15px;
     font-weight: 680;
+  }
+}
+
+.insight-question-heading-tools {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.insight-question-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e7ebf2;
+  border-radius: 10px;
+  background: #f4f6fa;
+
+  button {
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 7px;
+    color: #8491a5;
+    background: transparent;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover,
+    &.is-active {
+      color: #b13b31;
+      background: #fff;
+      box-shadow: 0 2px 7px rgba(36, 52, 74, 0.08);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(194, 65, 53, 0.3);
+      outline-offset: 1px;
+    }
   }
 }
 
@@ -1722,6 +2481,33 @@ onMounted(() => {
   border: 1px solid #edf0f5;
   border-radius: 13px;
   background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: #b9ccf7;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.09);
+    outline: none;
+    transform: translateY(-1px);
+  }
+}
+
+.all-question-item {
+  cursor: default;
+
+  &.is-answerable {
+    cursor: pointer;
+  }
+
+  .wrong-question-rank {
+    color: #2563eb;
+  }
+
+  .wrong-question-score strong {
+    color: #2563eb;
+    font-size: 15px;
+  }
 }
 
 .wrong-question-rank {
@@ -1784,6 +2570,259 @@ onMounted(() => {
     color: #94a3b8;
     font-size: 9px;
     white-space: nowrap;
+  }
+}
+
+.wrong-question-detail-shell {
+  min-height: 100%;
+  color: #172033;
+}
+
+.wrong-question-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #edf0f5;
+
+  h2 {
+    margin: 5px 0 0;
+    color: #172033;
+    font-size: 22px;
+  }
+}
+
+.detail-eyebrow,
+.detail-section-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.detail-eyebrow {
+  margin: 0;
+  color: #2563eb;
+}
+
+.wrong-question-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+
+  div {
+    padding: 13px;
+    border: 1px solid #edf0f5;
+    border-radius: 12px;
+    background: #fafbfe;
+  }
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: #c24135;
+    font-size: 20px;
+  }
+
+  span {
+    margin-top: 4px;
+    color: #8491a5;
+    font-size: 10px;
+  }
+}
+
+.wrong-question-detail-section {
+  margin-top: 22px;
+}
+
+.wrong-question-full-text {
+  margin: 9px 0 0;
+  color: #273349;
+  font-size: 15px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wrong-question-options {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+
+  .wrong-question-option {
+    padding: 9px 11px;
+    border-radius: 9px;
+    color: #526176;
+    background: #f5f7fb;
+    font-size: 12px;
+
+    strong,
+    p {
+      display: block;
+    }
+
+    strong {
+      color: #3c4b61;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 5px 0 0;
+      color: #718096;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  }
+}
+
+.wrong-question-correct-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 15px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #14754d;
+  background: #eaf8f1;
+  font-size: 12px;
+
+  span {
+    color: #4c8b6e;
+  }
+
+  strong {
+    word-break: break-word;
+  }
+}
+
+.detail-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+
+  small {
+    color: #94a3b8;
+    font-size: 10px;
+  }
+}
+
+.wrong-question-attempt-list {
+  display: flex;
+  max-height: 440px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.wrong-question-attempt {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  background: #fff;
+
+  &.is-wrong {
+    border-color: #f5d9d5;
+  }
+
+  &.is-correct {
+    border-color: #d6eee2;
+  }
+}
+
+.wrong-question-attempt-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #215cc5;
+  background: #e8f0ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.wrong-question-attempt-main {
+  min-width: 0;
+
+  p {
+    margin: 7px 0 0;
+    color: #273349;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  small {
+    display: block;
+    margin-top: 6px;
+    color: #718096;
+    font-size: 11px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+.wrong-question-attempt-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+
+  strong,
+  span,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #273349;
+    font-size: 12px;
+  }
+
+  span,
+  small {
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  small {
+    margin-left: auto;
+  }
+}
+
+.wrong-question-attempt-status {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+
+  .is-wrong & {
+    color: #b13b31;
+    background: #ffefec;
+  }
+
+  .is-correct & {
+    color: #14754d;
+    background: #e9f8f0;
   }
 }
 
@@ -2038,6 +3077,18 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .student-overview-header {
+    flex-direction: column;
+  }
+
+  .student-overview-header .progress-filter-select {
+    width: 100%;
+  }
+
+  .student-overview-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .hero-actions {
     align-items: stretch;
   }
@@ -2051,6 +3102,12 @@ onMounted(() => {
     flex-wrap: wrap;
   }
 
+  .progress-filter-select,
+  .progress-filter-select-wide {
+    flex: 1 1 180px;
+    width: auto;
+  }
+
   .insight-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2061,6 +3118,14 @@ onMounted(() => {
   .chart-card,
   .metric-card {
     padding: 20px;
+  }
+
+  .student-overview-panel {
+    padding: 20px;
+  }
+
+  .student-overview-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .metrics-grid {
@@ -2080,12 +3145,16 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .insight-class-select {
+  .insight-progress-select {
     width: 100%;
   }
 
   .student-detail-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wrong-question-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .chart-view {
@@ -2125,6 +3194,19 @@ onMounted(() => {
   .section-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .wrong-question-detail-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-question-attempt {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .wrong-question-attempt-status {
+    grid-column: 2;
+    justify-self: flex-start;
   }
 }
 </style>

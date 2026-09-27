@@ -52,9 +52,21 @@ export function refreshProgressStatusApi(progressId: string) {
   })
 }
 
-export function getTeacherProgressRemindersApi() {
+export function getTeacherProgressRemindersApi(params?: {
+  class_id?: string
+  progress_id?: string
+}) {
   return request<Progress.TeacherProgressReminderResponseData>({
     url: "api/v1/progress/reminders",
-    method: "get"
+    method: "get",
+    params
+  })
+}
+
+export function getTeacherStudentProgressOverviewApi(params?: { class_id?: string }) {
+  return request<Progress.TeacherStudentProgressOverviewResponseData>({
+    url: "api/v1/progress/overview",
+    method: "get",
+    params
   })
 }

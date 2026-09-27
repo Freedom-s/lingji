@@ -174,14 +174,21 @@ const ProgressReminder = () => {
               </span>
               <span className={styles.docCopy}>
                 <strong>{doc.doc_name}</strong>
-                <small>
+                <small
+                  className={
+                    !doc.is_completed && doc.completion_reason
+                      ? styles.docIncompleteReason
+                      : undefined
+                  }
+                >
                   {doc.is_completed
                     ? completedDetail(doc)
-                    : doc.doc_type === 'video'
-                      ? '完成视频学习'
-                      : doc.quiz_threshold > 0
-                        ? `测验达到 ${doc.quiz_threshold}%`
-                        : '阅读并记录笔记'}
+                    : doc.completion_reason ||
+                      (doc.doc_type === 'video'
+                        ? '完成视频学习'
+                        : doc.quiz_threshold > 0
+                          ? `测验达到 ${doc.quiz_threshold}%`
+                          : '阅读并记录笔记')}
                 </small>
               </span>
               <ArrowRightOutlined className={styles.docArrow} />
@@ -277,9 +284,10 @@ const ProgressReminder = () => {
             你还有 <strong>{incompleteItems.length}</strong> 项进度待完成
           </h3>
           <p className={styles.promptDescription}>
-            {overdueCount
-              ? `其中 ${overdueCount} 项已经逾期，请优先完成。`
-              : '老师已经安排了学习进度，请按时完成。'}
+            {urgentDoc?.completion_reason ||
+              (overdueCount
+                ? `其中 ${overdueCount} 项已经逾期，请优先完成。`
+                : '老师已经安排了学习进度，请按时完成。')}
           </p>
           <div className={styles.urgentTask}>
             <div>

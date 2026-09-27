@@ -7,6 +7,7 @@ from services.dashboard.service import (
     get_class_activity_ranking,
     get_learning_insights,
     get_student_learning_detail,
+    get_wrong_question_detail,
 )
 from auth import require_superuser, get_current_user
 
@@ -50,7 +51,7 @@ def active_students_chart():
     """
     获取活跃学生数趋势图数据
     
-    说明：只有用户登录系统，并且产生了conversation，才能够算作活跃，否则不算活跃。
+    说明：学生在该时间桶内完成答题或产生对话，即算作活跃；同一时间桶内重复活动只计 1 人。
     """
     try:
         current_user = get_current_user()
@@ -245,6 +246,7 @@ def learning_insights():
             tenant_id=current_user["user_id"],
             time_range=request.args.get('range', '7d'),
             class_id=request.args.get('class_id', '').strip(),
+            progress_id=request.args.get('progress_id', '').strip(),
             limit=min(max(int(request.args.get('limit', 10)), 1), 50),
         )
         if success:
@@ -265,6 +267,7 @@ def student_learning_detail(student_id):
         success, result = get_student_learning_detail(
             tenant_id=current_user["user_id"],
             student_id=student_id,
+            progress_id=request.args.get('progress_id', '').strip(),
             time_range=request.args.get('range', '7d'),
         )
         if success:
@@ -273,3 +276,30 @@ def student_learning_detail(student_id):
         return jsonify({"code": status, "message": result}), status
     except Exception as error:
         return jsonify({"code": 500, "message": f"获取学生学习明细失败: {error}"}), 500
+
+
+@dashboard_bp.route('/wrong-questions/detail', methods=['GET'])
+@require_superuser
+def wrong_question_detail():
+    """获取一道全场错题的完整题目和学生作答明细。"""
+    try:
+        current_user = get_current_user()
+        doc_id = request.args.get('doc_id', '').strip()
+        question_index = request.args.get('question_index', '').strip()
+        if not doc_id or not question_index:
+            return jsonify({"code": 400, "message": "doc_id 和 question_index 不能为空"}), 400
+
+        success, result = get_wrong_question_detail(
+            tenant_id=current_user["user_id"],
+            doc_id=doc_id,
+            question_index=question_index,
+            class_id=request.args.get('class_id', '').strip(),
+            progress_id=request.args.get('progress_id', '').strip(),
+            time_range=request.args.get('range', '7d'),
+        )
+        if success:
+            return jsonify({"code": 0, "data": result, "message": "获取错题详情成功"})
+        status = 404 if result == "错题不存在或不属于当前老师" else 500
+        return jsonify({"code": status, "message": result}), status
+    except Exception as error:
+        return jsonify({"code": 500, "message": f"获取错题详情失败: {error}"}), 500

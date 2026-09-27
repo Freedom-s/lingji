@@ -1,0 +1,18 @@
+[Unit]
+Description=RAGFlow Plus Management API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/home/user/jianhuasuo/lingji/management/server
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/user/jianhuasuo/lingji/management/server:/home/user/jianhuasuo/lingji
+ExecStart=/usr/local/bin/ragflow-management-start
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -24,6 +24,9 @@ LOGGER = logging.getLogger(__name__)
 MAX_HEIGHT = int(os.getenv("VIDEO_TRANSCODE_MAX_HEIGHT", "720"))
 MAX_BITRATE = int(float(os.getenv("VIDEO_TRANSCODE_MAX_BITRATE_MBPS", "3")) * 1_000_000)
 GPU_INDEX = os.getenv("VIDEO_TRANSCODE_GPU", "0")
+# Ubuntu 20.04 ships FFmpeg 4.2.x, whose NVENC wrapper accepts the legacy
+# numeric preset values rather than the newer p1-p7 names (for example p4).
+NVENC_PRESET = os.getenv("VIDEO_TRANSCODE_NVENC_PRESET", "4")
 LOCK_PATH = Path(os.getenv("VIDEO_TRANSCODE_LOCK", "/data/ragflow-video-transcode-work/transcode.lock"))
 
 
@@ -173,7 +176,7 @@ def _transcode_command(source: Path, output: Path, encoder: str) -> list[str]:
                 "-gpu",
                 GPU_INDEX,
                 "-preset",
-                "p4",
+                NVENC_PRESET,
                 "-rc",
                 "vbr",
                 "-cq",

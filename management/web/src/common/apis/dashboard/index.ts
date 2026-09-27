@@ -33,6 +33,24 @@ export interface WrongQuestionInsight {
   wrong_rate: number
 }
 
+export interface WrongQuestionAttemptDetail {
+  id: string
+  student_id: string
+  student_name: string
+  student_email: string
+  student_answer: string
+  answer_explanation: string
+  is_correct: boolean
+  answered_at: string
+}
+
+export interface WrongQuestionDetailData extends WrongQuestionInsight {
+  options: Record<string, string>
+  explanations: Record<string, string>
+  attempts: WrongQuestionAttemptDetail[]
+  range: "24h" | "7d" | "30d"
+}
+
 export interface LearningInsightsData {
   classes: LearningInsightClass[]
   summary: {
@@ -44,6 +62,7 @@ export interface LearningInsightsData {
   }
   students: LearningInsightStudent[]
   wrong_questions: WrongQuestionInsight[]
+  all_questions: WrongQuestionInsight[]
   range: "24h" | "7d" | "30d"
 }
 
@@ -139,6 +158,7 @@ export function getDashboardAllApi(params?: Dashboard.DashboardAllRequestData) {
 export function getLearningInsightsApi(params?: {
   range?: "24h" | "7d" | "30d"
   class_id?: string
+  progress_id?: string
   limit?: number
 }) {
   return request<ApiResponseData<LearningInsightsData>>({
@@ -151,11 +171,28 @@ export function getLearningInsightsApi(params?: {
 /** 获取单个学生的逐题记录与提问内容 */
 export function getStudentLearningDetailApi(
   studentId: string,
-  params?: { range?: "24h" | "7d" | "30d" }
+  params?: { range?: "24h" | "7d" | "30d"; progress_id?: string }
 ) {
   return request<ApiResponseData<StudentLearningDetailData>>({
     url: `api/v1/dashboard/students/${studentId}/learning-detail`,
     method: "get",
     params
+  })
+}
+
+/** 获取单道错题的完整题目、统计和学生作答明细 */
+export function getWrongQuestionDetailApi(
+  docId: string,
+  questionIndex: number,
+  params?: {
+    range?: "24h" | "7d" | "30d"
+    class_id?: string
+    progress_id?: string
+  }
+) {
+  return request<ApiResponseData<WrongQuestionDetailData>>({
+    url: "api/v1/dashboard/wrong-questions/detail",
+    method: "get",
+    params: { doc_id: docId, question_index: questionIndex, ...params }
   })
 }

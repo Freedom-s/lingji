@@ -7,11 +7,55 @@ from database import DB_CONFIG
 from auth import get_current_user
 
 
+_PROGRESS_STATUS_QUERY = """
+    SELECT sps.student_id, u.nickname as student_name, sps.doc_id,
+           sps.is_completed, sps.video_completed, sps.quiz_passed, sps.has_notes
+    FROM student_progress_status sps
+    JOIN user u ON sps.student_id = u.id
+    JOIN weekly_progress wp ON wp.id = sps.progress_id
+    JOIN user_class uc
+      ON uc.class_id = wp.class_id
+     AND uc.user_id = sps.student_id
+     AND uc.role = 'student'
+     AND uc.status = '1'
+    WHERE sps.progress_id = %s
+    ORDER BY u.nickname
+"""
+
+
 def _get_utc8_time():
     utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
     target_tz = pytz.timezone('Asia/Shanghai')
     local_dt = utc_now.astimezone(target_tz)
     return int(local_dt.timestamp() * 1000), local_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _get_utc8_today():
+    utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
+    return utc_now.astimezone(pytz.timezone('Asia/Shanghai')).date()
+
+
+def _get_progress_state(start_date, end_date, today):
+    if today < start_date:
+        return "upcoming", (start_date - today).days
+    if today > end_date:
+        return "overdue", (today - end_date).days
+    return "active", (end_date - today).days
+
+
+def _evaluate_quiz_completion(total_questions, answered_questions, correct_questions, threshold):
+    """按原题数计算达标率：每道题答对过一次即可记为正确。"""
+    total_questions = int(total_questions or 0)
+    answered_questions = int(answered_questions or 0)
+    correct_questions = int(correct_questions or 0)
+    threshold = float(threshold or 0)
+    quiz_rate = round(correct_questions / total_questions * 100, 1) if total_questions else 0.0
+    quiz_passed = (
+        total_questions > 0
+        and answered_questions >= total_questions
+        and quiz_rate >= threshold
+    )
+    return quiz_rate, quiz_passed
 
 
 def get_weekly_progress_list(class_id):
@@ -346,14 +390,21 @@ def refresh_progress_status(progress_id):
         # 判断哪些文档有测验
         doc_ids = [d["doc_id"] for d in progress_docs]
         has_quiz_docs = set()
+        quiz_question_counts = {}
         if doc_ids:
             placeholders = ", ".join(["%s"] * len(doc_ids))
             cursor.execute(
-                f"SELECT DISTINCT doc_id FROM document_generation WHERE doc_id IN ({placeholders}) AND generation_type = 'quiz'",
+                f"SELECT doc_id, content FROM document_generation WHERE doc_id IN ({placeholders}) AND generation_type = 'quiz'",
                 doc_ids
             )
             for row in cursor.fetchall():
-                has_quiz_docs.add(row["doc_id"])
+                doc_id = row["doc_id"]
+                has_quiz_docs.add(doc_id)
+                try:
+                    questions = json.loads(row.get("content") or "[]")
+                    quiz_question_counts[doc_id] = len(questions) if isinstance(questions, list) else 0
+                except (TypeError, json.JSONDecodeError):
+                    quiz_question_counts[doc_id] = 0
 
         ct_ms, ct_date = _get_utc8_time()
         now_dt = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
@@ -385,14 +436,22 @@ def refresh_progress_status(progress_id):
                 # 有测验的文档：测验达标即完成
                 elif did in has_quiz_docs:
                     cursor.execute(
-                        "SELECT COUNT(*) as cnt, SUM(is_correct) as correct FROM student_quiz_result WHERE student_id = %s AND doc_id = %s",
+                        "SELECT COUNT(*) as cnt, COUNT(DISTINCT question_index) as answered_questions, "
+                        "COUNT(DISTINCT CASE WHEN is_correct = 1 THEN question_index END) as correct_questions "
+                        "FROM student_quiz_result "
+                        "WHERE student_id = %s AND doc_id = %s",
                         (sid, did)
                     )
                     qr = cursor.fetchone()
-                    total = int(qr["cnt"] or 0)
-                    correct = int(qr["correct"] or 0)
-                    rate = (correct / total * 100) if total > 0 else 0
-                    quiz_passed = (total > 0 and rate >= threshold)
+                    answered_questions = int(qr["answered_questions"] or 0)
+                    correct_questions = int(qr["correct_questions"] or 0)
+                    total_questions = quiz_question_counts.get(did, 0)
+                    rate, quiz_passed = _evaluate_quiz_completion(
+                        total_questions,
+                        answered_questions,
+                        correct_questions,
+                        threshold,
+                    )
 
                     cursor.execute(
                         "SELECT COUNT(*) as cnt FROM student_note WHERE student_id = %s AND doc_id = %s",
@@ -489,14 +548,7 @@ def get_progress_status(progress_id):
         docs = cursor.fetchall()
 
         # 学生完成状态
-        cursor.execute("""
-            SELECT sps.student_id, u.nickname as student_name, sps.doc_id,
-                   sps.is_completed, sps.video_completed, sps.quiz_passed, sps.has_notes
-            FROM student_progress_status sps
-            JOIN user u ON sps.student_id = u.id
-            WHERE sps.progress_id = %s
-            ORDER BY u.nickname
-        """, (progress_id,))
+        cursor.execute(_PROGRESS_STATUS_QUERY, (progress_id,))
         status_rows = cursor.fetchall()
 
         cursor.close()
@@ -550,7 +602,7 @@ def get_progress_status(progress_id):
         return False, str(err)
 
 
-def get_teacher_progress_reminders():
+def get_teacher_progress_reminders(class_id=None, progress_id=None):
     """获取当前老师所有周进度的完成提醒，用于后台首页。"""
     current_user = get_current_user()
     if not current_user:
@@ -560,22 +612,31 @@ def get_teacher_progress_reminders():
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
+        conditions = ["c.tenant_id = %s", "wp.status = '1'"]
+        query_params = [user_id]
+        if class_id:
+            conditions.append("wp.class_id = %s")
+            query_params.append(class_id)
+        if progress_id:
+            conditions.append("wp.id = %s")
+            query_params.append(progress_id)
+
         cursor.execute(
-            """
+            f"""
             SELECT wp.id
             FROM weekly_progress wp
             JOIN class c ON wp.class_id = c.id
-            WHERE c.tenant_id = %s AND wp.status = '1'
+            WHERE {' AND '.join(conditions)}
             ORDER BY wp.week_end ASC, wp.week_start ASC
             """,
-            (user_id,),
+            tuple(query_params),
         )
         progress_ids = [row["id"] for row in cursor.fetchall()]
         cursor.close()
         conn.close()
 
         items = []
-        today = date.today()
+        today = _get_utc8_today()
         for progress_id in progress_ids:
             success, result = get_progress_status(progress_id)
             if not success:
@@ -595,15 +656,7 @@ def get_teacher_progress_reminders():
                 else datetime.strptime(str(end_value)[:10], "%Y-%m-%d").date()
             )
 
-            if today < start_date:
-                state = "upcoming"
-                day_count = (start_date - today).days
-            elif today > end_date:
-                state = "overdue"
-                day_count = (today - end_date).days
-            else:
-                state = "active"
-                day_count = (end_date - today).days
+            state, day_count = _get_progress_state(start_date, end_date, today)
 
             completed_students = []
             incomplete_students = []
@@ -655,3 +708,169 @@ def get_teacher_progress_reminders():
     except (mysql.connector.Error, ValueError) as err:
         print(f"获取教师进度提醒失败: {err}")
         return False, str(err)
+
+
+def get_teacher_progress_overview(class_id=None):
+    """汇总学生跨周进度，用于教师查看整体跟进情况。"""
+    success, reminder_result = get_teacher_progress_reminders(class_id=class_id)
+    if not success:
+        return False, reminder_result
+
+    items = reminder_result.get("items", [])
+    ordered_items = sorted(
+        items,
+        key=lambda item: (item["week_start"], item["week_end"], item["name"]),
+    )
+    state_priority = {"overdue": 0, "active": 1, "upcoming": 2}
+    progress_groups = []
+    progress_group_map = {}
+    for item in ordered_items:
+        group_key = (item["name"], item["week_start"], item["week_end"])
+        group = progress_group_map.get(group_key)
+        if group is None:
+            group = {"key": group_key, "items": []}
+            progress_group_map[group_key] = group
+            progress_groups.append(group)
+        group["items"].append(item)
+
+    progress_columns = [
+        {
+            "id": "|".join(group["key"]),
+            "name": group["key"][0],
+            "week_start": group["key"][1],
+            "week_end": group["key"][2],
+            "state": min(
+                (item["state"] for item in group["items"]),
+                key=lambda state: state_priority[state],
+            ),
+        }
+        for group in progress_groups
+    ]
+
+    student_map = {}
+    for item in ordered_items:
+        group_key = (item["name"], item["week_start"], item["week_end"])
+        student_statuses = {
+            student["student_id"]: ("completed", student)
+            for student in item["completed_students"]
+        }
+        student_statuses.update({
+            student["student_id"]: (
+                "partial" if student["completed_docs"] > 0 else "not_started",
+                student,
+            )
+            for student in item["incomplete_students"]
+        })
+
+        for student_id, (progress_status, student) in student_statuses.items():
+            key = (item["class_id"], student_id)
+            row = student_map.setdefault(
+                key,
+                {
+                    "student_id": student_id,
+                    "student_name": student["student_name"],
+                    "class_id": item["class_id"],
+                    "class_name": item["class_name"],
+                    "progress_by_key": {},
+                },
+            )
+            row["progress_by_key"][group_key] = {
+                "progress_id": item["id"],
+                "name": item["name"],
+                "week_start": item["week_start"],
+                "week_end": item["week_end"],
+                "state": item["state"],
+                "status": progress_status,
+                "completed_docs": student["completed_docs"],
+                "total_docs": student["total_docs"],
+            }
+
+    students = []
+    for row in student_map.values():
+        progress_rows = [
+            row["progress_by_key"].get(group["key"], {
+                "progress_id": "",
+                "name": group["key"][0],
+                "week_start": group["key"][1],
+                "week_end": group["key"][2],
+                "state": "unassigned",
+                "status": "unassigned",
+                "completed_docs": 0,
+                "total_docs": 0,
+            })
+            for group in progress_groups
+        ]
+        assigned_rows = [item for item in progress_rows if item["state"] != "unassigned"]
+        tracked_rows = [
+            item for item in assigned_rows
+            if item["state"] != "upcoming"
+        ]
+        completed_count = sum(1 for item in tracked_rows if item["status"] == "completed")
+        partial_count = sum(1 for item in tracked_rows if item["status"] == "partial")
+        not_started_count = sum(1 for item in tracked_rows if item["status"] == "not_started")
+        completed_task_count = sum(item["completed_docs"] for item in tracked_rows)
+        total_task_count = sum(item["total_docs"] for item in tracked_rows)
+        overdue_count = sum(
+            1
+            for item in tracked_rows
+            if item["state"] == "overdue" and item["status"] != "completed"
+        )
+
+        consecutive_incomplete = 0
+        for item in reversed(tracked_rows):
+            if item["status"] == "completed":
+                break
+            consecutive_incomplete += 1
+
+        if not tracked_rows:
+            overall_status = "upcoming"
+        elif completed_count == len(tracked_rows):
+            overall_status = "completed"
+        elif completed_count == 0 and partial_count == 0:
+            overall_status = "not_started"
+        else:
+            overall_status = "partial"
+
+        row.update({
+            "status": overall_status,
+            "total_progresses": len(assigned_rows),
+            "tracked_progresses": len(tracked_rows),
+            "completed_progresses": completed_count,
+            "partial_progresses": partial_count,
+            "not_started_progresses": not_started_count,
+            "overdue_progresses": overdue_count,
+            "consecutive_incomplete_progresses": consecutive_incomplete,
+            "completion_rate": (
+                round(completed_task_count / total_task_count * 100, 1)
+                if total_task_count
+                else 0.0
+            ),
+            "progresses": progress_rows,
+        })
+        row.pop("progress_by_key")
+        students.append(row)
+
+    status_priority = {"not_started": 0, "partial": 1, "upcoming": 2, "completed": 3}
+    students.sort(key=lambda row: (
+        -row["overdue_progresses"],
+        status_priority[row["status"]],
+        -row["consecutive_incomplete_progresses"],
+        row["completion_rate"],
+        row["student_name"],
+    ))
+
+    return True, {
+        "summary": {
+            "total_students": len(students),
+            "completed_students": sum(1 for row in students if row["status"] == "completed"),
+            "partial_students": sum(1 for row in students if row["status"] == "partial"),
+            "not_started_students": sum(1 for row in students if row["status"] == "not_started"),
+            "upcoming_students": sum(1 for row in students if row["status"] == "upcoming"),
+            "overdue_incomplete_students": sum(
+                1 for row in students if row["overdue_progresses"] > 0
+            ),
+            "total_progresses": len(progress_columns),
+        },
+        "progresses": progress_columns,
+        "students": students,
+    }
