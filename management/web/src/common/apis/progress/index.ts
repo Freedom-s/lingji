@@ -16,6 +16,14 @@ export function createWeeklyProgressApi(classId: string, data: Progress.CreatePr
   })
 }
 
+export function createWeeklyProgressBatchApi(data: Progress.BatchCreateProgressData) {
+  return request<Progress.WeeklyProgressBatchCreateResponseData>({
+    url: "api/v1/progress/batch",
+    method: "post",
+    data
+  })
+}
+
 export function updateWeeklyProgressApi(progressId: string, data: Progress.CreateProgressData) {
   return request<Progress.ProgressMutationResponseData>({
     url: `api/v1/progress/detail/${progressId}`,

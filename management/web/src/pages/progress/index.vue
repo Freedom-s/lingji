@@ -9,6 +9,7 @@ import type {
 import type { FormInstance } from "element-plus"
 import {
   createWeeklyProgressApi,
+  createWeeklyProgressBatchApi,
   deleteWeeklyProgressApi,
   getClassDocumentsApi,
   getProgressStatusApi,
@@ -79,6 +80,10 @@ watch(selectedClassId, () => {
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingId = ref("")
+const createClassIds = ref<string[]>([])
+const saving = ref(false)
+const docsLoading = ref(false)
+let docsRequestId = 0
 const formRef = ref<FormInstance | null>(null)
 const formData = reactive<CreateProgressData>({
   name: "",
@@ -111,16 +116,18 @@ function openCreate() {
   formData.week_end = ""
   formData.doc_ids = []
   formData.quiz_thresholds = {}
+  createClassIds.value = selectedClassId.value ? [selectedClassId.value] : []
   // 重置选择
   availableDocs.value.forEach((d) => {
     docSelection[d.id] = false
     docThresholds[d.id] = 0
   })
   dialogVisible.value = true
-  if (selectedClassId.value) loadDocs()
 }
 
 async function openEdit(row: WeeklyProgressItem) {
+  docsRequestId++
+  docsLoading.value = false
   isEditing.value = true
   editingId.value = row.id
   formData.name = row.name
@@ -145,18 +152,48 @@ async function openEdit(row: WeeklyProgressItem) {
   }
 }
 
-function loadDocs() {
-  if (!selectedClassId.value) return
-  getClassDocumentsApi(selectedClassId.value).then(({ data }) => {
-    availableDocs.value = data || []
-    availableDocs.value.forEach((d) => {
-      if (!(d.id in docSelection)) {
-        docSelection[d.id] = false
-        docThresholds[d.id] = 0
+async function loadCreateDocs() {
+  const requestId = ++docsRequestId
+  const classIds = [...createClassIds.value]
+  if (!classIds.length) {
+    availableDocs.value = []
+    docsLoading.value = false
+    return
+  }
+  docsLoading.value = true
+  try {
+    const responses = await Promise.all(classIds.map(id => getClassDocumentsApi(id)))
+    if (requestId !== docsRequestId || isEditing.value) return
+    const commonIds = new Set(responses[0].data.map(doc => doc.id))
+    responses.slice(1).forEach(({ data }) => {
+      const ids = new Set(data.map(doc => doc.id))
+      commonIds.forEach((id) => {
+        if (!ids.has(id)) commonIds.delete(id)
+      })
+    })
+    availableDocs.value = responses[0].data.filter(doc => commonIds.has(doc.id))
+    Object.keys(docSelection).forEach((id) => {
+      if (!commonIds.has(id)) docSelection[id] = false
+    })
+    availableDocs.value.forEach((doc) => {
+      if (!(doc.id in docSelection)) {
+        docSelection[doc.id] = false
+        docThresholds[doc.id] = 0
       }
     })
-  })
+  } catch {
+    if (requestId === docsRequestId) {
+      availableDocs.value = []
+      ElMessage.error("获取班级资料失败")
+    }
+  } finally {
+    if (requestId === docsRequestId) docsLoading.value = false
+  }
 }
+
+watch(createClassIds, () => {
+  if (dialogVisible.value && !isEditing.value) void loadCreateDocs()
+})
 
 async function loadDocsAsync() {
   if (!selectedClassId.value) return
@@ -182,6 +219,12 @@ function buildFormFromSelection() {
 }
 
 function handleSave() {
+  if (saving.value) return
+  if (docsLoading.value) return
+  if (!isEditing.value && createClassIds.value.length === 0) {
+    ElMessage.warning("至少选择1个班级")
+    return
+  }
   if (!formData.name.trim()) {
     ElMessage.warning("请输入名称")
     return
@@ -197,18 +240,26 @@ function handleSave() {
     return
   }
 
-  loading.value = true
+  saving.value = true
+  const targetClassIds = [...createClassIds.value]
+  const payload = {
+    ...formData,
+    doc_ids: [...formData.doc_ids],
+    quiz_thresholds: { ...formData.quiz_thresholds }
+  }
   const api = isEditing.value
-    ? updateWeeklyProgressApi(editingId.value, { ...formData })
-    : createWeeklyProgressApi(selectedClassId.value, { ...formData })
+    ? updateWeeklyProgressApi(editingId.value, payload)
+    : targetClassIds.length === 1
+      ? createWeeklyProgressApi(targetClassIds[0], payload)
+      : createWeeklyProgressBatchApi({ ...payload, class_ids: targetClassIds })
 
   api
     .then(() => {
-      ElMessage.success(isEditing.value ? "修改成功" : "创建成功")
+      ElMessage.success(isEditing.value ? "修改成功" : `已为${targetClassIds.length}个班级创建周进度`)
       dialogVisible.value = false
       loadProgressList()
     })
-    .finally(() => (loading.value = false))
+    .finally(() => (saving.value = false))
 }
 
 function handleDelete(row: WeeklyProgressItem) {
@@ -732,6 +783,25 @@ function getStudentInitial(name: string) {
         label-position="top"
         class="editor-form"
       >
+        <el-form-item v-if="!isEditing" label="发布班级" required>
+          <el-select
+            v-model="createClassIds"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择一个或多个班级"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in classOptions"
+              :key="c.id"
+              :label="c.name"
+              :value="c.id"
+            />
+          </el-select>
+          <small class="class-doc-hint">下方仅显示所选班级都可使用的资料</small>
+        </el-form-item>
         <div class="editor-form-grid">
           <el-form-item label="进度名称" required>
             <el-input
@@ -759,7 +829,7 @@ function getStudentInitial(name: string) {
         </div>
 
         <el-form-item label="选择文档" required class="document-form-item">
-          <div class="doc-picker">
+          <div v-loading="docsLoading" class="doc-picker">
             <header class="doc-picker-header">
               <div>
                 <strong>本周学习资料</strong>
@@ -839,7 +909,8 @@ function getStudentInitial(name: string) {
             <el-button
               class="save-plan-button"
               type="primary"
-              :loading="loading"
+              :loading="saving"
+              :disabled="docsLoading"
               @click="handleSave"
             >
               {{ isEditing ? "保存修改" : "创建进度" }}
@@ -1620,6 +1691,13 @@ function getStudentInitial(name: string) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
   gap: 18px;
+}
+
+.class-doc-hint {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .date-picker-row {

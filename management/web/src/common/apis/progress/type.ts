@@ -16,6 +16,10 @@ export interface CreateProgressData {
   quiz_thresholds: Record<string, number>
 }
 
+export interface BatchCreateProgressData extends CreateProgressData {
+  class_ids: string[]
+}
+
 export interface ClassDocument {
   id: string
   name: string
@@ -154,6 +158,7 @@ export interface TeacherStudentProgressOverviewResult {
 
 export type WeeklyProgressListResponseData = ApiResponseData<WeeklyProgressItem[]>
 export type WeeklyProgressCreateResponseData = ApiResponseData<{ id: string }>
+export type WeeklyProgressBatchCreateResponseData = ApiResponseData<{ ids: Record<string, string> }>
 export type ProgressMutationResponseData = ApiResponseData<null>
 export type ClassDocumentListResponseData = ApiResponseData<ClassDocument[]>
 export type ProgressStatusResponseData = ApiResponseData<ProgressStatusResult>

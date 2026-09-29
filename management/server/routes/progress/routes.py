@@ -2,6 +2,7 @@ from flask import jsonify, request
 from services.progress.service import (
     get_weekly_progress_list,
     create_weekly_progress,
+    create_weekly_progresses,
     update_weekly_progress,
     delete_weekly_progress,
     get_class_documents,
@@ -63,6 +64,21 @@ def create_progress(class_id):
         success, result = create_weekly_progress(class_id, data)
         if success:
             return jsonify({"code": 0, "data": {"id": result}, "message": "创建周进度成功"})
+        return jsonify({"code": 400, "message": result}), 400
+    except Exception as e:
+        return jsonify({"code": 500, "message": f"创建周进度失败: {str(e)}"}), 500
+
+
+@progress_bp.route('/batch', methods=['POST'])
+@require_superuser
+def create_progress_batch():
+    try:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"code": 400, "message": "请求体不能为空"}), 400
+        success, result = create_weekly_progresses(data.get("class_ids"), data)
+        if success:
+            return jsonify({"code": 0, "data": {"ids": result}, "message": "创建周进度成功"})
         return jsonify({"code": 400, "message": result}), 400
     except Exception as e:
         return jsonify({"code": 500, "message": f"创建周进度失败: {str(e)}"}), 500

@@ -1,7 +1,159 @@
 from services.progress import service
 from datetime import date, timedelta
+from itertools import count
+
+import mysql.connector
 
 import pytest
+
+
+class _CreateCursor:
+    def __init__(self, conn):
+        self.conn = conn
+        self.rows = []
+
+    def execute(self, query, params=()):
+        db = self.conn
+        if "FROM class WHERE" in query:
+            class_id, user_id = params
+            self.rows = [{"id": class_id}] if db.classes.get(class_id) == user_id else []
+        elif "FROM class_dialog cd" in query:
+            self.rows = [{"kb_ids": '["kb-1"]'}] if params[0] in db.classes else []
+        elif "FROM document WHERE" in query:
+            self.rows = [{"id": "doc-1"}] if "kb-1" in params else []
+        elif "SELECT id FROM weekly_progress" in query:
+            class_id, name, start, end = params
+            self.rows = [
+                {"id": row["id"]} for row in db.progresses.values()
+                if (row["class_id"], row["name"], row["start"], row["end"])
+                == (class_id, name, start, end)
+            ]
+        elif "SELECT doc_id, quiz_threshold" in query:
+            self.rows = [
+                {"doc_id": doc_id, "quiz_threshold": threshold}
+                for progress_id, doc_id, threshold in db.docs
+                if progress_id == params[0]
+            ]
+        elif "INSERT INTO weekly_progress_doc" in query:
+            _, progress_id, doc_id, threshold, *_ = params
+            db.pending_docs.append((progress_id, doc_id, threshold))
+        elif "INSERT INTO weekly_progress" in query:
+            progress_id, class_id, name, start, end, *_ = params
+            if class_id == db.fail_on_class:
+                raise mysql.connector.Error("insert failed")
+            db.pending_progresses[progress_id] = {
+                "id": progress_id, "class_id": class_id,
+                "name": name, "start": start, "end": end,
+            }
+        else:
+            raise AssertionError(query)
+
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        pass
+
+
+class _CreateConnection:
+    def __init__(self):
+        self.classes = {"class-1": "teacher-1", "class-2": "teacher-1", "foreign": "other"}
+        self.progresses = {}
+        self.docs = []
+        self.pending_progresses = {}
+        self.pending_docs = []
+        self.fail_on_class = None
+        self.commits = 0
+        self.rollbacks = 0
+
+    def cursor(self, dictionary=False):
+        return _CreateCursor(self)
+
+    def commit(self):
+        self.progresses.update(self.pending_progresses)
+        self.docs.extend(self.pending_docs)
+        self.pending_progresses = {}
+        self.pending_docs = []
+        self.commits += 1
+
+    def rollback(self):
+        self.pending_progresses = {}
+        self.pending_docs = []
+        self.rollbacks += 1
+
+    def close(self):
+        pass
+
+
+@pytest.fixture
+def create_db(monkeypatch):
+    db = _CreateConnection()
+    ids = count(1)
+    monkeypatch.setattr(service, "get_current_user", lambda: {"user_id": "teacher-1"})
+    monkeypatch.setattr(service.mysql.connector, "connect", lambda **kwargs: db)
+    monkeypatch.setattr(service, "generate_uuid", lambda: f"id-{next(ids)}")
+    return db
+
+
+@pytest.fixture
+def create_data():
+    return {
+        "name": "第1周", "week_start": "2026-09-01", "week_end": "2026-09-07",
+        "doc_ids": ["doc-1"], "quiz_thresholds": {"doc-1": 80},
+    }
+
+
+def test_batch_create_and_retry_return_same_ids(create_db, create_data):
+    success, ids = service.create_weekly_progresses(["class-1", "class-2"], create_data)
+    assert success is True
+    assert set(ids) == {"class-1", "class-2"}
+    assert len(set(ids.values())) == 2
+    assert len(create_db.progresses) == len(create_db.docs) == 2
+
+    assert service.create_weekly_progresses(["class-1", "class-2"], create_data) == (True, ids)
+    assert create_db.commits == 1
+    assert len(create_db.progresses) == 2
+
+
+def test_batch_rejects_empty_foreign_and_partial_existing_classes(create_db, create_data):
+    assert service.create_weekly_progresses([], create_data)[0] is False
+    assert service.create_weekly_progresses(["class-1", "foreign"], create_data)[0] is False
+    assert create_db.progresses == {}
+
+    assert service.create_weekly_progress("class-1", create_data)[0] is True
+    success, message = service.create_weekly_progresses(["class-1", "class-2"], create_data)
+    assert success is False
+    assert "部分班级" in message
+    assert len(create_db.progresses) == 1
+
+
+def test_batch_rejects_unavailable_document_and_rolls_back_failed_insert(create_db, create_data):
+    unavailable = {**create_data, "doc_ids": ["doc-2"]}
+    assert service.create_weekly_progresses(["class-1", "class-2"], unavailable)[0] is False
+    assert create_db.progresses == {}
+
+    create_db.fail_on_class = "class-2"
+    success, _ = service.create_weekly_progresses(["class-1", "class-2"], create_data)
+    assert success is False
+    assert create_db.progresses == {}
+    assert create_db.docs == []
+    assert create_db.rollbacks >= 2
+
+
+def test_single_class_create_keeps_original_result_shape(create_db, create_data):
+    success, progress_id = service.create_weekly_progress("class-1", create_data)
+    assert success is True
+    assert isinstance(progress_id, str)
+    assert service.create_weekly_progress("class-1", create_data) == (True, progress_id)
+
+    changed_threshold = {**create_data, "quiz_thresholds": {"doc-1": 90}}
+    success, message = service.create_weekly_progress("class-1", changed_threshold)
+    assert success is False
+    assert "内容不同" in message
+    assert len(create_db.progresses) == 1
 
 
 def test_progress_status_query_only_includes_current_class_students():
@@ -186,6 +338,7 @@ def test_teacher_progress_overview_distinguishes_partial_and_not_started_student
     assert result["summary"]["completed_students"] == 1
     assert result["summary"]["partial_students"] == 1
     assert result["summary"]["not_started_students"] == 0
+    assert [student["student_id"] for student in result["students"]] == ["student-1", "student-2"]
     zhang = next(student for student in result["students"] if student["student_id"] == "student-1")
     assert zhang["status"] == "partial"
     assert zhang["overdue_progresses"] == 1

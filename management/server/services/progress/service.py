@@ -96,6 +96,78 @@ def get_weekly_progress_list(class_id):
 
 
 def create_weekly_progress(class_id, data):
+    """保留原单班级接口的返回格式。"""
+    success, result = create_weekly_progresses([class_id], data, validate_docs=False)
+    return (success, result[class_id]) if success else (False, result)
+
+
+def _class_document_ids(cursor, class_id):
+    """班级通过关联的智能体可使用的有效文档。"""
+    cursor.execute(
+        "SELECT d.kb_ids FROM class_dialog cd JOIN dialog d ON d.id = cd.dialog_id "
+        "WHERE cd.class_id = %s", (class_id,)
+    )
+    kb_ids = set()
+    for row in cursor.fetchall():
+        value = row.get("kb_ids")
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                value = []
+        if isinstance(value, list):
+            kb_ids.update(kb_id for kb_id in value if kb_id)
+    if not kb_ids:
+        return set()
+    placeholders = ", ".join(["%s"] * len(kb_ids))
+    cursor.execute(
+        f"SELECT id FROM document WHERE kb_id IN ({placeholders}) AND status = '1'",
+        tuple(sorted(kb_ids)),
+    )
+    return {row["id"] for row in cursor.fetchall()}
+
+
+def create_weekly_progresses(class_ids, data, validate_docs=True):
+    """在一个事务中为多个班级创建同一周进度；重复请求返回原有 ID。"""
+    if not isinstance(class_ids, list) or not class_ids or any(
+        not isinstance(class_id, str) or not class_id.strip() for class_id in class_ids
+    ):
+        return False, "至少选择1个班级"
+    if len(class_ids) != len(set(class_ids)):
+        return False, "班级不能重复选择"
+    if not isinstance(data, dict):
+        return False, "请求体格式错误"
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return False, "名称不能为空"
+    name = name.strip()
+    try:
+        week_start = date.fromisoformat(data.get("week_start", ""))
+        week_end = date.fromisoformat(data.get("week_end", ""))
+    except (TypeError, ValueError):
+        return False, "日期格式错误"
+    if week_start > week_end:
+        return False, "开始日期不能晚于截止日期"
+    doc_ids = data.get("doc_ids")
+    if not isinstance(doc_ids, list) or not doc_ids or any(
+        not isinstance(doc_id, str) or not doc_id for doc_id in doc_ids
+    ):
+        return False, "至少选择1个文档"
+    if len(doc_ids) != len(set(doc_ids)):
+        return False, "文档不能重复选择"
+    quiz_thresholds = data.get("quiz_thresholds", {})
+    if not isinstance(quiz_thresholds, dict):
+        return False, "测验达标分数格式错误"
+    try:
+        thresholds = {doc_id: int(quiz_thresholds.get(doc_id, 0)) for doc_id in doc_ids}
+    except (ValueError, TypeError):
+        return False, "测验达标分数格式错误"
+    if any(value < 0 or value > 100 for value in thresholds.values()):
+        return False, "测验达标分数须在0到100之间"
+
+    conn = None
+    cursor = None
+    committed = False
     try:
         current_user = get_current_user()
         if not current_user:
@@ -104,56 +176,77 @@ def create_weekly_progress(class_id, data):
 
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
+        # 按固定顺序锁定班级行，串行化同一班级的创建及重复请求。
+        for class_id in sorted(class_ids):
+            cursor.execute(
+                "SELECT id FROM class WHERE id = %s AND tenant_id = %s FOR UPDATE",
+                (class_id, user_id),
+            )
+            if not cursor.fetchone():
+                return False, "班级不存在或无权操作"
 
-        check_query = "SELECT id FROM class WHERE id = %s AND tenant_id = %s"
-        cursor.execute(check_query, (class_id, user_id))
-        if not cursor.fetchone():
-            cursor.close()
-            conn.close()
-            return False, "班级不存在或无权操作"
+        # 批量创建时，资料须对每个目标班级可见。单班级旧接口保留原有行为。
+        if validate_docs:
+            for class_id in class_ids:
+                if not set(doc_ids).issubset(_class_document_ids(cursor, class_id)):
+                    return False, "所选文档并非每个班级都可使用"
 
-        name = data.get("name", "").strip()
-        if not name:
-            cursor.close()
-            conn.close()
-            return False, "名称不能为空"
+        existing = {}
+        for class_id in class_ids:
+            cursor.execute(
+                "SELECT id FROM weekly_progress WHERE class_id = %s AND name = %s "
+                "AND week_start = %s AND week_end = %s FOR UPDATE",
+                (class_id, name, week_start, week_end),
+            )
+            rows = cursor.fetchall()
+            if rows:
+                if len(rows) != 1:
+                    return False, "所选班级已有同名、同日期的周进度"
+                existing[class_id] = rows[0]["id"]
 
-        week_start = data.get("week_start", "")
-        week_end = data.get("week_end", "")
-        doc_ids = data.get("doc_ids", [])
-        quiz_thresholds = data.get("quiz_thresholds", {})
-
-        if not doc_ids:
-            cursor.close()
-            conn.close()
-            return False, "至少选择1个文档"
+        if existing:
+            if len(existing) != len(class_ids):
+                return False, "部分班级已有同名、同日期的周进度，请检查后重试"
+            for progress_id in existing.values():
+                cursor.execute(
+                    "SELECT doc_id, quiz_threshold FROM weekly_progress_doc WHERE progress_id = %s",
+                    (progress_id,),
+                )
+                if {row["doc_id"]: row["quiz_threshold"] for row in cursor.fetchall()} != thresholds:
+                    return False, "所选班级已有同名、同日期但内容不同的周进度"
+            return True, existing
 
         ct_ms, ct_date = _get_utc8_time()
-        progress_id = generate_uuid()
-
-        cursor.execute(
-            "INSERT INTO weekly_progress (id, class_id, name, week_start, week_end, status, create_time, create_date, update_time, update_date) "
-            "VALUES (%s, %s, %s, %s, %s, '1', %s, %s, %s, %s)",
-            (progress_id, class_id, name, week_start, week_end, ct_ms, ct_date, ct_ms, ct_date)
-        )
-
-        for doc_id in doc_ids:
-            threshold = int(quiz_thresholds.get(doc_id, 0))
-            doc_link_id = generate_uuid()
+        created = {}
+        for class_id in class_ids:
+            progress_id = generate_uuid()
+            created[class_id] = progress_id
             cursor.execute(
-                "INSERT INTO weekly_progress_doc (id, progress_id, doc_id, quiz_threshold, create_time, create_date, update_time, update_date) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (doc_link_id, progress_id, doc_id, threshold, ct_ms, ct_date, ct_ms, ct_date)
+                "INSERT INTO weekly_progress (id, class_id, name, week_start, week_end, status, create_time, create_date, update_time, update_date) "
+                "VALUES (%s, %s, %s, %s, %s, '1', %s, %s, %s, %s)",
+                (progress_id, class_id, name, week_start, week_end, ct_ms, ct_date, ct_ms, ct_date),
             )
+            for doc_id in doc_ids:
+                cursor.execute(
+                    "INSERT INTO weekly_progress_doc (id, progress_id, doc_id, quiz_threshold, create_time, create_date, update_time, update_date) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (generate_uuid(), progress_id, doc_id, thresholds[doc_id], ct_ms, ct_date, ct_ms, ct_date),
+                )
 
         conn.commit()
-        cursor.close()
-        conn.close()
-        return True, progress_id
+        committed = True
+        return True, created
 
     except mysql.connector.Error as err:
         print(f"创建周进度失败: {err}")
         return False, str(err)
+    finally:
+        if conn:
+            if not committed:
+                conn.rollback()
+            if cursor:
+                cursor.close()
+            conn.close()
 
 
 def update_weekly_progress(progress_id, data):
@@ -852,10 +945,10 @@ def get_teacher_progress_overview(class_id=None):
 
     status_priority = {"not_started": 0, "partial": 1, "upcoming": 2, "completed": 3}
     students.sort(key=lambda row: (
+        row["completion_rate"],
         -row["overdue_progresses"],
         status_priority[row["status"]],
         -row["consecutive_incomplete_progresses"],
-        row["completion_rate"],
         row["student_name"],
     ))
 
