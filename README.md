@@ -22,22 +22,29 @@
 
 **Lingji（灵机）** 是一个基于 [RAGFlow-Plus](https://github.com/zstar1003/ragflow-plus) 深度定制的**多模态检索增强生成（Multimodal RAG）**教学平台。通过**页面级图文检索** + **视觉语言模型（VLM）**回答，实现了对课件、文档、视频等教学资源的智能化理解与问答。
 
-#### 1️⃣ **多模态 RAG 引擎**
-- 📄 **页面级检索**：保留文档原始页面结构，图文并茂地检索与展示
+### 🎯 核心特性
+
+#### 1️⃣ **页面级检索（核心创新）**
+- 📄 **Workflow 模式**：检索后直接展示原始页面，用户可以看到答案来源于哪个页面、哪个位置
+- 🤖 **Agentic 模式**：AI 理解页面内容后生成答案，同时展示来源页面
+- ✅ **可追溯性**：每个答案都能追溯到具体页面，避免 AI 幻觉
+- ✅ **可验证性**：用户可以直接查看原文，验证 AI 回答的准确性
+
+#### 2️⃣ **多模态 RAG 引擎**
 - 🖼️ **视觉理解**：集成 Qwen3-VL 系列模型，直接理解图表、公式、截图等视觉内容
 - 🔍 **混合检索**：结合文本语义检索 + 视觉特征检索 + 重排序，提升准确率
+- 🎨 **图文并茂**：保留原始页面的图表、公式、排版，完整呈现信息
 
-#### 2️⃣ **教育场景深度适配**
+#### 3️⃣ **教育场景深度适配**
 - 👨‍🏫 **教师端**：班级管理、助教配置、教学进度追踪、学生行为分析
 - 👨‍🎓 **学生端**：AI 对话答疑、课件学习、思维导图、闪卡速记、视频学习
 - 📊 **数据看板**：实时统计学习时长、对话轮次、知识库使用情况
 
-#### 3️⃣ **文档解析增强**
+#### 4️⃣ **文档解析增强**
 - 🚀 使用 **MinerU** 替代传统 OCR，支持复杂排版、表格、公式的精准解析
 - 📑 支持 PDF、Word、PPT、视频等多种格式
-- 🎨 保留原始页面图片，支持图文混排输出
 
-#### 4️⃣ **灵活的部署架构**
+#### 5️⃣ **灵活的部署架构**
 - 🐳 **Docker 一键部署**，开箱即用
 - 🔌 **模块化设计**：前台（React）、后台（Vue3）、API（Flask）、微服务（Qwen3-VL、MinerU）
 - ☁️ 支持本地部署和云端部署
@@ -46,87 +53,116 @@
 
 ## 📸 系统演示
 
-### 学生端界面
+### 🎯 核心功能：页面级检索（Workflow & Agentic）
+
+> **灵机的最大创新**：不仅返回文本答案，还展示**检索到的原始页面**，让用户清楚地看到答案来源于哪个页面、哪个位置。
 
 <table>
   <tr>
     <td width="50%">
-      <img src="pic/系统主页面.png" alt="系统主页面"/>
-      <p align="center"><b>系统主页面</b></p>
+      <img src="pic/student/workflow.png" alt="Workflow 检索模式"/>
+      <p align="center"><b>Workflow 检索模式</b><br/>检索后直接返回页面，用户可以看到具体的页面内容</p>
     </td>
     <td width="50%">
-      <img src="pic/助教主页面.png" alt="AI 助教对话"/>
-      <p align="center"><b>AI 助教对话</b></p>
+      <img src="pic/student/agentic.png" alt="Agentic 智能模式"/>
+      <p align="center"><b>Agentic 智能模式</b><br/>AI 理解页面内容后生成答案，同时展示来源页面</p>
     </td>
   </tr>
   <tr>
-    <td width="50%">
-      <img src="pic/系统问答界面.png" alt="智能问答"/>
-      <p align="center"><b>智能问答界面</b></p>
-    </td>
-    <td width="50%">
-      <img src="pic/问答页面.png" alt="问答页面"/>
-      <p align="center"><b>多轮对话</b></p>
+    <td colspan="2" align="center">
+      <img src="pic/system/workflow_vs_agentic.png" alt="两种模式对比" width="80%"/>
+      <p><b>Workflow vs Agentic 对比</b><br/>
+      📄 Workflow：快速定位页面，适合查找具体内容<br/>
+      🤖 Agentic：智能理解后回答，适合需要解释和归纳的问题</p>
     </td>
   </tr>
 </table>
+
+**核心优势：**
+- ✅ **可追溯性**：每个答案都能追溯到具体页面，避免 AI 幻觉
+- ✅ **可验证性**：用户可以直接查看原文，验证 AI 回答的准确性
+- ✅ **图文并茂**：保留原始页面的图表、公式、排版，完整呈现信息
+- ✅ **多模态理解**：VLM 可以直接理解页面中的图片、表格、公式
+
+---
 
 ### 多模态图文理解
 
 <table>
   <tr>
     <td width="50%">
-      <img src="pic/图片上传提问.png" alt="图片上传提问"/>
-      <p align="center"><b>图片上传提问</b></p>
+      <img src="pic/student/图片上传提问.png" alt="图片上传提问"/>
+      <p align="center"><b>图片上传提问</b><br/>支持上传图片直接提问</p>
     </td>
     <td width="50%">
-      <img src="pic/图片上传图文.png" alt="图文混合输出"/>
-      <p align="center"><b>图文混合输出</b></p>
+      <img src="pic/student/图片上传图文.png" alt="图文混合输出"/>
+      <p align="center"><b>图文混合输出</b><br/>返回结果包含相关图片和文本</p>
     </td>
   </tr>
 </table>
+
+---
+
+### 学生端界面
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="pic/student/助教主页面.png" alt="AI 助教对话"/>
+      <p align="center"><b>AI 助教对话</b></p>
+    </td>
+    <td width="50%">
+      <img src="pic/student/系统问答界面.png" alt="智能问答"/>
+      <p align="center"><b>智能问答界面</b></p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/student/学情分析.png" alt="学情分析" width="80%"/>
+      <p><b>学生学情分析</b><br/>可视化展示学习进度、知识点掌握度</p>
+    </td>
+  </tr>
+</table>
+
+---
 
 ### 教师管理后台
 
 <table>
   <tr>
     <td width="50%">
-      <img src="pic/数据概览.png" alt="数据概览"/>
+      <img src="pic/teacher/数据概览.png" alt="数据概览"/>
       <p align="center"><b>数据概览看板</b></p>
     </td>
     <td width="50%">
-      <img src="pic/学情分析.png" alt="学情分析"/>
-      <p align="center"><b>学情分析</b></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="pic/班级管理.png" alt="班级管理"/>
+      <img src="pic/teacher/班级管理.png" alt="班级管理"/>
       <p align="center"><b>班级管理</b></p>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
-      <img src="pic/学生管理.png" alt="学生管理"/>
+      <img src="pic/teacher/学生管理.png" alt="学生管理"/>
       <p align="center"><b>学生管理</b></p>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
-      <img src="pic/助教管理.png" alt="助教管理"/>
+      <img src="pic/teacher/助教管理.png" alt="助教管理"/>
       <p align="center"><b>助教配置</b></p>
     </td>
-    <td width="50%">
-      <img src="pic/知识库管理.png" alt="知识库管理"/>
-      <p align="center"><b>知识库管理</b></p>
-    </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="pic/进度管理.png" alt="进度管理"/>
-      <p align="center"><b>教学进度管理</b></p>
+      <img src="pic/teacher/知识库管理.png" alt="知识库管理"/>
+      <p align="center"><b>知识库管理</b></p>
     </td>
     <td width="50%">
-      <img src="pic/评分管理.png" alt="评分管理"/>
-      <p align="center"><b>评分管理</b></p>
+      <img src="pic/teacher/进度管理.png" alt="进度管理"/>
+      <p align="center"><b>教学进度管理</b></p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="pic/teacher/评分管理.png" alt="评分管理" width="60%"/>
+      <p><b>评分管理</b></p>
     </td>
   </tr>
 </table>
@@ -138,24 +174,23 @@
 ### 系统架构图
 
 <div align="center">
-  <img src="pic/系统架构图.png" alt="系统架构图" width="80%"/>
+  <img src="pic/system/系统架构图.png" alt="系统架构图" width="80%"/>
   <p><i>灵机多模态 RAG 系统架构</i></p>
 </div>
 
 ### 业务流程
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="pic/业务流程.png" alt="业务流程"/>
-      <p align="center"><b>整体业务流程</b></p>
-    </td>
-    <td width="50%">
-      <img src="pic/角色权限关系2.png" alt="角色权限"/>
-      <p align="center"><b>角色权限关系</b></p>
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <img src="pic/system/业务流程2.png" alt="业务流程" width="70%"/>
+  <p><i>整体业务流程</i></p>
+</div>
+
+### 角色权限关系
+
+<div align="center">
+  <img src="pic/system/角色权限关系.png" alt="角色权限关系" width="60%"/>
+  <p><i>系统角色与权限设计</i></p>
+</div>
 
 ### 技术架构
 
@@ -202,7 +237,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/<your-username>/lingji.git
+git clone https://github.com/Freedom-s/lingji.git
 cd lingji
 
 # 2. 配置环境变量（重要！）
@@ -236,7 +271,9 @@ docker compose -f docker/docker-compose.yml logs -f
 
 | 模块 | 功能描述 |
 |------|----------|
-| **AI 助教对话** | 基于知识库的多轮智能问答，支持图文混合输出 |
+| **AI 助教对话** | 基于知识库的多轮智能问答，支持**页面级检索**和图文混合输出 |
+| **Workflow 模式** | 快速定位页面，直接展示原始内容，适合查找具体信息 |
+| **Agentic 模式** | AI 智能理解后回答，同时展示来源页面，适合需要解释的问题 |
 | **课件学习** | 在线浏览 PPT/PDF，自动生成思维导图和概念速记 |
 | **闪卡系统** | 知识点记忆卡片，支持自定义标签和复习计划 |
 | **视频学习** | 支持视频问答，自动提取视频字幕和关键帧 |
@@ -247,7 +284,7 @@ docker compose -f docker/docker-compose.yml logs -f
 | 模块 | 功能描述 |
 |------|----------|
 | **班级管理** | 创建班级、分配学生、管理教学进度 |
-| **助教配置** | 自定义 AI 助教的知识库、模型、提示词 |
+| **助教配置** | 自定义 AI 助教的知识库、模型、提示词、检索模式 |
 | **教学文件管理** | 批量上传课件、视频，自动解析与索引 |
 | **学生行为分析** | 查看学生学习轨迹、对话记录、知识点薄弱项 |
 | **数据看板** | 班级整体学习情况、知识库使用热度、模型调用统计 |
@@ -325,6 +362,9 @@ lingji/
 ├── mineru-ocr-service/    # MinerU OCR 服务
 ├── docker/                # Docker 配置
 ├── pic/                   # 系统截图
+│   ├── student/          # 学生端截图
+│   ├── teacher/          # 教师端截图
+│   └── system/           # 架构图和流程图
 └── docs/                  # 文档
 ```
 
@@ -350,6 +390,8 @@ lingji/
 - ✅ **允许修改**：可以自由修改源代码
 - ⚠️ **必须开源**：若修改代码或通过网络提供服务，必须公开源码
 - ⚠️ **相同许可**：衍生作品必须使用相同的 AGPL-3.0 许可证
+
+详见 [`LICENSE`](LICENSE)。
 
 ---
 
