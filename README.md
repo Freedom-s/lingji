@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🔮 Lingji | 灵机</h1>
+  <h1>Lingji | 灵机</h1>
   <p><strong>多模态检索增强的智能教学助手平台</strong></p>
   
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-green" alt="License"></a>
@@ -20,9 +20,7 @@
 
 ## 🌟 项目简介
 
-**Lingji（灵机）** 是一个基于 RAGFlow 深度定制的**多模态检索增强生成（Multimodal RAG）**教学平台。通过**页面级图文检索** + **视觉语言模型（VLM）**回答，实现了对课件、文档、视频等教学资源的智能化理解与问答。
-
-### 🎯 核心特性
+**Lingji（灵机）** 是一个基于 [RAGFlow-Plus](https://github.com/zstar1003/ragflow-plus) 深度定制的**多模态检索增强生成（Multimodal RAG）**教学平台。通过**页面级图文检索** + **视觉语言模型（VLM）**回答，实现了对课件、文档、视频等教学资源的智能化理解与问答。
 
 #### 1️⃣ **多模态 RAG 引擎**
 - 📄 **页面级检索**：保留文档原始页面结构，图文并茂地检索与展示
