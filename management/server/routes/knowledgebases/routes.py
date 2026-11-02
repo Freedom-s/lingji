@@ -3,6 +3,7 @@ import traceback
 from flask import request
 from services.knowledgebases.service import KnowledgebaseService
 from services.knowledgebases import generation
+from services.knowledgebases import knowledge_graph
 from services.knowledgebases import video_binding
 from utils import error_response, success_response
 
@@ -138,6 +139,58 @@ def get_knowledgebase_documents(kb_id):
         return error_response("参数类型错误", code=400)
     except Exception as e:
         return error_response(str(e))
+
+
+@knowledgebase_bp.route("/<string:kb_id>/knowledge-graph", methods=["GET"])
+@require_superuser
+def get_knowledge_graph_route(kb_id):
+    """获取知识库级知识图谱草稿和已发布版本。"""
+    try:
+        current_user = get_current_user()
+        result = knowledge_graph.get_knowledge_graph(kb_id, current_user["user_id"])
+        return success_response(data=result)
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except Exception as e:
+        print(f"获取知识图谱失败: {str(e)}")
+        traceback.print_exc()
+        return error_response("获取知识图谱失败", code=500)
+
+
+@knowledgebase_bp.route("/<string:kb_id>/knowledge-graph/generate", methods=["POST"])
+@require_superuser
+def generate_knowledge_graph_route(kb_id):
+    """调用当前租户的大模型生成一份知识图谱草稿。"""
+    try:
+        current_user = get_current_user()
+        result = knowledge_graph.generate_knowledge_graph(kb_id, current_user["user_id"])
+        return success_response(data=result, message="知识图谱草稿已生成")
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        print(f"生成知识图谱失败: {str(e)}")
+        traceback.print_exc()
+        return error_response(f"生成知识图谱失败: {str(e)}", code=500)
+
+
+@knowledgebase_bp.route("/<string:kb_id>/knowledge-graph/publish", methods=["POST"])
+@require_superuser
+def publish_knowledge_graph_route(kb_id):
+    """发布教师确认后的知识图谱草稿。"""
+    try:
+        current_user = get_current_user()
+        result = knowledge_graph.publish_knowledge_graph(kb_id, current_user["user_id"])
+        return success_response(data=result, message="知识图谱已发布")
+    except PermissionError as e:
+        return error_response(str(e), code=403)
+    except ValueError as e:
+        return error_response(str(e), code=400)
+    except Exception as e:
+        print(f"发布知识图谱失败: {str(e)}")
+        traceback.print_exc()
+        return error_response(f"发布知识图谱失败: {str(e)}", code=500)
 
 
 @knowledgebase_bp.route("/<string:kb_id>/video-binding-options", methods=["GET"])

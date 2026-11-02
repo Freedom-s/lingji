@@ -12,6 +12,7 @@ from rag.nlp import rag_tokenizer, query
 import numpy as np
 from rag.utils.doc_store_conn import DocStoreConnection, MatchDenseExpr, FusionExpr, OrderByExpr
 from rag.utils.minio_conn import MINIO
+from rag.utils.perf_trace import perf_span
 
 
 def index_name(uid):
@@ -1269,10 +1270,11 @@ class Dealer:
             matchDense = MatchDenseExpr(vector_column, embedding_data, "float", "cosine", top_k, {})
 
             # 真正执行干活的函数，都应该是底层的es存储索引
-            sres = self.dataStore.search(
-                src, [], {}, [matchDense], OrderByExpr(),
-                0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
-            )
+            with perf_span("es_image_vector_search", top_k=top_k):
+                sres = self.dataStore.search(
+                    src, [], {}, [matchDense], OrderByExpr(),
+                    0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
+                )
 
             total = self.dataStore.getTotal(sres)
             ids = self.dataStore.getChunkIds(sres) # 收集所有的chunk的_id字段，为了就是给其添加分数字段
@@ -1355,10 +1357,11 @@ class Dealer:
 
             matchDense = MatchDenseExpr(vector_column, embedding_data, "float", "cosine", top_k, {})
 
-            sres = self.dataStore.search(
-                src, [], {}, [matchDense], OrderByExpr(),
-                0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
-            )
+            with perf_span("es_text_vector_search", top_k=top_k):
+                sres = self.dataStore.search(
+                    src, [], {}, [matchDense], OrderByExpr(),
+                    0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
+                )
 
             total = self.dataStore.getTotal(sres)
             ids = self.dataStore.getChunkIds(sres)
@@ -1447,10 +1450,11 @@ class Dealer:
                 extra_options={"minimum_should_match": "25%", "boost": 1.0}
             )
 
-            sres = self.dataStore.search(
-                src, [], {}, [matchText], OrderByExpr(),
-                0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
-            )
+            with perf_span("es_keyword_search", top_k=top_k):
+                sres = self.dataStore.search(
+                    src, [], {}, [matchText], OrderByExpr(),
+                    0, top_k, [index_name(tid) for tid in tenant_ids], kb_ids
+                )
 
 
             total = self.dataStore.getTotal(sres)
@@ -1520,6 +1524,7 @@ class Dealer:
             }
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from contextvars import copy_context
 
         results = {}
 
@@ -1547,9 +1552,9 @@ class Dealer:
         # 并行执行三路检索
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
-                executor.submit(retrieve_image_vector): "image",
-                executor.submit(retrieve_text_vector): "text",
-                executor.submit(retrieve_keyword): "keyword"
+                executor.submit(copy_context().run, retrieve_image_vector): "image",
+                executor.submit(copy_context().run, retrieve_text_vector): "text",
+                executor.submit(copy_context().run, retrieve_keyword): "keyword"
             }
 
             for future in as_completed(futures):
@@ -1849,7 +1854,16 @@ class Dealer:
         logging.info(f"[HYBRID_RETRIEVAL] 开始三路并行检索: {question[:50]}...")
 
         # 1. 三路并行检索
-        retrieval_results = self._parallel_retrieval(question, embd_mdl, tenant_ids, kb_ids,image_topk, text_topk, keyword_topk)
+        with perf_span(
+            "parallel_retrieval",
+            image_topk=image_topk,
+            text_topk=text_topk,
+            keyword_topk=keyword_topk,
+        ):
+            retrieval_results = self._parallel_retrieval(
+                question, embd_mdl, tenant_ids, kb_ids,
+                image_topk, text_topk, keyword_topk,
+            )
 
         image_count = len(retrieval_results.get("image", {}).get("chunks", []))
         text_count = len(retrieval_results.get("text", {}).get("chunks", []))
@@ -1859,7 +1873,8 @@ class Dealer:
                      f"image={image_count}, text={text_count}, keyword={keyword_count}")
 
         # 2. RRF 融合（需要挑选出rrf_topk页）
-        fused_results = self._rrf_fusion(retrieval_results, rrf_k, rrf_topk)
+        with perf_span("rrf_fusion", input_count=image_count + text_count + keyword_count):
+            fused_results = self._rrf_fusion(retrieval_results, rrf_k, rrf_topk)
         """
         经过rrf之后，这些fused——results就编程了这样，并且只有5个页面
         {
@@ -1885,9 +1900,14 @@ class Dealer:
         # 3. Rerank 重排序
         if rerank_mdl:
             # 使用现有的 rerank_chunks 方法
-            reranked_chunks = self.rerank_chunks(
-                question, fused_results["chunks"], rerank_mdl, rerank_final_topk
-            )
+            with perf_span(
+                "rerank_pipeline",
+                candidate_count=len(fused_results["chunks"]),
+                output_count=rerank_final_topk,
+            ):
+                reranked_chunks = self.rerank_chunks(
+                    question, fused_results["chunks"], rerank_mdl, rerank_final_topk
+                )
             """
             经过rerank之后，这些reranked_chunks就编程了这样，并且只有5个页面
             {
@@ -1967,19 +1987,23 @@ class Dealer:
             # 本地映射：page_id -> (main_page, ctx_pages)，用于保持顺序
             page_id_to_result = {}
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                # 提交所有任务，记住每个chunk对应的page_id
-                future_to_page_id = {
-                    executor.submit(process_chunk, chunk): chunk.get("page_id")
-                    for chunk in fused_results["chunks"]
-                }
+            with perf_span(
+                "context_recall",
+                candidate_count=len(fused_results["chunks"]),
+            ):
+                with ThreadPoolExecutor(max_workers=3) as executor:
+                    # 提交所有任务，记住每个chunk对应的page_id
+                    future_to_page_id = {
+                        executor.submit(process_chunk, chunk): chunk.get("page_id")
+                        for chunk in fused_results["chunks"]
+                    }
 
-                # 等待所有任务完成
-                for future in as_completed(future_to_page_id):
-                    page_id = future_to_page_id[future]
-                    main_page, ctx_pages = future.result()
-                    # 存储到本地映射中
-                    page_id_to_result[page_id] = (main_page, ctx_pages)
+                    # 等待所有任务完成
+                    for future in as_completed(future_to_page_id):
+                        page_id = future_to_page_id[future]
+                        main_page, ctx_pages = future.result()
+                        # 存储到本地映射中
+                        page_id_to_result[page_id] = (main_page, ctx_pages)
 
             # 按原始顺序组装结果：先父页面，再其上下文页面
             for chunk in fused_results["chunks"]:

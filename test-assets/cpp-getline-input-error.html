@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C++ Input Stream Experiment</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #0f172a; }
+    body { display: flex; align-items: center; justify-content: center; padding: 32px; }
+    .window { width: 1430px; height: 880px; overflow: hidden; border: 1px solid #334155; border-radius: 16px; background: #1e1e1e; box-shadow: 0 28px 80px rgba(0,0,0,.48); }
+    .titlebar { height: 52px; display: flex; align-items: center; position: relative; padding: 0 20px; background: #181818; border-bottom: 1px solid #303030; color: #b8b8b8; font: 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .dots { display: flex; gap: 10px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; }
+    .red { background: #ff5f57; } .yellow { background: #febc2e; } .green { background: #28c840; }
+    .title { position: absolute; left: 50%; transform: translateX(-50%); }
+    .tabbar { height: 46px; display: flex; background: #181818; border-bottom: 1px solid #2b2b2b; }
+    .tab { width: 190px; padding: 12px 20px; color: #e5e7eb; background: #1e1e1e; border-top: 2px solid #4daafc; border-right: 1px solid #303030; font: 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .editor { height: 580px; padding: 14px 0; color: #d4d4d4; font: 20px/1.42 ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace; }
+    .line { display: flex; min-height: 28px; }
+    .ln { width: 72px; padding-right: 20px; color: #858585; text-align: right; user-select: none; }
+    .code { white-space: pre; }
+    .pp { color: #c586c0; } .header { color: #ce9178; } .kw { color: #569cd6; }
+    .type { color: #4ec9b0; } .fn { color: #dcdcaa; } .str { color: #ce9178; } .num { color: #b5cea8; }
+    .focus { background: rgba(250, 204, 21, .075); }
+    .panel { height: 202px; border-top: 1px solid #3c3c3c; background: #181818; }
+    .panel-tabs { height: 42px; display: flex; align-items: center; gap: 32px; padding: 0 24px; color: #9ca3af; font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; border-bottom: 1px solid #2b2b2b; }
+    .active { height: 42px; display: flex; align-items: center; color: #f3f4f6; border-bottom: 2px solid #4daafc; }
+    .terminal { padding: 16px 28px; color: #e5e7eb; font: 19px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; }
+    .prompt { color: #86efac; } .input { color: #93c5fd; } .unexpected { color: #fca5a5; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header class="titlebar">
+      <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+      <div class="title">main.cpp — Input Stream Experiment</div>
+    </header>
+    <div class="tabbar"><div class="tab">● main.cpp</div></div>
+    <section class="editor">
+      <div class="line"><span class="ln">1</span><span class="code"><span class="pp">#include</span> <span class="header">&lt;iostream&gt;</span></span></div>
+      <div class="line"><span class="ln">2</span><span class="code"><span class="pp">#include</span> <span class="header">&lt;string&gt;</span></span></div>
+      <div class="line"><span class="ln">3</span><span class="code"><span class="kw">using namespace</span> std;</span></div>
+      <div class="line"><span class="ln">4</span><span class="code"></span></div>
+      <div class="line"><span class="ln">5</span><span class="code"><span class="type">int</span> <span class="fn">main</span>() {</span></div>
+      <div class="line"><span class="ln">6</span><span class="code">    <span class="type">int</span> age;</span></div>
+      <div class="line"><span class="ln">7</span><span class="code">    string name;</span></div>
+      <div class="line"><span class="ln">8</span><span class="code"></span></div>
+      <div class="line"><span class="ln">9</span><span class="code">    cout &lt;&lt; <span class="str">"请输入年龄: "</span>;</span></div>
+      <div class="line focus"><span class="ln">10</span><span class="code">    cin &gt;&gt; age;</span></div>
+      <div class="line"><span class="ln">11</span><span class="code"></span></div>
+      <div class="line"><span class="ln">12</span><span class="code">    cout &lt;&lt; <span class="str">"请输入姓名: "</span>;</span></div>
+      <div class="line focus"><span class="ln">13</span><span class="code">    getline(cin, name);</span></div>
+      <div class="line"><span class="ln">14</span><span class="code"></span></div>
+      <div class="line"><span class="ln">15</span><span class="code">    cout &lt;&lt; <span class="str">"你好，"</span> &lt;&lt; name &lt;&lt; <span class="str">"，年龄："</span> &lt;&lt; age &lt;&lt; endl;</span></div>
+      <div class="line"><span class="ln">16</span><span class="code">    <span class="kw">return</span> <span class="num">0</span>;</span></div>
+      <div class="line"><span class="ln">17</span><span class="code">}</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel-tabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="active">TERMINAL</span></div>
+      <div class="terminal"><span class="prompt">student@lab:~/cpp$</span> g++ main.cpp -o main &amp;&amp; ./main
+请输入年龄: <span class="input">20</span>
+请输入姓名: <span class="unexpected">你好，，年龄：20</span>
+
+<span class="prompt">student@lab:~/cpp$</span></div>
+    </section>
+  </main>
+</body>
+</html>

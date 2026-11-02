@@ -2,6 +2,7 @@ import requests
 import os
 from abc import ABC
 import numpy as np
+from rag.utils.perf_trace import perf_span
 
 
 class Base(ABC):
@@ -31,11 +32,17 @@ class OpenAI_APIEmbed(Base):
             batch_size = 4
             ress = []
             for i in range(0, len(texts), batch_size):
+                batch = texts[i: i + batch_size]
                 data = {
                     "model": self.model_name,
-                    "input": texts[i: i+batch_size]
+                    "input": batch
                 }
-                res = requests.post(self.base_url, headers=self.headers, json=data).json()
+                with perf_span(
+                    "embedding_request",
+                    model=self.model_name,
+                    batch_size=len(batch),
+                ):
+                    res = requests.post(self.base_url, headers=self.headers, json=data).json()
                 ress.extend([d['embedding'] for d in res['data']])
             return np.array(ress)
         except Exception as e:

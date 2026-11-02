@@ -16,8 +16,8 @@
    ▼
 shiyanshi —— 应用 + 数据节点，代码在 /home/user/jianhuasuo/lingji
    ├─ 后端  conda 环境 lingji (/home/user/gsl/miniconda3/envs/lingji, Python 3.10)
-   │     ├─ ragflow-api         (9380)  systemd 守护 → python -m api.ragflow_server
-   │     └─ ragflow-management  (5000)  systemd 守护 → python app.py (management/server)
+   │     ├─ ragflow-api         (9380)  systemd 守护 → Gunicorn（2 worker × 4 threads）
+   │     └─ ragflow-management  (5000)  systemd 守护 → Gunicorn（2 worker × 4 threads）
    ├─ 前端  nginx 托管
    │     ├─ 学生端  web/dist             → 端口 80
    │     └─ 教师端  management/web/dist  → 端口 8080
@@ -30,8 +30,8 @@ shiyanshi —— 应用 + 数据节点，代码在 /home/user/jianhuasuo/lingji
 |------|----------------|----------|----------|------|
 | 前台前端（学生端） | `web` | `web/dist` | nginx | 80 |
 | 后台前端（教师端） | `mgmt-web` | `management/web/dist` | nginx | 8080 |
-| 前台后端 API | `api` | `api/` | systemd `ragflow-api` | 9380 |
-| 后台后端管理 | `mgmt-server` | `management/server/` | systemd `ragflow-management` | 5000 |
+| 前台后端 API | `api` | `api/` | systemd `ragflow-api` + Gunicorn `api.wsgi:application` | 9380 |
+| 后台后端管理 | `mgmt-server` | `management/server/` | systemd `ragflow-management` + Gunicorn `app:app` | 5000 |
 | （依赖目录） | `infra` | `rag/` `graphrag/` `conf/` | — | — |
 
 ---
@@ -68,10 +68,10 @@ echo 'SHIYANSHI_SUDO_PASS=你的sudo密码' > .deploy.env
 
 ### 3. 后端 Python 依赖
 
-新增 pip 依赖时，`deploy.sh` **不会**自动装。需要在 shiyanshi 上手动执行：
+新增 pip 依赖时，`deploy.sh` **不会**自动装。当前两个后端都需要 Gunicorn；如果目标环境尚未安装，需要在 shiyanshi 上手动执行：
 
 ```bash
-ssh shiyanshi "/home/user/gsl/miniconda3/envs/lingji/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ <包名>"
+ssh shiyanshi "/home/user/gsl/miniconda3/envs/lingji/bin/python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ 'gunicorn>=23,<27'"
 ```
 
 ### 4. 数据库 / 存储凭据
@@ -116,6 +116,7 @@ ssh shiyanshi "docker exec ragflow-mysql mysql -u root -pinfini_rag_flow rag_flo
 - **Nginx**（`nginx`）：上传 `deploy/nginx/ragflow-plus.conf` → 备份旧配置 → `nginx -t` → reload；检查失败时自动恢复旧配置。
 - **后端**（`api` / `mgmt-server`）：`rsync` 增量覆盖代码（排除 `__pycache__` / `*.pyc`，mgmt-server 另排除 `logs`）→ `systemctl restart`。
 - **后端日志**：每次 systemd 启动都会创建一个带时间戳的新日志文件，分别写入 `api/logs/start_*.log` 和 `management/server/logs/start_*.log`；部署 API 代码时会排除远端 `api/logs`，避免覆盖日志。
+- **后端进程模型**：两个后端都由 Gunicorn 托管，默认使用 2 个 worker、每个 worker 4 个线程；API 通过 `api/wsgi.py` 完成初始化，管理端通过 `management/server/app.py` 暴露 Flask 应用。长请求超时设置为 3600 秒，以兼容文件处理和流式响应。
 - **infra**：`rsync` 推 `rag/` `graphrag/` `conf/` → `restart ragflow-api`（api 运行时依赖这三处 import + 读配置，日常不必重推）。
 
 脚本带 `set -euo pipefail`，任何一步失败会立即停止并返回非零退出码。
@@ -139,7 +140,7 @@ ssh shiyanshi "journalctl -u ragflow-api -n 50 --no-pager"
 ssh shiyanshi "journalctl -u ragflow-management -n 50 --no-pager"
 ```
 
-- api 正常启动会打印 `Running on http://10.18.21.47:9380`。
+- api 正常启动会打印 Gunicorn master/worker 启动信息，并监听 `0.0.0.0:9380`。
 - 日志尾部出现 `401 Unauthorized` 是正常的鉴权拒绝，不是启动错误。
 
 ---

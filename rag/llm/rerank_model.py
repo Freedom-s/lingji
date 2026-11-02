@@ -2,6 +2,7 @@ import requests
 import os
 from abc import ABC
 import numpy as np
+from rag.utils.perf_trace import perf_span
 
 
 def sigmoid(x):
@@ -37,7 +38,12 @@ class OpenAI_APIRerank(Base):
                 "documents": documents,
             }
 
-            resp = requests.post(self.base_url, headers=self.headers, json=data)
+            with perf_span(
+                "rerank_request",
+                model=self.model_name,
+                documents_count=len(documents),
+            ):
+                resp = requests.post(self.base_url, headers=self.headers, json=data)
 
             if resp.status_code != 200:
                 return None

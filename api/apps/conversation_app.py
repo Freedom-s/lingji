@@ -24,6 +24,7 @@ from api.db.services.write_service import upload_image, write_dialog
 from api.utils.api_utils import get_data_error_result, get_json_result, server_error_response, validate_request
 from rag.app.tag import label_question
 from rag.utils.redis_conn import REDIS_CONN
+from rag.utils.perf_trace import PerfTrace, reset_current_trace, set_current_trace
 
 try:
     from docx import Document
@@ -538,6 +539,8 @@ def list_convsersation():
 @validate_request("conversation_id", "messages")
 def completion():
     req = request.json
+    perf_trace = PerfTrace("conversation_completion")
+    perf_trace.mark("route_start")
     msg = []
 
     for m in req["messages"]:
@@ -564,29 +567,40 @@ def completion():
         e, dia = DialogService.get_by_id(conv.dialog_id)
         if not e:
             return get_data_error_result(message="Dialog not found!")
+        perf_trace.mark("route_prepare_end")
         del req["conversation_id"]
         del req["messages"]
 
         # 第四步：定义流式返回的函数（对应的conv的message、reference字段，是在对应函数内部来产生的）
         def stream():
             nonlocal dia, msg, req, conv
+            trace_token = set_current_trace(perf_trace)
+            perf_trace.mark("stream_start")
             try:
                 # 判断是否使用 Agent + MCP 架构
                 use_agent = _should_use_agent(dia)
+                perf_trace.set_meta(agent_enabled=use_agent)
 
                 if use_agent:
                     for ans in _stream_with_agent(dia, msg, conv, message_id, req):
+                        perf_trace.mark_first("http_first_event")
                         yield ans
                 else:
-                    for ans in chat(dia, msg, True, **req):
+                    for ans in chat(dia, msg, True, _perf_trace=perf_trace, **req):
                         ans = structure_answer(conv, ans, message_id, conv.id)
+                        perf_trace.mark_first("http_first_event")
                         yield "data:" + json.dumps({"code": 0, "message": "", "data": ans}, ensure_ascii=False) + "\n\n"
 
                 # 第五步：与ai对话完毕之后，更新ai的消息
-                ConversationService.update_by_id(conv.id, conv.to_dict())
+                with perf_trace.span("conversation_persist"):
+                    ConversationService.update_by_id(conv.id, conv.to_dict())
             except Exception as e:
                 traceback.print_exc()
                 yield "data:" + json.dumps({"code": 500, "message": str(e), "data": {"answer": "**ERROR**: " + str(e), "reference": {}}}, ensure_ascii=False) + "\n\n"
+            finally:
+                perf_trace.mark("request_complete")
+                perf_trace.finish()
+                reset_current_trace(trace_token)
             yield "data:" + json.dumps({"code": 0, "message": "", "data": True}, ensure_ascii=False) + "\n\n"
 
         if req.get("stream", True):

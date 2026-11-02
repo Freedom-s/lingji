@@ -12,6 +12,7 @@ import {
   QuestionFilled,
   School,
   UserFilled,
+  View,
   WarningFilled
 } from "@element-plus/icons-vue"
 import SvgDashboard from "../images/dashboard.svg?component"
@@ -80,6 +81,8 @@ const progressReminderProgressId = ref("")
 const allProgressReminderItems = ref<TeacherProgressReminderItem[]>([])
 const studentProgressOverview = ref<TeacherStudentProgressOverviewResult | null>(null)
 const studentProgressOverviewLoading = ref(false)
+const studentProgressOverviewVisible = ref(false)
+const studentOverviewClassId = ref("")
 const learningInsights = ref<LearningInsightsData | null>(null)
 const learningInsightsLoading = ref(false)
 const insightProgressId = ref("")
@@ -536,7 +539,7 @@ async function fetchStudentProgressOverview() {
   studentProgressOverviewLoading.value = true
   try {
     const res = await getTeacherStudentProgressOverviewApi({
-      class_id: progressReminderClassId.value || undefined
+      class_id: studentOverviewClassId.value || undefined
     })
     if (res.code === 0 && res.data) {
       studentProgressOverview.value = res.data
@@ -551,11 +554,22 @@ async function fetchStudentProgressOverview() {
 function handleProgressReminderClassChange() {
   progressReminderProgressId.value = ""
   fetchProgressReminders()
-  fetchStudentProgressOverview()
 }
 
 function handleProgressReminderProgressChange() {
   fetchProgressReminders()
+}
+
+function handleStudentOverviewClassChange() {
+  studentProgressOverview.value = null
+  fetchStudentProgressOverview()
+}
+
+async function openStudentProgressOverview() {
+  studentOverviewClassId.value = ""
+  studentProgressOverview.value = null
+  studentProgressOverviewVisible.value = true
+  await fetchStudentProgressOverview()
 }
 
 function handleInsightProgressChange() {
@@ -700,7 +714,6 @@ onMounted(() => {
   fetchOverviewData()
   fetchTrendData()
   fetchProgressReminders()
-  fetchStudentProgressOverview()
   fetchLearningInsights()
 })
 </script>
@@ -737,127 +750,6 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-loading="studentProgressOverviewLoading" class="student-overview-panel panel-card">
-        <header class="student-overview-header">
-          <div>
-            <p class="section-eyebrow overview-eyebrow">Student progress</p>
-            <h2 class="progress-reminder-title">学生整体进度</h2>
-            <p class="progress-reminder-description">
-              从全局查看每名学生跨周的完成情况，优先发现连续掉队的学生。
-            </p>
-          </div>
-          <el-select
-            v-model="progressReminderClassId"
-            class="progress-filter-select"
-            clearable
-            placeholder="全部班级"
-            @change="handleProgressReminderClassChange"
-          >
-            <el-option
-              v-for="item in progressReminderClassOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-        </header>
-
-        <template v-if="studentProgressOverview">
-          <div class="student-overview-summary">
-            <div class="overview-stat is-slate">
-              <span>全部学生</span>
-              <strong>{{ studentProgressOverview.summary.total_students }}</strong>
-              <small>当前纳入统计</small>
-            </div>
-            <div class="overview-stat is-green">
-              <span>全部完成</span>
-              <strong>{{ studentProgressOverview.summary.completed_students }}</strong>
-              <small>所有已到期周进度</small>
-            </div>
-            <div class="overview-stat is-amber">
-              <span>部分完成</span>
-              <strong>{{ studentProgressOverview.summary.partial_students }}</strong>
-              <small>仍有周进度缺口</small>
-            </div>
-            <div class="overview-stat is-red">
-              <span>未开始</span>
-              <strong>{{ studentProgressOverview.summary.not_started_students }}</strong>
-              <small>已到期但尚未完成</small>
-            </div>
-            <div class="overview-stat is-alert">
-              <span>逾期未完成</span>
-              <strong>{{ studentProgressOverview.summary.overdue_incomplete_students }}</strong>
-              <small>需要优先跟进</small>
-            </div>
-          </div>
-
-          <div v-if="studentProgressOverview.students.length" class="student-overview-table-shell">
-            <div
-              class="student-overview-table"
-              :style="{ '--overview-week-count': studentProgressOverview.progresses.length }"
-            >
-              <div class="student-overview-row overview-table-head">
-                <span>学生</span>
-                <span>整体状态</span>
-                <span>完成率</span>
-                <div class="overview-week-matrix">
-                  <span v-for="week in studentProgressOverview.progresses" :key="week.id" :title="week.name">
-                    {{ week.name }}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                v-for="student in studentProgressOverview.students"
-                :key="overviewStudentKey(student)"
-                class="student-overview-row"
-                :class="`is-${student.status}`"
-              >
-                <div class="overview-student-identity">
-                  <span class="overview-student-avatar">{{ student.student_name.slice(0, 1) }}</span>
-                  <span>
-                    <strong>{{ student.student_name }}</strong>
-                    <small>{{ student.class_name }} · {{ student.completed_progresses }}/{{ student.tracked_progresses }} 周</small>
-                  </span>
-                </div>
-                <div class="overview-status-copy">
-                  <span class="overview-status-pill" :class="`is-${student.status}`">
-                    {{ overallProgressStatusLabel(student.status) }}
-                  </span>
-                  <small v-if="student.consecutive_incomplete_progresses > 1">
-                    连续 {{ student.consecutive_incomplete_progresses }} 周未完成
-                  </small>
-                </div>
-                <div class="overview-rate-copy">
-                  <strong>{{ student.completion_rate }}%</strong>
-                  <el-progress
-                    :percentage="student.completion_rate"
-                    :show-text="false"
-                    :stroke-width="5"
-                    :color="student.status === 'completed' ? '#16a36a' : student.status === 'not_started' ? '#dc5a3a' : '#d89920'"
-                  />
-                </div>
-                <div class="overview-week-matrix">
-                  <button
-                    v-for="week in student.progresses"
-                    :key="week.progress_id"
-                    type="button"
-                    class="overview-week-cell"
-                    :class="[`is-${week.status}`, { 'is-overdue': week.state === 'overdue', 'is-upcoming': week.state === 'upcoming' }]"
-                    :disabled="week.status === 'unassigned'"
-                    :title="overviewWeekTitle(week)"
-                    @click="openOverviewProgress(student, week)"
-                  >
-                    {{ overviewWeekText(week) }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="当前没有可统计的学生进度" :image-size="76" />
-        </template>
-      </section>
-
       <section v-loading="progressReminderLoading" class="progress-reminder-panel panel-card">
         <header class="progress-reminder-header">
           <div>
@@ -868,6 +760,20 @@ onMounted(() => {
             </p>
           </div>
           <div class="progress-reminder-actions">
+            <el-select
+              v-model="progressReminderClassId"
+              class="progress-filter-select"
+              clearable
+              placeholder="全部班级"
+              @change="handleProgressReminderClassChange"
+            >
+              <el-option
+                v-for="item in progressReminderClassOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
             <el-select
               v-model="progressReminderProgressId"
               class="progress-filter-select progress-filter-select-wide"
@@ -888,6 +794,9 @@ onMounted(() => {
             </div>
             <el-button type="primary" plain :icon="ArrowRight" @click="openProgressDetail()">
               全部进度
+            </el-button>
+            <el-button type="primary" :icon="View" @click="openStudentProgressOverview">
+              学生整体进度
             </el-button>
           </div>
         </header>
@@ -1210,6 +1119,148 @@ onMounted(() => {
       </section>
     </div>
 
+    <el-dialog
+      v-model="studentProgressOverviewVisible"
+      class="student-overview-dialog"
+      width="min(1380px, 94vw)"
+      top="5vh"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="student-overview-dialog-header">
+          <div>
+            <p class="section-eyebrow overview-eyebrow">Student progress</p>
+            <h2>学生整体进度</h2>
+          </div>
+          <el-select
+            v-model="studentOverviewClassId"
+            class="student-overview-class-select"
+            clearable
+            placeholder="全部班级"
+            @change="handleStudentOverviewClassChange"
+          >
+            <el-option
+              v-for="item in progressReminderClassOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </div>
+      </template>
+
+      <div class="student-overview-dialog-content">
+        <div v-if="studentProgressOverviewLoading" class="student-overview-loading-state" role="status" aria-live="polite">
+          <div class="student-overview-loading-orbit" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <strong>正在加载学生整体进度</strong>
+          <span>正在汇总当前筛选范围内的学生完成情况，请稍候…</span>
+        </div>
+
+        <template v-else-if="studentProgressOverview">
+          <p class="student-overview-dialog-description">
+            从全局查看每名学生跨周的完成情况，优先发现连续掉队的学生。点击周进度单元格可进入对应班级的完成明细。
+          </p>
+
+          <div class="student-overview-summary">
+            <div class="overview-stat is-slate">
+              <span>全部学生</span>
+              <strong>{{ studentProgressOverview.summary.total_students }}</strong>
+              <small>当前纳入统计</small>
+            </div>
+            <div class="overview-stat is-green">
+              <span>全部完成</span>
+              <strong>{{ studentProgressOverview.summary.completed_students }}</strong>
+              <small>所有已到期周进度</small>
+            </div>
+            <div class="overview-stat is-amber">
+              <span>部分完成</span>
+              <strong>{{ studentProgressOverview.summary.partial_students }}</strong>
+              <small>仍有周进度缺口</small>
+            </div>
+            <div class="overview-stat is-red">
+              <span>未开始</span>
+              <strong>{{ studentProgressOverview.summary.not_started_students }}</strong>
+              <small>已到期但尚未完成</small>
+            </div>
+            <div class="overview-stat is-alert">
+              <span>逾期未完成</span>
+              <strong>{{ studentProgressOverview.summary.overdue_incomplete_students }}</strong>
+              <small>需要优先跟进</small>
+            </div>
+          </div>
+
+          <div v-if="studentProgressOverview.students.length" class="student-overview-table-shell">
+            <div
+              class="student-overview-table"
+              :style="{ '--overview-week-count': studentProgressOverview.progresses.length }"
+            >
+              <div class="student-overview-row overview-table-head">
+                <span>学生</span>
+                <span>整体状态</span>
+                <span>完成率</span>
+                <div class="overview-week-matrix">
+                  <span v-for="week in studentProgressOverview.progresses" :key="week.id" :title="week.name">
+                    {{ week.name }}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                v-for="student in studentProgressOverview.students"
+                :key="overviewStudentKey(student)"
+                class="student-overview-row"
+                :class="`is-${student.status}`"
+              >
+                <div class="overview-student-identity">
+                  <span class="overview-student-avatar">{{ student.student_name.slice(0, 1) }}</span>
+                  <span>
+                    <strong>{{ student.student_name }}</strong>
+                    <small>{{ student.class_name }} · {{ student.completed_progresses }}/{{ student.tracked_progresses }} 周</small>
+                  </span>
+                </div>
+                <div class="overview-status-copy">
+                  <span class="overview-status-pill" :class="`is-${student.status}`">
+                    {{ overallProgressStatusLabel(student.status) }}
+                  </span>
+                  <small v-if="student.consecutive_incomplete_progresses > 1">
+                    连续 {{ student.consecutive_incomplete_progresses }} 周未完成
+                  </small>
+                </div>
+                <div class="overview-rate-copy">
+                  <strong>{{ student.completion_rate }}%</strong>
+                  <el-progress
+                    :percentage="student.completion_rate"
+                    :show-text="false"
+                    :stroke-width="5"
+                    :color="student.status === 'completed' ? '#16a36a' : student.status === 'not_started' ? '#dc5a3a' : '#d89920'"
+                  />
+                </div>
+                <div class="overview-week-matrix">
+                  <button
+                    v-for="week in student.progresses"
+                    :key="week.progress_id"
+                    type="button"
+                    class="overview-week-cell"
+                    :class="[`is-${week.status}`, { 'is-overdue': week.state === 'overdue', 'is-upcoming': week.state === 'upcoming' }]"
+                    :disabled="week.status === 'unassigned'"
+                    :title="overviewWeekTitle(week)"
+                    @click="openOverviewProgress(student, week)"
+                  >
+                    {{ overviewWeekText(week) }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="当前没有可统计的学生进度" :image-size="76" />
+        </template>
+      </div>
+    </el-dialog>
+
     <el-drawer
       v-model="studentDetailVisible"
       class="student-detail-drawer"
@@ -1374,28 +1425,125 @@ onMounted(() => {
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.04);
 }
 
+.student-overview-dialog {
+  :deep(.el-dialog) {
+    overflow: hidden;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: 24px;
+    background: #fbfcfe;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
+  }
+
+  :deep(.el-dialog__header) {
+    margin-right: 0;
+    padding: 24px 26px 0;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 0 26px 26px;
+  }
+}
+
+.student-overview-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+
+  h2 {
+    margin: 4px 0 0;
+    color: #172033;
+    font-size: 22px;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+  }
+}
+
+.student-overview-class-select {
+  width: 168px;
+  flex: 0 0 auto;
+}
+
+.student-overview-dialog-content {
+  max-height: calc(90vh - 112px);
+  overflow: auto;
+  padding: 0 2px 2px;
+}
+
+.student-overview-loading-state {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #94a3b8;
+
+  strong {
+    color: #334155;
+    font-size: 15px;
+  }
+
+  > span:last-child {
+    font-size: 12px;
+  }
+}
+
+.student-overview-loading-orbit {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border: 2px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: student-overview-spin 900ms linear infinite;
+
+  span {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #60a5fa;
+
+    &:nth-child(1) {
+      top: 5px;
+      left: 5px;
+    }
+
+    &:nth-child(2) {
+      right: 3px;
+      bottom: 9px;
+      background: #f2b84b;
+    }
+
+    &:nth-child(3) {
+      bottom: 2px;
+      left: 17px;
+      background: #67c79a;
+    }
+  }
+}
+
+@keyframes student-overview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.student-overview-dialog-description {
+  margin: 0 0 18px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .hero-panel {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.7fr);
   gap: 32px;
   padding: 32px;
   align-items: center;
-}
-
-.student-overview-panel {
-  padding: 26px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 0 0, rgba(37, 99, 235, 0.08), transparent 30%),
-    rgba(255, 255, 255, 0.94);
-}
-
-.student-overview-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 22px;
 }
 
 .overview-eyebrow {
@@ -3077,14 +3225,6 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .student-overview-header {
-    flex-direction: column;
-  }
-
-  .student-overview-header .progress-filter-select {
-    width: 100%;
-  }
-
   .student-overview-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3117,10 +3257,6 @@ onMounted(() => {
   .hero-panel,
   .chart-card,
   .metric-card {
-    padding: 20px;
-  }
-
-  .student-overview-panel {
     padding: 20px;
   }
 
@@ -3169,6 +3305,14 @@ onMounted(() => {
 @media (max-width: 560px) {
   .dashboard-content {
     gap: 16px;
+  }
+
+  .student-overview-dialog-header {
+    flex-direction: column;
+  }
+
+  .student-overview-class-select {
+    width: 100%;
   }
 
   .hero-panel {

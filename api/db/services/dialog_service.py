@@ -19,6 +19,7 @@ from rag.app.tag import label_question
 from rag.nlp.search import index_name
 from rag.prompts import chunks_format, citation_prompt, kb_prompt, keyword_extraction, llm_id2llm_type, message_fit_in
 from rag.utils import num_tokens_from_string, rmSpace
+from rag.utils.perf_trace import PerfTrace, current_trace, perf_span
 
 from .database import MINIO_CONFIG, get_minio_client
 
@@ -116,7 +117,7 @@ def get_image_base64_from_minio(image_path):
         return None
 
 
-def _recognize_intent(chat_mdl, messages) -> str:
+def _recognize_intent(chat_mdl, messages, perf_trace: PerfTrace | None = None) -> str:
     """
     意图识别：判断用户最后一条消息是否需要检索知识库。
 
@@ -150,7 +151,12 @@ def _recognize_intent(chat_mdl, messages) -> str:
         user_msg = f"当前问题：{current_question}\n\n请对上述「当前问题」进行意图分类。"
 
     try:
-        result = chat_mdl.chat(system_prompt, [{"role": "user", "content": user_msg}], {"temperature": 0.0, "max_tokens": 32})
+        with perf_span("intent_llm", trace=perf_trace, max_tokens=32):
+            result = chat_mdl.chat(
+                system_prompt,
+                [{"role": "user", "content": user_msg}],
+                {"temperature": 0.0, "max_tokens": 32},
+            )
         result = result.strip().lower()
         logging.info(f"[INTENT] Raw result: '{result}'")
 
@@ -193,6 +199,14 @@ def chat(dialog, messages, stream=True, **kwargs):
     messages:message列表，只包含id、role、content这样一种的dict列表
     """
     assert messages[-1]["role"] == "user", "The last content of this conversation is not from user."
+    perf_trace = kwargs.pop("_perf_trace", None) or current_trace()
+    if perf_trace:
+        perf_trace.set_meta(
+            kb_count=len(dialog.kb_ids or []),
+            message_count=len(messages),
+            question_chars=len(messages[-1].get("content", "")),
+            rerank_enabled=bool(dialog.rerank_id),
+        )
     if not dialog.kb_ids:
         for ans in chat_solo(dialog, messages, stream):
             yield ans
@@ -202,13 +216,14 @@ def chat(dialog, messages, stream=True, **kwargs):
     # ===================
     # 第一步：获取到租户的聊天模型
     # ===================
-    chat_mdl = LLMBundle(dialog.tenant_id, LLMType.CHAT, dialog.llm_id)
+    with perf_span("chat_model_init", trace=perf_trace):
+        chat_mdl = LLMBundle(dialog.tenant_id, LLMType.CHAT, dialog.llm_id)
 
     # ===================
     # 第二步：意图识别 — 判断用户问题是否需要检索知识库
     # 闲聊/打招呼/询问系统能力等，直接走 LLM 对话，节省检索资源
     # ===================
-    intent = _recognize_intent(chat_mdl, messages)
+    intent = _recognize_intent(chat_mdl, messages, perf_trace)
     if intent != "knowledge_query":
         logging.info(f"[CHAT] Intent is '{intent}', skipping retrieval, using chat_solo")
         for ans in chat_solo(dialog, messages, stream):
@@ -222,7 +237,8 @@ def chat(dialog, messages, stream=True, **kwargs):
     # dialog配备知识库，dialog配备llm、rerank，而配置embedding模型的是知识库，不同的知识库可以配置不同的embedding模型
     # 当然这里做了一个判断，一个dialog如果享有多个知识库，这些知识库配置的embedding模型必须是相同的
     # ===================
-    kbs = KnowledgebaseService.get_by_ids(dialog.kb_ids)
+    with perf_span("knowledgebase_load", trace=perf_trace, kb_count=len(dialog.kb_ids or [])):
+        kbs = KnowledgebaseService.get_by_ids(dialog.kb_ids)
     embedding_list = list(set([kb.embd_id for kb in kbs]))
     if len(embedding_list) != 1:
         yield {"answer": "**ERROR**: Knowledge bases use different embedding models.", "reference": {}}
@@ -294,24 +310,30 @@ def chat(dialog, messages, stream=True, **kwargs):
         # 精排。原来的那个版本是把这个重排许模型传到了那个retriever函数的retrieval中
         
         # 方案二：文本、图片、关键词（并行召回）,进行混合检索
-        kbinfos = retriever.hybrid_page_retrieval(
-            question=" ".join(questions),
-            embd_mdl=embd_mdl,
-            tenant_ids=tenant_ids,
-            kb_ids=dialog.kb_ids,
-            rerank_mdl=rerank_mdl,
-            chat_mdl=chat_mdl,
-            # 使用合理的默认值
-            image_topk=50,
-            text_topk=50,
-            keyword_topk=50,
-            rrf_k=60,
-            rrf_topk=5,
-            rerank_final_topk=3,
-            similarity_threshold=0.7, # 这里的阈值是给最后一阶段rerank模型进行使用的
-            enable_context_recall=True, # 是否开启上下页召回
-            context_recall_max_pages=1
-        )
+        with perf_span("retrieval_total", trace=perf_trace):
+            kbinfos = retriever.hybrid_page_retrieval(
+                question=" ".join(questions),
+                embd_mdl=embd_mdl,
+                tenant_ids=tenant_ids,
+                kb_ids=dialog.kb_ids,
+                rerank_mdl=rerank_mdl,
+                chat_mdl=chat_mdl,
+                # 使用合理的默认值
+                image_topk=50,
+                text_topk=50,
+                keyword_topk=50,
+                rrf_k=60,
+                rrf_topk=5,
+                rerank_final_topk=3,
+                similarity_threshold=0.7, # 这里的阈值是给最后一阶段rerank模型进行使用的
+                enable_context_recall=True, # 是否开启上下页召回
+                context_recall_max_pages=1
+            )
+        if perf_trace:
+            perf_trace.set_meta(
+                retrieved_pages=len(kbinfos.get("chunks", [])),
+                retrieved_total=kbinfos.get("total", 0),
+            )
 
 
     # ====================
@@ -352,21 +374,26 @@ def chat(dialog, messages, stream=True, **kwargs):
 
                 # 转换图片为base64并添加（限制最多3张，避免token过多）
                 successful_images = 0
-                for img_path in page_images:
-                    # 从MinIO获取图片并转换为base64
-                    base64_data_url = get_image_base64_from_minio(img_path)
+                with perf_span(
+                    "context_image_fetch",
+                    trace=perf_trace,
+                    image_count=len(page_images),
+                ):
+                    for img_path in page_images:
+                        # 从MinIO获取图片并转换为base64
+                        base64_data_url = get_image_base64_from_minio(img_path)
 
-                    if base64_data_url:
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": base64_data_url,  # 使用base64 data URL
-                                "detail": "auto"
-                            }
-                        })
-                        successful_images += 1
-                    else:
-                        logging.warning(f"跳过无法获取的图片: {img_path}")
+                        if base64_data_url:
+                            content_parts.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": base64_data_url,  # 使用base64 data URL
+                                    "detail": "auto"
+                                }
+                            })
+                            successful_images += 1
+                        else:
+                            logging.warning(f"跳过无法获取的图片: {img_path}")
 
                 if successful_images > 0:
                     msg[-1]["content"] = content_parts
@@ -520,18 +547,30 @@ def chat(dialog, messages, stream=True, **kwargs):
         last_ans = "" # 这个主要是存储上次返回了什么
         answer = "" # 这个是ans的一个副本
 
-        for ans in chat_mdl.chat_streamly(system_prompt, msg, gen_conf):
-            # 我是怎么判断是否存在think标记的？
-            # 从来也没有人更新thought啊，这个thought一直都是空的字符串
-            if thought:
-                ans = re.sub(r"<think>.*</think>", "", ans, flags=re.DOTALL)
-            answer = ans
-            delta_ans = ans[len(last_ans) :]
-            if num_tokens_from_string(delta_ans) < 4:
-                continue
-            last_ans = answer
-            # 返回当前累计回答(包含思考过程)+新增片段)
-            yield {"answer": thought + answer, "reference": {}}
+        generation_started = time.perf_counter()
+        try:
+            for ans in chat_mdl.chat_streamly(system_prompt, msg, gen_conf):
+                # 我是怎么判断是否存在think标记的？
+                # 从来也没有人更新thought啊，这个thought一直都是空的字符串
+                if thought:
+                    ans = re.sub(r"<think>.*</think>", "", ans, flags=re.DOTALL)
+                answer = ans
+                delta_ans = ans[len(last_ans) :]
+                if perf_trace and delta_ans:
+                    perf_trace.mark_first("llm_first_token")
+                if num_tokens_from_string(delta_ans) < 4:
+                    continue
+                last_ans = answer
+                # 返回当前累计回答(包含思考过程)+新增片段)
+                yield {"answer": thought + answer, "reference": {}}
+        finally:
+            if perf_trace:
+                perf_trace.record(
+                    "llm_generation",
+                    (time.perf_counter() - generation_started) * 1000,
+                    output_chars=len(answer),
+                    output_tokens=num_tokens_from_string(answer),
+                )
         delta_ans = answer[len(last_ans): ]
         if delta_ans:
             yield {"answer": thought + answer, "reference": {}}

@@ -10,7 +10,7 @@ from flasgger import Swagger
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 
 from api.db import StatusEnum
-from api.db.db_models import close_connection
+from api.db.db_models import DB, close_connection
 from api.db.services import UserService
 from api.utils import CustomJSONEncoder, commands
 
@@ -136,9 +136,25 @@ def load_user(web_request):
             access_token = str(jwt.loads(authorization))
             print(f"[DEBUG] Deserialized access_token: {access_token}")
             
-            user = UserService.query(
-                access_token=access_token, status=StatusEnum.VALID.value
-            )
+            try:
+                user = UserService.query(
+                    access_token=access_token, status=StatusEnum.VALID.value
+                )
+            except Exception as query_error:
+                # Gunicorn 的线程复用可能拿到一个已经被 MySQL 断开的连接。
+                # 这类临时连接错误不能被当成无效 Token，否则前端会清空登录态。
+                logging.warning(
+                    "load_user database query failed, retrying with a fresh connection: %s",
+                    query_error,
+                )
+                try:
+                    if not DB.is_closed():
+                        DB.close()
+                except Exception:
+                    logging.exception("load_user failed to close the broken database connection")
+                user = UserService.query(
+                    access_token=access_token, status=StatusEnum.VALID.value
+                )
             print(f"[DEBUG] User query result: {user}")
             
             if user:

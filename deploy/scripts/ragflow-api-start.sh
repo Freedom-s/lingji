@@ -14,4 +14,15 @@ echo "PID=$$"
 
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="/home/user/jianhuasuo/lingji"
-exec /home/user/gsl/miniconda3/envs/lingji/bin/python -m api.ragflow_server
+exec /home/user/gsl/miniconda3/envs/lingji/bin/python -m gunicorn \
+  --bind 0.0.0.0:9380 \
+  --workers 2 \
+  --worker-class gthread \
+  --threads 4 \
+  --timeout 3600 \
+  --graceful-timeout 30 \
+  --keep-alive 65 \
+  --access-logfile - \
+  --error-logfile - \
+  --capture-output \
+  api.wsgi:application

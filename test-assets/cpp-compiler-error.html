@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C++ Compiler Error</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #111827; }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 36px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .window {
+      width: 1400px;
+      height: 860px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      background: #1e1e1e;
+      box-shadow: 0 28px 80px rgba(0,0,0,.45);
+    }
+    .titlebar {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 0 20px;
+      background: #181818;
+      border-bottom: 1px solid #303030;
+      color: #b8b8b8;
+      font-size: 16px;
+    }
+    .dots { display: flex; gap: 10px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; }
+    .red { background: #ff5f57; }
+    .yellow { background: #febc2e; }
+    .green { background: #28c840; }
+    .title { position: absolute; left: 50%; transform: translateX(-50%); }
+    .tabbar {
+      height: 48px;
+      display: flex;
+      align-items: stretch;
+      background: #181818;
+      border-bottom: 1px solid #2b2b2b;
+    }
+    .tab {
+      width: 190px;
+      padding: 13px 20px;
+      background: #1e1e1e;
+      border-top: 2px solid #4daafc;
+      border-right: 1px solid #303030;
+      color: #e5e7eb;
+      font: 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .editor {
+      height: 500px;
+      padding-top: 22px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font: 24px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .line { display: flex; min-height: 41px; }
+    .ln {
+      width: 76px;
+      padding-right: 20px;
+      color: #858585;
+      text-align: right;
+      user-select: none;
+    }
+    .code { white-space: pre; }
+    .pp { color: #c586c0; }
+    .header { color: #ce9178; }
+    .kw { color: #569cd6; }
+    .type { color: #4ec9b0; }
+    .fn { color: #dcdcaa; }
+    .str { color: #ce9178; }
+    .num { color: #b5cea8; }
+    .error-line { background: rgba(244, 63, 94, .08); }
+    .squiggle {
+      text-decoration-line: underline;
+      text-decoration-style: wavy;
+      text-decoration-color: #f14c4c;
+      text-underline-offset: 7px;
+    }
+    .panel {
+      height: 258px;
+      border-top: 1px solid #3c3c3c;
+      background: #181818;
+    }
+    .panel-tabs {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      padding: 0 24px;
+      color: #9ca3af;
+      font-size: 14px;
+      letter-spacing: .5px;
+      border-bottom: 1px solid #2b2b2b;
+    }
+    .panel-tabs .active {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      color: #f3f4f6;
+      border-bottom: 2px solid #4daafc;
+    }
+    .terminal {
+      padding: 18px 28px;
+      color: #e5e7eb;
+      font: 19px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    .prompt { color: #86efac; }
+    .err { color: #f87171; font-weight: 600; }
+    .caret { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header class="titlebar">
+      <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+      <div class="title">main.cpp — C++ Experiment</div>
+    </header>
+    <div class="tabbar"><div class="tab">● main.cpp</div></div>
+    <section class="editor">
+      <div class="line"><span class="ln">1</span><span class="code"><span class="pp">#include</span> <span class="header">&lt;iostream&gt;</span></span></div>
+      <div class="line"><span class="ln">2</span><span class="code"><span class="kw">using namespace</span> std;</span></div>
+      <div class="line"><span class="ln">3</span><span class="code"></span></div>
+      <div class="line"><span class="ln">4</span><span class="code"><span class="type">int</span> <span class="fn">main</span>() {</span></div>
+      <div class="line error-line"><span class="ln">5</span><span class="code">    <span class="type">int</span> a = <span class="num">10</span><span class="squiggle"> </span></span></div>
+      <div class="line"><span class="ln">6</span><span class="code">    cout &lt;&lt; <span class="str">"a = "</span> &lt;&lt; a &lt;&lt; endl;</span></div>
+      <div class="line"><span class="ln">7</span><span class="code">    <span class="kw">return</span> <span class="num">0</span>;</span></div>
+      <div class="line"><span class="ln">8</span><span class="code">}</span></div>
+    </section>
+    <section class="panel">
+      <div class="panel-tabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="active">TERMINAL</span></div>
+      <div class="terminal"><span class="prompt">student@lab:~/cpp$</span> g++ main.cpp -o main
+main.cpp: In function ‘int main()’:
+main.cpp:6:5: <span class="err">error: expected ‘,’ or ‘;’ before ‘cout’</span>
+    6 |     cout &lt;&lt; "a = " &lt;&lt; a &lt;&lt; endl;
+      |     <span class="caret">^~~~</span></div>
+    </section>
+  </main>
+</body>
+</html>

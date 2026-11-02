@@ -1,8 +1,16 @@
 import { Modal, Spin, Empty, Result, Button, Progress, Typography, Radio, Space, Tag } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled, ThunderboltOutlined, ExperimentOutlined } from '@ant-design/icons';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import learningService from '@/services/learning-service';
+import authorizationUtil from '@/utils/authorization-util';
 import MathText from '@/components/math-text';
+import {
+  clearQuizProgress,
+  getQuizProgressKey,
+  loadQuizProgress,
+  saveQuizProgress,
+} from './progress';
+import type { QuizAnswer, SubmitResult } from './progress';
 import styles from './index.less';
 
 const { Text, Title, Paragraph } = Typography;
@@ -14,12 +22,6 @@ interface QuizQuestion {
   knowledge_point_ids?: string[];
   knowledge_point_names?: string[];
   doc_id?: string;
-}
-
-interface SubmitResult {
-  is_correct: boolean;
-  correct_answer: string;
-  explanations: Record<string, string>;
 }
 
 interface QuizModalProps {
@@ -35,67 +37,92 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [kpLabels, setKpLabels] = useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [score, setScore] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, QuizAnswer>>({});
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitInFlight = useRef(false);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const [restartCount, setRestartCount] = useState(0);
 
   const isPersonalized = mode === 'personalized';
-
-  const fetchQuiz = useCallback(() => {
-    if (isPersonalized) {
-      if (!dialogId) return;
-      setLoading(true);
-      setError(null);
-      learningService
-        .startPersonalizedQuiz({ dialog_id: dialogId, count: 10 })
-        .then((res: any) => {
-          if (res?.code === 0 && res?.data?.questions?.length > 0) {
-            setQuestions(res.data.questions);
-            setKpLabels(res.data.kp_labels || {});
-          }
-        })
-        .catch((err: any) => setError(err?.message || '获取个性化测验失败'))
-        .finally(() => setLoading(false));
-    } else {
-      if (!docId) return;
-      setLoading(true);
-      setError(null);
-      learningService
-        .getQuiz(docId)
-        .then((res: any) => {
-          if (res?.code === 0 && res?.data?.questions?.length > 0) {
-            setQuestions(res.data.questions);
-            setKpLabels(res.data.kp_labels || {});
-          }
-        })
-        .catch((err: any) => setError(err?.message || '获取测验失败'))
-        .finally(() => setLoading(false));
+  const userEmail = useMemo(() => {
+    try {
+      return JSON.parse(authorizationUtil.getUserInfo() || '{}').email as string | undefined;
+    } catch {
+      return undefined;
     }
-  }, [docId, dialogId, isPersonalized]);
+  }, []);
+  const progressKey = !isPersonalized && docId && userEmail
+    ? getQuizProgressKey(userEmail, docId)
+    : null;
+  const currentAnswer = answers[currentIndex];
+  const selectedAnswer = currentAnswer?.selectedAnswer ?? drafts[currentIndex] ?? null;
+  const submitted = Boolean(currentAnswer);
+  const submitResult = currentAnswer?.result ?? null;
+  const score = Object.values(answers).filter((answer) => answer.result.is_correct).length;
 
   useEffect(() => {
-    if (open && (docId || dialogId)) {
-      fetchQuiz();
-      setCurrentIndex(0);
-      setSelectedAnswer(null);
-      setSubmitted(false);
-      setScore(0);
-      setFinished(false);
-      setSubmitResult(null);
+    if (!open || (isPersonalized ? !dialogId : !docId)) return;
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setQuestions([]);
+    setReadyKey(null);
+
+    const request = isPersonalized
+      ? learningService.startPersonalizedQuiz({ dialog_id: dialogId!, count: 10 })
+      : learningService.getQuiz(docId!);
+
+    request
+      .then((res: any) => {
+        if (!active) return;
+        const nextQuestions: QuizQuestion[] = res?.code === 0
+          ? res?.data?.questions || []
+          : [];
+        setQuestions(nextQuestions);
+        setKpLabels(res?.data?.kp_labels || {});
+        const saved = progressKey && nextQuestions.length
+          ? loadQuizProgress(progressKey, nextQuestions)
+          : null;
+        setCurrentIndex(saved?.currentIndex ?? 0);
+        setAnswers(saved?.answers ?? {});
+        setDrafts(saved?.drafts ?? {});
+        setFinished(saved?.finished ?? false);
+        setReadyKey(progressKey);
+      })
+      .catch((err: any) => {
+        if (active) setError(err?.message || '获取测验失败');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [open, docId, dialogId, isPersonalized, progressKey, restartCount]);
+
+  useEffect(() => {
+    if (readyKey && readyKey === progressKey && questions.length) {
+      saveQuizProgress(readyKey, questions, {
+        currentIndex,
+        finished,
+        answers,
+        drafts,
+      });
     }
-  }, [open, docId, dialogId, fetchQuiz]);
+  }, [readyKey, progressKey, questions, currentIndex, finished, answers, drafts]);
 
   const handleSelect = (value: string) => {
     if (submitted) return;
-    setSelectedAnswer(value);
+    setDrafts((current) => ({ ...current, [currentIndex]: value }));
   };
 
   const handleSubmit = async () => {
-    if (!selectedAnswer) return;
+    if (!selectedAnswer || submitted || submitInFlight.current) return;
     const question = questions[currentIndex];
+    submitInFlight.current = true;
+    setSubmitting(true);
 
     try {
       let body: any;
@@ -112,35 +139,36 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
           student_answer: selectedAnswer,
         });
       }
-      // unwrap 返回的是 { code, data, message }，body.data 才是实际结果
-      const res: SubmitResult = body?.data || body;
-      setSubmitResult(res);
-      if (res.is_correct) setScore((s) => s + 1);
-      setSubmitted(true);
+      if (body?.code !== 0 || typeof body?.data?.is_correct !== 'boolean') return;
+      const res: SubmitResult = body.data;
+      setAnswers((current) => ({
+        ...current,
+        [currentIndex]: { selectedAnswer, result: res },
+      }));
     } catch {
       // API 失败时不做判题回退
+    } finally {
+      submitInFlight.current = false;
+      setSubmitting(false);
     }
   };
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setSelectedAnswer(null);
-      setSubmitted(false);
-      setSubmitResult(null);
+      setCurrentIndex((index) => index + 1);
     } else {
       setFinished(true);
     }
   };
 
+  const handlePrevious = () => {
+    setCurrentIndex((index) => Math.max(0, index - 1));
+  };
+
   const handleRestart = () => {
-    fetchQuiz();
-    setCurrentIndex(0);
-    setSelectedAnswer(null);
-    setSubmitted(false);
-    setScore(0);
-    setFinished(false);
-    setSubmitResult(null);
+    if (progressKey) clearQuizProgress(progressKey);
+    setReadyKey(null);
+    setRestartCount((count) => count + 1);
   };
 
   const renderContent = () => {
@@ -167,6 +195,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
             </Paragraph>
           )}
           <Space>
+            <Button onClick={() => setFinished(false)}>回看题目</Button>
             <Button type="primary" onClick={handleRestart}>再来一次</Button>
             <Button onClick={onClose}>关闭</Button>
           </Space>
@@ -219,8 +248,11 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
         </div>
 
         <div className={styles.quizNav}>
+          <Button onClick={handlePrevious} disabled={currentIndex === 0 || submitting}>
+            上一题
+          </Button>
           {!submitted ? (
-            <Button type="primary" onClick={handleSubmit} disabled={!selectedAnswer}>
+            <Button type="primary" onClick={handleSubmit} disabled={!selectedAnswer || submitting} loading={submitting}>
               提交答案
             </Button>
           ) : (
@@ -242,6 +274,7 @@ const QuizModal = ({ open, docId, dialogId, mode = 'default', onClose }: QuizMod
       }
       open={open}
       onCancel={onClose}
+      maskClosable={false}
       footer={null}
       width={650}
       destroyOnClose

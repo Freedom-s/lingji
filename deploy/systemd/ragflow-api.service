@@ -9,9 +9,13 @@ User=user
 WorkingDirectory=/home/user/jianhuasuo/lingji
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=/home/user/jianhuasuo/lingji
+EnvironmentFile=-/home/user/jianhuasuo/lingji/conf/ragflow-secret.env
 ExecStart=/usr/local/bin/ragflow-api-start
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure
 RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
 LimitNOFILE=65536
 
 [Install]

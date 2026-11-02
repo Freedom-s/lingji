@@ -1,0 +1,1548 @@
+{
+  "input_directory": "/Users/suojianhua/Desktop/c++程序设计题库",
+  "parsed_records_including_duplicates": 424,
+  "unique_records_before_validation": 167,
+  "usable_question_count": 84,
+  "excluded_question_count": 72,
+  "excluded_questions": [
+    {
+      "question": "将输出结果设置成左对齐可以使用的命令是_____。 （1.0） 正确答案： 第1空: setiosflags(ios::left) 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "C++中，最好用（ ）代替malloc。 （1.0） 正确答案： 第1空: new 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "假定有如下定义：int x; 若要将整型变量y定义为变量x的引用,则应使用的定义语句是_________。 （1.0） 正确答案： 第1空: int &y=x; 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "为了解决程序中语句较少函数频繁调用的效率问题，引入了_________，定义时需在函数前面加上__________说明。 （2.0） 正确答案： 第1空: 内联函数 第2空: inline 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "_______，______，_______，派生类构造函数对基类构造函数的调用必须采用初始化列表进行初始化。 （3.0） 正确答案： 第1空: 常量成员 第2空: 引用成员 第3空: 类对象成员 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "模版函数是________经________而生成的函数。 （2.0） 正确答案： 第1空: 函数模版 第2空: 实例化 解析： 三、 判断题 （共10题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "const char *p说明了p是指向字符串的常量指针。 （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "引用作为函数参数在函数内可对被直接引用的变量进行操作。 （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "函数重载既要求两函数参数对应的类型不同又要求参数个数不同。 （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "在声明一个类时，必须同时声明类的数据成员和成员函数。 （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "构造函数初始化列表先于构造函数体中的语句执行。 （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "如果在一个类的对象之间要进行数据交换，可以使用该类的静态数据成员来完成。( ) （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "在类模板的中，必须至少有一个类参数。 （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "迭代器就是我们平时所用的指针。 （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "“引用”作为目标的别名而使用，对引用的改动实际就是对目标的改动。引用不是值，不占存储空间，声明引用时，目标的存储状态不会改变。 （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "析构函数的作用是当对象不用时，删除对象。 （1.0） 正确答案： 正确 解析： 四、 简答题 （共2题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "简要说明面向对象的三大特征。 （5.0） 正确答案： 封装性：将客观事物抽象成类，每个类对自身的数据和方法实行protection（private， protected，public）。 继承性：对象之间的相互关系,使得某类对象可以继承另外一类对象（祖先）的特征和功能。 多态性：对象根据所接受的消息而做出动作，同样的消息为不同的对象接受时可导致完全不同的行动，该现象称为多态性。 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "简述成员函数、全局函数和友元函数的差别。 （5.0） 正确答案： 成员函数是在类内部定义的，作用域在类的内部，成员函数可以访问类的数据成员（公有、保护和私有数据成员），可以调用该类的其它成员函数（公有、保护和私有成员函数），可以调用全局函数。如果友元函数是另一个类的公有成员函数，则该类的成员函数也只能通过那个类的对象调用，不能调用那个类的保护和私有成员函数。非本类成员函数（其它类成员函数或全局函数）可以通过该类的对象访问该类的公有数据成员和调用该类的的公有成员函数。 不是在类中定义的成员函数都是全局函数。 如果某一个函数（全局函数或类的成员函数）定义为另一个类的友元函数，需要在那个类中用friend关键字声明，友元函数并不是类的成员，它的定义自然是在那个类的外面。 解析： 五、 改错题 （共1题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下面的错误，标注行号和错误原因。 1. int i=-1; 2. const int ic=i; 3. const int *pic=⁣ 4. int *const cpi=⁣ 5. cpi=pic; 6. ic=*pic; 7. int &ia[5]; 8. int &*p=i; 9. int * pi=&i; 10. int* &pr=pi; （10.0） 正确答案： 第1空: 4.非法：cpi是指向int型对象的const指针，不能用const int型对象ic的地址初始化 5.cpi是const常量，不能被赋值 6.ic是const常量，不能被赋值 7. 不能定义引用数组 8. 不能定义指向引用的指针 解析： 六、 读程序题 （共4题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "写出下列程序运行结果。 #include #include void main(){ cout<<hex<<20<<endl; cout<<oct<<10<<endl; cout<<setfill('x')<<setw(10); cout<<10<<”aa”<<endl; } （5.0） 正确答案： xxxxxxxx12aa 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "阅读下面的程序，写出程序运行的结果。 #include class count { static int n; public: count() {n++;} void show() {cout<<n<<endl;} ~count() {cout<<n<<endl;n--;} }; int count::n=0; void main() { count b[4]; } （4.0） 正确答案： 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "阅读下面的程序，写出程序运行的结果。 class A { public: A() { cout<<\"Constructing A\"<<endl;} ~A(){ cout<<\"Destructing A\"<<endl;} }; class B { public: B() { cout<<\"Constructing B\"<<endl;} ~B(){ cout<<\"Destructing B\"<<endl;} }; class C { public: C() { cout<<\"Constructing C\"<<endl;} ~C(){ cout<<\"Destructing C\"<<endl;} }; class D:public C { public: D() { cout<<\"Constructing D\"<<endl;} ~D(){ cout<<\"Destructing D\"<<endl;} B b; A a; C c; }; int main() { D d; } （5.0） 正确答案： Constructing C Constructing B Constructing A Constructing C Constructing D Destructing D Destructing C Destructing A Destructing B Destructing C 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "写出下列程序运行结果。 class B {public: void f ( ) { cout f();pB->ff(); pB->vf();pB->vff(); } （6.0） 正确答案： bf dvf bf dvf dvf bf 解析： 七、 程序设计题 （共1题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "某出版社发行图书和光盘，利用继承设计管理出版物的类，要求如下：建立一个基类Publication存储出版物的标题title、出版物名称name、单价price及出版日期date；用Book和CD类分别管理图书和光盘，它们都从Publication派生；Book类具有保存图书页数的数据成员page，CD类具有保存时间的数据成员playtime；每个类都有构造函数、析构函数，且都有用于从键盘获取数据的成员函数inputData()和用于显示数据的成员函数display()。 （20.0） 正确答案： class Publication{ protected: char title[20],name[20],date[8]; double price; public: Publication(char* t=\"\",char* n=\"\",char* d=\"\",double p=0) { strcpy(title,t); strcpy(name,n); strcpy(date,d); price=p; } ~Publication(){ cout>price; } void display() { cout>page; } void display() { Publication::display(); cout>playtime; } void display() { Publication::display(); cout<<\"磁盘播放时间为:\"<<playtime<<endl; } }; int main(int argc, char* argv[]) { Tape t1; Book b1; t1.inputData(); t1.display(); cout<<endl<<endl; b1.inputData(); b1.display(); return 0; } 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx"
+      ]
+    },
+    {
+      "question": "由static修饰的类的成员为该类的所有对象______。 （2.0） 正确答案： 第1空: 共享 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "若需要把一个类 AB 定义为另一个类 CD 的友元类，则应在类 CD 的定义中加入一条语句:___________________。 （2.0） 正确答案： 第1空: friend class AB; 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "在C++中，编译时的多态性是通过__________实现的，而运行时的多态性则是通过__________实现的。 （4.0） 正确答案： 第1空: 重载 第2空: 虚函数 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "当一个类对象被撤消时将自动调用该类的_____________。 （2.0） 正确答案： 第1空: 析构函数 解析： 三、 简答题 （共2题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "面向对象与面向过程的编程差异？ （10.0） 正确答案： 描述合理即可。 以猪八戒吃西瓜为例: 面向对象：以对象为中心，对象最大，因此会用下面语句表达： 猪八戒.吃(西瓜) 面向过程：以函数为中心，函数最大，因此会用下面语句表达： 吃(猪八戒,西瓜) 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "简述define和const的区别。 （10.0） 正确答案： #define（宏）问题： 行末不必用分号 宏展开方式：简单地把它替换成对应的常量表达式 不检查数据类型，不安全 const： 具有类型检查机制 可以有自己的数据类型，系统为它分配内存 解析： 四、 改错题 （共2题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "int f(int i1=1,int i2=2,int i3=0){ return i1+i2+i3; } 针对此函数，有如下调用，指出错误的调用。 f(); f(3); f(2,3); f(4,5,6); f(,2,3); （10.0） 正确答案： 第1空: f(,2,3); i1缺省，而右边的i2,i3没有 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下列函数的错误。 int f(int i1=1,int i2=2,int i3=0); int g(int i1,int i2=0,int i3); int h(int i1=0,int i2,int i3=0); （10.0） 正确答案： 第1空: g(): i3没有缺省值 h(): i2没有缺省值 解析： 五、 读程序题 （共1题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "#include class A{ int * a; public: A( int x ) { a=new int (x); cout<<\"Constructor! \"<<*a<<endl; } ~A() { cout<<\"Destructor! \"<<*a<<endl; delete a; } }; void main() { A x(3), *p; p=new A(5); delete p; } （10.0） 正确答案： Constructor!3 Constructor!5 Destructor!5 Destructor!3 解析： 六、 程序设计题 （共1题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "（20.0） 正确答案： #include using namespace std; class Salary{ private: double Wage,Subsidy,Rent,WaterFee,ElecFee; public: Salary(double w,double sub,double rent,double waterfee,double elecfee); //初始化工资数据的各分项 Salary(); void setWage(double w){ Wage=w; } void setSubsidy(double sub){Subsidy=sub;} void setRent(double rent){Rent=rent;} void setWaterFee(double waterfee){WaterFee=waterfee;} void setElecFee(double elecfee){ElecFee=elecfee;} double getWage(){ return Wage; } double getSubsidy(){return Subsidy;} double getRent(){return Rent;} double getWaterFee(){return WaterFee;} double getElecFee(){return ElecFee;} double RealSalary(); //计?算?实º¦Ì发¤¡é工¡è资Á¨º void display(); }; Salary::Salary(double w,double sub,double rent,double waterfee,double elecfee){ //初始化工资数据的各分项 Wage=w; Subsidy=sub; Rent=rent; WaterFee=waterfee; ElecFee=elecfee; } Salary::Salary(){ //初始化工资数据的各分项数据0 Wage=Subsidy=Rent=WaterFee=ElecFee=0; } void Salary::display(){ cout<<\"Wage: \"<<Wage<<\"\\tSubsidy: \"<<Subsidy<<\"\\tRent: \"<<Rent <<\"\\tWaterFee: \"<<WaterFee<<\"\\tElecFee: \"<<ElecFee; cout<<\"\\tTotal Salary: \"<<RealSalary()<<endl; } double Salary::RealSalary() { return Wage+Subsidy-Rent-WaterFee-ElecFee; } void main() { Salary s1; Salary s2(1200,2000,123,400,213); s1.display(); s2.display(); s1.setWage(1200); s1.setSubsidy(2100); s1.setElecFee(321); s1.setRent(800); s1.setWaterFee(220); cout<<\"s1: Wage\\t\"<<\"Subsidt\\t\"<<\"Rent\\t\"<<\"WaterFee\\t\"<<\"ElecFee\\t\"<<\"TotalSalary\\t\"<<endl; cout<<s1.getWage()<<\"\\t\"<<s1.getSubsidy()<<\"\\t\"<<s1.getRent()<<\"\\t\"<<s1.getWaterFee()<<\"\\t\" <<s1.getElecFee()<<\"\\t\"<<s1.RealSalary()<<endl; cout<<endl<<\"----------------------------------------------\"<<endl; s1.display(); } 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+        "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx"
+      ]
+    },
+    {
+      "question": "C++中，最好用（ ）代替malloc。 （2.0） 正确答案： 第1空: new 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "在函数参数传递中，解决大的对象传递效率，最好使用________为参数。 （2.0） 正确答案： 第1空: 引用 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "在类中定义的用于格式控制的枚举变量中十、八、十六进制是dec，oct，____。 （2.0） 正确答案： 第1空: hex 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "对类对象成员的初始化是通过执行构造函数中的____________完成的。 （2.0） 正确答案： 第1空: 初始化表 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "若希望提供的操作方法对于不同的类型是一样的，则________将是最佳的选择。 （2.0） 正确答案： 第1空: 模板 解析： 三、 判断题 （共10题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "每个对象也有地址，该地址就是存储此对象数据成员的单元的首地址。( ) （1.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "构造函数的名字必须与类名相同，其返回类型缺省为void类型 。 （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "在类Time中的析构函数可以声明为：void ~Time(int) （1.0） 正确答案： 错误 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "引用作为函数参数在函数内可对被直接引用的变量进行操作。 （1.0） 正确答案： 正确 解析： 四、 简答题 （共2题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "面向对象与面向过程的编程差异？ （5.0） 正确答案： 描述合理即可。 以猪八戒吃西瓜为例: 面向对象：以对象为中心，对象最大，因此会用下面语句表达： 猪八戒.吃(西瓜) 面向过程：以函数为中心，函数最大，因此会用下面语句表达： 吃(猪八戒,西瓜) 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "简述成员函数、全局函数和友元函数的差别。 （5.0） 正确答案： 成员函数是在类内部定义的，作用域在类的内部，成员函数可以访问类的数据成员（公有、保护和私有数据成员），可以调用该类的其它成员函数（公有、保护和私有成员函数），可以调用全局函数。如果友元函数是另一个类的公有成员函数，则该类的成员函数也只能通过那个类的对象调用，不能调用那个类的保护和私有成员函数。非本类成员函数（其它类成员函数或全局函数）可以通过该类的对象访问该类的公有数据成员和调用该类的的公有成员函数。 不是在类中定义的成员函数都是全局函数。 如果某一个函数（全局函数或类的成员函数）定义为另一个类的友元函数，需要在那个类中用friend关键字声明，友元函数并不是类的成员，它的定义自然是在那个类的外面。 解析： 五、 改错题 （共5题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下面程序段中的错误，并说明出错原因。 class A{ public: virtual void show()=0; }; void main() { A a; A *p; } （2.0） 正确答案： 第1空: A a; 不能说明抽象类的对象 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下面程序段中的错误，并改正。 void main(){ int *ptr=new test[2]; delete ptr; } （2.0） 正确答案： 第1空: 应为：delete []ptr; 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "改正一处错误。 class A { int a,b; public: A(int aa=0,int bb) { a=aa; b=bb; } }; （2.0） 正确答案： 第1空: bb没有默认值 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下面程序段中的错误，并说明出错原因。 class Test{ private: int num; protected: int p; }; void fun() {Test m; int x=m.p;} （2.0） 正确答案： 第1空: int x=m.p;类之外定义的函数不能访问类的保护成员 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下面程序段中的错误，并改正。 class number{ private: int num; public: number(int i){num=i;} int ++operator(); }; int number::++operator() { num++; return num; } （2.0） 正确答案： 第1空: int ++operator();改为int operator++(); 第2空: int number::++operator()改为int number::operator++(); 解析： 六、 读程序题 （共2题，15分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "阅读下面的程序，写出程序运行的结果。 class A { public: A() { cout<<\"Constructing A\"<<endl;} ~A(){ cout<<\"Destructing A\"<<endl;} }; class B { public: B() { cout<<\"Constructing B\"<<endl;} ~B(){ cout<<\"Destructing B\"<<endl;} }; class C { public: C() { cout<<\"Constructing C\"<<endl;} ~C(){ cout<<\"Destructing C\"<<endl;} }; class D:public C { public: D() { cout<<\"Constructing D\"<<endl;} ~D(){ cout<<\"Destructing D\"<<endl;} B b; A a; C c; }; int main() { D d; } （10.0） 正确答案： Constructing C Constructing B Constructing A Constructing C Constructing D Destructing D Destructing C Destructing A Destructing B Destructing C 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "请写出下述程序的运行结果。 #include class base { public: virtual void f1( ) { cout f1( ); p->f2( ); p->f3( ); } （5.0） 正确答案： f1 of derive,f2 of base,f3 of base 解析： 七、 程序设计题 （共3题，25分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "编写程序实现从标准输入每次读入一行文本。 （5.0） 正确答案： #include void main() { char line[100]; while(cin.getline(line, 100))； cout<<line<<endl; } 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "编写程序实现从标准输入每次读入一个单词。 （5.0） 正确答案： #include void main() { char word[100]; while(std::cin>>word) std::cout<<word<<std::endl; } 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "已知复数类Complex的声明如下： class Complex {public: Complex(); //无参构造函数，要求将实部和虚部初始化为0 Complex(double, double); //有两个形参的构造函数 //对“+”运算符进行重载 friend Complex operator+(Complex& com1, Complex& com2); //对“<<”运算符进行重载 friend ostream& operator<<(ostream& out, Complex& com); private: double real,imag; }; 要求 （1）写出该类的所有构造函数的类外定义代码。 （2）写出对运算符“+”、“<<”进行重载的运算符重载函数的定义。 （15.0） 正确答案： Complex::Complex(){real=0;imag=0;} Complex::Complex(double r,double i){real=r;imag=I;} Complex operator+(Coplex &com1,Complex &com2) { Complex com; com.real=com1.real+com2.real; com.imag=com1.imag+com2.imag; return com; } ostream& operator<<(ostream& output,Complex& com){ output<<”(“<<com.real<<”+”<<com.imag<<”i)”<<endl; return output; } 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+        "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx"
+      ]
+    },
+    {
+      "question": "（5.0） 正确答案： 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/新建试卷20220503192623-重命名1.docx",
+        "试卷库(word)/新建试卷20220503192623.docx"
+      ]
+    },
+    {
+      "question": "当一个类对象被撤消时将自动调用该类的_____________。 （2.0） 正确答案： 第1空: 析构函数 解析： 三、 判断题 （共2题，4分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "每个对象也有地址，该地址就是存储此对象数据成员的单元的首地址。( ) （2.0） 正确答案： 正确 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "类的析构函数一般都声明为虚函数。( ) （2.0） 正确答案： 正确 解析： 四、 简答题 （共1题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "简述C++语言的特点。 （10.0） 正确答案： 1） 兼容C，支持面向过程的程序设计 class C{}; class CPlusPlus : public C {}; 2）扩展了C，支持面向对象的机制 3）具有高效性、灵活性、可移植性 4）丰富的运算符和数据类型 解析： 五、 读程序题 （共1题，10分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "写出下列程序运行结果。 #include class A{ int * a; public: A( int x ) { a=new int (x); cout<<\"Constructor!\"<<*a<<endl; } ~A() { cout<<\"Destructor!\"<<*a<<endl; delete a; } }; void main() { A x(3), *p; p=new A(5); delete p; } （10.0） 正确答案： Constructor!3 Constructor!5 Destructor!5 Destructor!3 解析： 六、 程序设计题 （共1题，20分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "一个教学系统至少有学生和教师两种人员，假设教师的数据有教师编号、姓名、年龄、性别、职称和系别，学生的数据有学号、姓名、年龄、性别、班级和语文、数学、英语三门课程的成绩。编程完成学生和教师档案数据的输入和显示。 要求如下： 设计三个类Person、Teacher、Student，Person是Teacher和Student的基类，具有此二类共有的数据成员姓名、年龄、性别，并具有输入和显示这些数据的成员函数；Teacher类继承了Person类的功能，并增加对教师编号、职称和系别等数据成员进行输入和现实的成员函数；按同样的方法完善Student类的设计 （20.0） 正确答案： 解析： 七、 改错题 （共1题，5分）",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "指出下列语句中的错误行号和原因。 1. const int n; 2. const int i = 5; 3. n = 10; 4. i++; （5.0） 正确答案： 第1空: 1. 常量n未被初始化 3. 修改常量 4. 修改常量 解析：",
+      "options": {},
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+        "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+      ]
+    },
+    {
+      "question": "静态成员函数（ ）。",
+      "options": {
+        "A": "只能通过对象名（或指向对象的指针）访问该对象的静态成员",
+        "C": "可以被说明为虚函数",
+        "D": "有 this 指针"
+      },
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "B"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc"
+      ]
+    },
+    {
+      "question": "指向类 X 中类型为 type 的数据成员的指针的说明形式为（ ）。",
+      "options": {
+        "C": "Type *X::pointer",
+        "D": "X::*type pointer"
+      },
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "A",
+          "B"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "在C++中，要实现动态联编，必须使用（ ）调用虚函数。",
+      "options": {
+        "A": "类名",
+        "B": "派生类指针",
+        "C": "对象名"
+      },
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "有关类作用域，下列说法中不正确的是（ ）。",
+      "options": {
+        "A": "说明类时使用的一对花括号形成所谓的类作用域",
+        "D": "在可能出现两义性的情况下，必须使用作用域限定符“：：”"
+      },
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "B",
+          "C"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "指出下面程序段中的错误，并改正。 class number{ private: int num; public: number(int i){num=i;} int ++operator(); }; int number::++operator() { num++; return num; }",
+      "options": {
+        "A": "int operator++();",
+        "B": "int number::operator++();"
+      },
+      "correct": "B",
+      "reason": {
+        "missing_options": [
+          "C",
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": false,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc"
+      ]
+    },
+    {
+      "question": "下列关于动态联编的描述中,错误的是（ ）。",
+      "options": {
+        "A": "动态联编是以虚函数为基础的",
+        "B": "动态联编是在运行时确定所调用的函数代码的",
+        "C": "动态联编调用函数操作是指向对象的指针或对象引用"
+      },
+      "correct": null,
+      "reason": {
+        "missing_options": [
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": true,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "this指针存在的目的是：（ ）。",
+      "options": {
+        "A": "保证基类公有成员在子类中可以被访问",
+        "B": "保证每个对象拥有自己的数据成员，但共享处理这些数据成员的代码",
+        "C": "保证基类保护成员在子类中可以被访问"
+      },
+      "correct": "B",
+      "reason": {
+        "missing_options": [
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": false,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "下列关于this指针的说法正确的是（ ）。",
+      "options": {
+        "A": "this指针存在于每个函数之中",
+        "B": "在类的非静态函数中this指针指向调用该函数的对象",
+        "C": "this指针是指向虚函数表的指针"
+      },
+      "correct": "B",
+      "reason": {
+        "missing_options": [
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": false,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc",
+        "C面向对象程序设计B(题库导出).doc"
+      ]
+    },
+    {
+      "question": "在下列关于C++函数的叙述中，正确的是（ ）。",
+      "options": {
+        "A": "每个函数至少要有一个参数",
+        "B": "每个函数都必须返回一个值",
+        "C": "函数在被调用之前必须先声明"
+      },
+      "correct": "C",
+      "reason": {
+        "missing_options": [
+          "D"
+        ],
+        "oversized_options": [],
+        "missing_answer": false,
+        "image_only_question": false
+      },
+      "sources": [
+        "C面向对象程序设计B(题库导出) (1).doc"
+      ]
+    }
+  ],
+  "source_files": [
+    "C面向对象程序设计B(题库导出) (1).doc",
+    "C面向对象程序设计B(题库导出).doc",
+    "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+    "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》A卷1/2019-2020学年第2学期《面向对象程序设计与应用》A卷(1).docx",
+    "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+    "试卷库(word)/2019-2020-2学期《面向对象程序设计与应用》B卷1/2019-2020学年第2学期《面向对象程序设计与应用》B卷(1).docx",
+    "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+    "试卷库(word)/2021-2022学年第二学期C++面向对象程序设计B试卷1/2021-2022学年第二学期C++面向对象程序设计B试卷(1).docx",
+    "试卷库(word)/新建试卷20220503192623-重命名1.docx",
+    "试卷库(word)/新建试卷20220503192623.docx",
+    "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本/面向对象程序设计与应用重考试卷(1).docx",
+    "试卷库(word)/面向对象程序设计与应用重考试卷-副本-副本1/面向对象程序设计与应用重考试卷(1).docx"
+  ],
+  "notes": [
+    "重复题目已按题干和 A-D 选项去重。",
+    "解析为补充生成内容；正确选项给出知识点说明，其他选项标明错误并指向正确答案。",
+    "被排除题目缺少完整 A-D 选项、答案或题干仅为图片，需要人工确认后再导入。",
+    "已为 95 道可用题目补充四个选项的 explanations；正确选项优先使用基于题干和 C++ 规则生成的说明，错误选项包含正确答案及其内容，建议导入后抽查。",
+    "已按学生作答用途重新生成 explanations：每个选项均结合选项文本与本题考查规则说明；无法可靠还原或存在答案歧义的题目已移至 quality_excluded_questions。",
+    "另将 new[] 初始化规则存在标准版本/答案差异的题目移入复核列表。"
+  ],
+  "raw_usable_question_count_before_quality_filter": 95,
+  "quality_excluded_count": 11,
+  "quality_excluded_questions": [
+    {
+      "original_id": 12,
+      "question": "下列函数模版定义中正确的是（ ）。",
+      "reason": "模板语法选项在原始 Word 中被 HTML/XML 解析吞掉，当前选项只剩 template，无法可靠还原。"
+    },
+    {
+      "original_id": 17,
+      "question": "下列的模板说明中,正确的是( ）",
+      "reason": "模板声明的尖括号内容在原始 Word 中丢失，四个选项均无法可靠识别。"
+    },
+    {
+      "original_id": 21,
+      "question": "下列运算符中，（ ）运算符在C++中不能被重载。",
+      "reason": "与第 20 题重复，且原始选项 A 含乱码。"
+    },
+    {
+      "original_id": 26,
+      "question": "下面对模板的声明，正确的是（ ）。",
+      "reason": "模板声明的尖括号内容在原始 Word 中丢失，四个选项均无法可靠识别。"
+    },
+    {
+      "original_id": 27,
+      "question": "下面程序的输出结果是（ ） #include using namespace std; class Base { public: virtual void f() { cout f(); p->g(); }",
+      "reason": "程序代码在原始 Word 中被截断，无法保证输出题的条件完整。"
+    },
+    {
+      "original_id": 32,
+      "question": "以下类模板定义正确的为（ ）。",
+      "reason": "类模板声明的尖括号内容在原始 Word 中丢失，四个选项均无法可靠识别。"
+    },
+    {
+      "original_id": 43,
+      "question": "关于new运算符的下列描述中，（ ）是错误的。",
+      "reason": "原答案给出 D，但“可以为对象数组显式指定初值”取决于 C++ 标准版本和具体初始化语法，题干与答案需要回看原卷确认。"
+    },
+    {
+      "original_id": 45,
+      "question": "关于下面程序段，说法正确的是 class Location{ public: int GetX(); }; class Rectangle: private Location{ public: int GetW(); };",
+      "reason": "私有继承关系与 GetX 访问性导致多个选项存在歧义，需回看原卷答案。"
+    },
+    {
+      "original_id": 57,
+      "question": "函数模板定义如下: template Max( T a, T b ,T &c){c=a+b;} 下列选项正确的是（）。",
+      "reason": "函数模板声明的关键语法在原始 Word 中缺失，题干不完整。"
+    },
+    {
+      "original_id": 59,
+      "question": "函数重载是指（ ）。",
+      "reason": "选项 A 和 B 都部分符合函数重载定义，单选答案存在歧义。"
+    },
+    {
+      "original_id": 85,
+      "question": "考虑下面的函数原型声明：void testDefaulParam(int a,int b=1,char z='*')；下面函数调用中，不合法的是（ ）。",
+      "reason": "原答案给出 C，但按标准 C++，testDefaulParam(5, '#') 合法，字符可转换为 int 且 z 使用默认值。"
+    }
+  ]
+}

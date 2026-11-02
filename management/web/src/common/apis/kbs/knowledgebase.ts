@@ -98,6 +98,31 @@ export function addDocumentToKnowledgeBaseApi(data: {
   })
 }
 
+// 获取知识库级知识图谱草稿和已发布版本
+export function getKnowledgeGraphApi(kbId: string) {
+  return request({
+    url: `/api/v1/knowledgebases/${kbId}/knowledge-graph`,
+    method: "get"
+  })
+}
+
+// 使用课件思维导图和随堂测验生成知识图谱草稿
+export function generateKnowledgeGraphApi(kbId: string) {
+  return request({
+    url: `/api/v1/knowledgebases/${kbId}/knowledge-graph/generate`,
+    method: "post",
+    timeout: 60000000
+  })
+}
+
+// 发布教师确认后的知识图谱
+export function publishKnowledgeGraphApi(kbId: string) {
+  return request({
+    url: `/api/v1/knowledgebases/${kbId}/knowledge-graph/publish`,
+    method: "post"
+  })
+}
+
  // 获取知识库 Embedding 配置
 export function getKnowledgeBaseEmbeddingConfigApi(params:{kb_id: string}) {
   return request({

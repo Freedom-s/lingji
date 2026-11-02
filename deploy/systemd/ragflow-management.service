@@ -10,8 +10,11 @@ WorkingDirectory=/home/user/jianhuasuo/lingji/management/server
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=/home/user/jianhuasuo/lingji/management/server:/home/user/jianhuasuo/lingji
 ExecStart=/usr/local/bin/ragflow-management-start
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure
 RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
 LimitNOFILE=65536
 
 [Install]

@@ -105,7 +105,14 @@ def init_settings():
     HOST_IP = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("host", "127.0.0.1")
     HOST_PORT = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("http_port")
 
-    SECRET_KEY = get_base_config(RAG_FLOW_SERVICE_NAME, {}).get("secret_key", str(date.today()))
+    # 优先使用部署环境提供的固定密钥，其次使用 service_conf.yaml 中的配置。
+    # 不能把当前日期作为长期运行服务的密钥，否则跨天或重启后已有 Token 会失效。
+    ragflow_config = get_base_config(RAG_FLOW_SERVICE_NAME, {})
+    SECRET_KEY = (
+        os.environ.get("RAGFLOW_SECRET_KEY")
+        or ragflow_config.get("secret_key")
+        or str(date.today())
+    )
 
     global AUTHENTICATION_CONF, CLIENT_AUTHENTICATION, HTTP_APP_KEY, GITHUB_OAUTH, FEISHU_OAUTH
     # authentication

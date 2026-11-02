@@ -60,7 +60,6 @@ def login():
     # 通过email和password来查询当前的用户
     user = UserService.query_user(email, password)
     if user:
-        response_data = user.to_json()
         user.access_token = get_uuid() # 生成一个随机的uuid当作access_token
         # 用户的所有json信息
         login_user(user)
@@ -68,6 +67,9 @@ def login():
         user.update_time = (current_timestamp(),)
         user.update_date = (datetime_format(datetime.now()),)
         user.save()
+        # 必须在生成并持久化新的 access_token 后再组装响应数据，
+        # 否则响应体中的 access_token 仍然是登录前的旧 Token。
+        response_data = user.to_json()
         msg = "Welcome back!"
         # 这里一下吧全部的数据都返回回去了，甚至吧用户的密码也返回了
         return construct_response(data=response_data, auth=user.get_id(), message=msg)

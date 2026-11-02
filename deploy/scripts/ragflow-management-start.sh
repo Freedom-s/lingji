@@ -14,4 +14,16 @@ echo "PID=$$"
 
 export PYTHONUNBUFFERED=1
 export PYTHONPATH="/home/user/jianhuasuo/lingji/management/server:/home/user/jianhuasuo/lingji"
-exec /home/user/gsl/miniconda3/envs/lingji/bin/python app.py
+exec /home/user/gsl/miniconda3/envs/lingji/bin/python -m gunicorn \
+  --chdir /home/user/jianhuasuo/lingji/management/server \
+  --bind 0.0.0.0:5000 \
+  --workers 2 \
+  --worker-class gthread \
+  --threads 4 \
+  --timeout 3600 \
+  --graceful-timeout 30 \
+  --keep-alive 65 \
+  --access-logfile - \
+  --error-logfile - \
+  --capture-output \
+  app:app

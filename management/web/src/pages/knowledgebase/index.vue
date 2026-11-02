@@ -50,6 +50,7 @@ import {
   watch,
 } from "vue";
 import GenerationContentManager from "./components/GenerationContentManager.vue";
+import KnowledgeGraphReviewDialog from "./components/KnowledgeGraphReviewDialog.vue";
 import VideoKnowledgePointBindingDialog from "./components/VideoKnowledgePointBindingDialog.vue";
 import { getVideoBindingAction } from "./components/video-binding-action";
 import "element-plus/dist/index.css";
@@ -77,6 +78,7 @@ const generationManagerDocument = ref<{
 } | null>(null);
 const videoBindingVisible = ref(false);
 const videoBindingDocument = ref<{ id: string; name: string } | null>(null);
+const knowledgeGraphVisible = ref(false);
 
 // 添加清理函数
 function cleanupResources() {
@@ -99,6 +101,7 @@ function cleanupResources() {
   generationManagerDocument.value = null;
   videoBindingVisible.value = false;
   videoBindingDocument.value = null;
+  knowledgeGraphVisible.value = false;
 }
 
 // 在组件停用时清理资源
@@ -583,6 +586,11 @@ function handleView(row: KnowledgeBaseData) {
   batchProgress.value = null;
   // 获取文档列表
   getDocumentList();
+}
+
+function handleKnowledgeGraph(row: KnowledgeBaseData) {
+  currentKnowledgeBase.value = row;
+  knowledgeGraphVisible.value = true;
 }
 
 // 格式化解析状态
@@ -1668,7 +1676,7 @@ function loadingEmbeddingModels() {
             <el-table-column
               fixed="right"
               label="操作"
-              width="320"
+              width="400"
               align="center"
             >
               <template #default="scope">
@@ -1682,6 +1690,17 @@ function loadingEmbeddingModels() {
                     @click="handleView(scope.row)"
                   >
                     查看
+                  </el-button>
+                  <el-divider direction="vertical" />
+                  <el-button
+                    type="success"
+                    text
+                    bg
+                    size="small"
+                    :icon="Connection"
+                    @click="handleKnowledgeGraph(scope.row)"
+                  >
+                    知识图谱
                   </el-button>
                   <el-divider direction="vertical" />
                   <el-button
@@ -1771,6 +1790,13 @@ function loadingEmbeddingModels() {
             <div class="left-buttons">
               <el-button type="primary" @click="handleAddDocument">
                 添加文档
+              </el-button>
+              <el-button
+                type="success"
+                :icon="Connection"
+                @click="knowledgeGraphVisible = true"
+              >
+                知识图谱
               </el-button>
               <!-- 批量解析按钮 -->
               <el-button
@@ -2301,6 +2327,11 @@ function loadingEmbeddingModels() {
       :video="videoBindingDocument"
       :kb-id="currentKnowledgeBase?.id || ''"
       @saved="handleVideoBindingSaved"
+    />
+    <KnowledgeGraphReviewDialog
+      v-model="knowledgeGraphVisible"
+      :kb-id="currentKnowledgeBase?.id || ''"
+      :kb-name="currentKnowledgeBase?.name || ''"
     />
   </div>
 </template>

@@ -24,6 +24,7 @@ from rag.utils.redis_conn import RedisDistributedLock
 initRootLogger("ragflow_server")
 
 stop_event = threading.Event()
+_progress_executor = None
 
 
 def update_progress():
@@ -47,31 +48,39 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-if __name__ == "__main__":
+def initialize_application(start_background_tasks=True):
+    """Initialize the RAGFlow application for either Gunicorn or the dev runner."""
+    global _progress_executor
+
     logging.info(r"""
- ___       ___  ________   ________                     ___  ___     
-|\  \     |\  \|\   ___  \|\   ____\                   |\  \|\  \    
-\ \  \    \ \  \ \  \\ \  \ \  \___|   ____________    \ \  \ \  \   
- \ \  \    \ \  \ \  \\ \  \ \  \  ___|\____________\__ \ \  \ \  \  
-  \ \  \____\ \  \ \  \\ \  \ \  \|\  \|____________|\  \\_\  \ \  \ 
+ ___       ___  ________   ________                     ___  ___
+|\  \     |\  \|\   ___  \|\   ____\                   |\  \|\  \
+\ \  \    \ \  \ \  \\ \  \ \  \___|   ____________    \ \  \ \  \
+ \ \  \    \ \  \ \  \\ \  \ \  \  ___|\____________\__ \ \  \ \  \
+  \ \  \____\ \  \ \  \\ \  \ \  \|\  \|____________|\  \\_\  \ \  \
    \ \_______\ \__\ \__\\ \__\ \_______\            \ \________\ \__\
     \|_______|\|__|\|__| \|__|\|_______|             \|________|\|__|
-                                                                                                                                                           
     """)
     logging.info(f"RAGFlow base version: {get_ragflow_version()}")
     logging.info(f"project base: {utils.file_utils.get_project_base_directory()}")
     show_configs()
-    # 初始化settings
+
     settings.init_settings()
     print_rag_settings()
-
-    # init db
     init_web_db()
-    # init data
     init_web_data()
-    # init_llm_factory()
 
-    # init runtime config
+    RuntimeConfig.init_env()
+    RuntimeConfig.init_config(JOB_SERVER_HOST=settings.HOST_IP, HTTP_PORT=settings.HOST_PORT)
+
+    if start_background_tasks:
+        _progress_executor = ThreadPoolExecutor(max_workers=1)
+        _progress_executor.submit(update_progress)
+
+    return app
+
+
+if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -86,14 +95,10 @@ if __name__ == "__main__":
     if RuntimeConfig.DEBUG:
         logging.info("run on debug mode")
 
-    RuntimeConfig.init_env()
-    RuntimeConfig.init_config(JOB_SERVER_HOST=settings.HOST_IP, HTTP_PORT=settings.HOST_PORT)
+    initialize_application(start_background_tasks=True)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-
-    thread = ThreadPoolExecutor(max_workers=1)
-    thread.submit(update_progress)
 
     # start http server
     try:
