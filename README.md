@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="pic/favicon.svg" alt="Lingji Logo" width="80" height="80"/>
   <h1>Lingji | 灵机</h1>
   <p><strong>多模态检索增强的智能教学助手平台</strong></p>
   
@@ -25,8 +26,8 @@
 ### 🎯 核心特性
 
 #### 1️⃣ **页面级检索（核心创新）**
-- 📄 **Workflow 模式**：检索后直接展示原始页面，用户可以看到答案来源于哪个页面、哪个位置
-- 🤖 **Agentic 模式**：AI 理解页面内容后生成答案，同时展示来源页面
+- 📄 **Workflow 模式**：固定流程检索，直接展示原始页面，用户可以看到答案来源于哪个页面、哪个位置
+- 🤖 **Agentic 模式**：基于 MCP 工具的智能检索，通过 ReAct 机制理解页面内容后生成答案，同时展示来源页面
 - ✅ **可追溯性**：每个答案都能追溯到具体页面，避免 AI 幻觉
 - ✅ **可验证性**：用户可以直接查看原文，验证 AI 回答的准确性
 
@@ -37,7 +38,7 @@
 
 #### 3️⃣ **教育场景深度适配**
 - 👨‍🏫 **教师端**：班级管理、助教配置、教学进度追踪、学生行为分析
-- 👨‍🎓 **学生端**：AI 对话答疑、课件学习、思维导图、闪卡速记、视频学习
+- 👨‍🎓 **学生端**：AI 对话答疑、课件学习、思维导图、概念速记、闪卡、随堂测验
 - 📊 **数据看板**：实时统计学习时长、对话轮次、知识库使用情况
 
 #### 4️⃣ **文档解析增强**
@@ -61,11 +62,11 @@
   <tr>
     <td width="50%">
       <img src="pic/student/workflow.png" alt="Workflow 检索模式"/>
-      <p align="center"><b>Workflow 检索模式</b><br/>检索后直接返回页面，用户可以看到具体的页面内容</p>
+      <p align="center"><b>Workflow 检索模式</b><br/>固定流程检索，直接返回页面，用户可以看到具体的页面内容</p>
     </td>
     <td width="50%">
       <img src="pic/student/agentic.png" alt="Agentic 智能模式"/>
-      <p align="center"><b>Agentic 智能模式</b><br/>AI 理解页面内容后生成答案，同时展示来源页面</p>
+      <p align="center"><b>Agentic 智能模式</b><br/>基于 MCP 工具 + ReAct，AI 智能理解页面内容后生成答案，同时展示来源页面</p>
     </td>
   </tr>
   <tr>
@@ -73,7 +74,7 @@
       <img src="pic/system/workflow_vs_agentic.png" alt="两种模式对比" width="80%"/>
       <p><b>Workflow vs Agentic 对比</b><br/>
       📄 Workflow：快速定位页面，适合查找具体内容<br/>
-      🤖 Agentic：智能理解后回答，适合需要解释和归纳的问题</p>
+      🤖 Agentic：智能推理决策，适合需要解释和归纳的复杂问题</p>
     </td>
   </tr>
 </table>
@@ -84,11 +85,52 @@
 - ✅ **图文并茂**：保留原始页面的图表、公式、排版，完整呈现信息
 - ✅ **多模态理解**：VLM 可以直接理解页面中的图片、表格、公式
 
+**技术实现：**
+- Workflow：基于预定义检索流程
+- Agentic：集成 MCP (Model Context Protocol) 工具，通过 ReAct (Reasoning + Acting) 机制实现智能决策
+
 ---
 
-### 多模态图文理解
+### 🎓 学生端学习功能
 
 <table>
+  <tr>
+    <td width="50%">
+      <img src="pic/student/课件浏览.png" alt="课件浏览"/>
+      <p align="center"><b>课件在线浏览</b><br/>支持 PDF、PPT 在线浏览，保留原始排版</p>
+    </td>
+    <td width="50%">
+      <img src="pic/student/思维导图.png" alt="思维导图"/>
+      <p align="center"><b>自动生成思维导图</b><br/>基于课件内容自动生成结构化思维导图</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="pic/student/概念速记.png" alt="概念速记"/>
+      <p align="center"><b>概念速记</b><br/>提取关键知识点，快速复习</p>
+    </td>
+    <td width="50%">
+      <img src="pic/student/随堂测验.png" alt="随堂测验"/>
+      <p align="center"><b>随堂测验</b><br/>自动生成测验题，巩固学习效果</p>
+    </td>
+  </tr>
+</table>
+
+---
+
+### 💬 AI 对话与多模态理解
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="pic/student/助教主页面.png" alt="AI 助教对话"/>
+      <p align="center"><b>AI 助教对话</b><br/>多轮智能问答，支持上下文理解</p>
+    </td>
+    <td width="50%">
+      <img src="pic/student/系统问答界面.png" alt="智能问答"/>
+      <p align="center"><b>智能问答界面</b><br/>清晰的问答交互设计</p>
+    </td>
+  </tr>
   <tr>
     <td width="50%">
       <img src="pic/student/图片上传提问.png" alt="图片上传提问"/>
@@ -99,70 +141,53 @@
       <p align="center"><b>图文混合输出</b><br/>返回结果包含相关图片和文本</p>
     </td>
   </tr>
-</table>
-
----
-
-### 学生端界面
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="pic/student/助教主页面.png" alt="AI 助教对话"/>
-      <p align="center"><b>AI 助教对话</b></p>
-    </td>
-    <td width="50%">
-      <img src="pic/student/系统问答界面.png" alt="智能问答"/>
-      <p align="center"><b>智能问答界面</b></p>
-    </td>
-  </tr>
   <tr>
     <td colspan="2" align="center">
       <img src="pic/student/学情分析.png" alt="学情分析" width="80%"/>
-      <p><b>学生学情分析</b><br/>可视化展示学习进度、知识点掌握度</p>
+      <p><b>学生学情分析</b><br/>可视化展示学习进度、知识点掌握度、学习轨迹</p>
     </td>
   </tr>
 </table>
 
 ---
 
-### 教师管理后台
+### 👨‍🏫 教师管理后台
 
 <table>
   <tr>
     <td width="50%">
       <img src="pic/teacher/数据概览.png" alt="数据概览"/>
-      <p align="center"><b>数据概览看板</b></p>
+      <p align="center"><b>数据概览看板</b><br/>班级整体学习情况统计</p>
     </td>
     <td width="50%">
       <img src="pic/teacher/班级管理.png" alt="班级管理"/>
-      <p align="center"><b>班级管理</b></p>
+      <p align="center"><b>班级管理</b><br/>创建和管理教学班级</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <img src="pic/teacher/学生管理.png" alt="学生管理"/>
-      <p align="center"><b>学生管理</b></p>
+      <p align="center"><b>学生管理</b><br/>学生信息和权限管理</p>
     </td>
     <td width="50%">
       <img src="pic/teacher/助教管理.png" alt="助教管理"/>
-      <p align="center"><b>助教配置</b></p>
+      <p align="center"><b>助教配置</b><br/>自定义 AI 助教的知识库和模型</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <img src="pic/teacher/知识库管理.png" alt="知识库管理"/>
-      <p align="center"><b>知识库管理</b></p>
+      <p align="center"><b>知识库管理</b><br/>上传和管理教学资源</p>
     </td>
     <td width="50%">
       <img src="pic/teacher/进度管理.png" alt="进度管理"/>
-      <p align="center"><b>教学进度管理</b></p>
+      <p align="center"><b>教学进度管理</b><br/>设置和追踪每周学习目标</p>
     </td>
   </tr>
   <tr>
     <td colspan="2" align="center">
       <img src="pic/teacher/评分管理.png" alt="评分管理" width="60%"/>
-      <p><b>评分管理</b></p>
+      <p><b>评分管理</b><br/>在线测验、作业评分与成绩统计</p>
     </td>
   </tr>
 </table>
@@ -171,6 +196,13 @@
 
 ## 🏗️ 架构设计
 
+### 系统首页与登录
+
+<div align="center">
+  <img src="pic/system/登陆界面.png" alt="登录界面" width="70%"/>
+  <p><i>系统登录界面</i></p>
+</div>
+
 ### 系统架构图
 
 <div align="center">
@@ -178,11 +210,11 @@
   <p><i>灵机多模态 RAG 系统架构</i></p>
 </div>
 
-### 业务流程
+### 检索与回答流程
 
 <div align="center">
-  <img src="pic/system/业务流程2.png" alt="业务流程" width="70%"/>
-  <p><i>整体业务流程</i></p>
+  <img src="pic/system/业务流程2.png" alt="检索流程" width="70%"/>
+  <p><i>从文档上传到检索回答的完整业务流程</i></p>
 </div>
 
 ### 角色权限关系
@@ -272,10 +304,11 @@ docker compose -f docker/docker-compose.yml logs -f
 | 模块 | 功能描述 |
 |------|----------|
 | **AI 助教对话** | 基于知识库的多轮智能问答，支持**页面级检索**和图文混合输出 |
-| **Workflow 模式** | 快速定位页面，直接展示原始内容，适合查找具体信息 |
-| **Agentic 模式** | AI 智能理解后回答，同时展示来源页面，适合需要解释的问题 |
+| **Workflow 模式** | 固定流程检索，快速定位页面，直接展示原始内容 |
+| **Agentic 模式** | MCP 工具 + ReAct 智能推理，适合复杂问题的理解和回答 |
 | **课件学习** | 在线浏览 PPT/PDF，自动生成思维导图和概念速记 |
 | **闪卡系统** | 知识点记忆卡片，支持自定义标签和复习计划 |
+| **随堂测验** | 自动生成测验题，实时评估学习效果 |
 | **视频学习** | 支持视频问答，自动提取视频字幕和关键帧 |
 | **学习统计** | 个人学习时长、对话次数、知识点掌握度分析 |
 
@@ -284,7 +317,7 @@ docker compose -f docker/docker-compose.yml logs -f
 | 模块 | 功能描述 |
 |------|----------|
 | **班级管理** | 创建班级、分配学生、管理教学进度 |
-| **助教配置** | 自定义 AI 助教的知识库、模型、提示词、检索模式 |
+| **助教配置** | 自定义 AI 助教的知识库、模型、提示词、检索模式（Workflow/Agentic） |
 | **教学文件管理** | 批量上传课件、视频，自动解析与索引 |
 | **学生行为分析** | 查看学生学习轨迹、对话记录、知识点薄弱项 |
 | **数据看板** | 班级整体学习情况、知识库使用热度、模型调用统计 |
@@ -312,6 +345,7 @@ docker compose -f docker/docker-compose.yml logs -f
 | **Qwen3-VL-Embedding-2B** | 多模态文本 + 图像嵌入向量生成 |
 | **Qwen3-VL-Reranker-2B** | 检索结果重排序 |
 | **MinerU** | 高精度 OCR 文档解析引擎 |
+| **MCP (Model Context Protocol)** | Agentic 模式的工具调用协议 |
 | **Elasticsearch** | 全文检索与向量检索 |
 | **MinIO** | 对象存储（文件、图片、视频） |
 
@@ -361,10 +395,11 @@ lingji/
 ├── qwen3-vl-service/      # Qwen3-VL 推理服务
 ├── mineru-ocr-service/    # MinerU OCR 服务
 ├── docker/                # Docker 配置
-├── pic/                   # 系统截图
-│   ├── student/          # 学生端截图
-│   ├── teacher/          # 教师端截图
-│   └── system/           # 架构图和流程图
+├── pic/                   # 系统截图（23张）
+│   ├── favicon.svg       # 项目 Logo
+│   ├── student/          # 学生端截图（11张）
+│   ├── teacher/          # 教师端截图（7张）
+│   └── system/           # 架构图和流程图（5张）
 └── docs/                  # 文档
 ```
 
