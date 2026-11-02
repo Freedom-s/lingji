@@ -144,3 +144,9 @@ output/
 diagrams/
 deploy.sh
 work/
+# =====================
+# Sensitive config files
+# =====================
+conf/private.pem
+conf/public.pem
+conf/service_conf.yaml
