@@ -353,20 +353,21 @@ lingji/
 - ⚠️ **必须开源**：若修改代码或通过网络提供服务，必须公开源码
 - ⚠️ **相同许可**：衍生作品必须使用相同的 AGPL-3.0 许可证
 
-详见 [`LICENSE`](LICENSE)。
-
 ---
 
 ## 🙏 致谢
 
-本项目基于以下开源项目构建：
+本项目基于 [**ragflow-plus**](https://github.com/zstar1003/ragflow-plus) 进行深度定制开发，在此特别感谢原作者的开源贡献！
 
-- [RAGFlow](https://github.com/infiniflow/ragflow) - RAG 引擎基础
-- [MinerU](https://github.com/opendatalab/MinerU) - 高精度文档解析
+同时感谢以下开源项目：
+
+- [ragflow-plus](https://github.com/zstar1003/ragflow-plus) - 本项目的直接基础，提供了完整的教学场景适配方案
+- [RAGFlow](https://github.com/infiniflow/ragflow) - 强大的 RAG 引擎核心
+- [MinerU](https://github.com/opendatalab/MinerU) - 高精度 OCR 文档解析引擎
 - [Qwen-VL](https://github.com/QwenLM/Qwen-VL) - 多模态视觉语言模型
-- [v3-admin-vite](https://github.com/un-pany/v3-admin-vite) - 后台管理模板
+- [v3-admin-vite](https://github.com/un-pany/v3-admin-vite) - Vue3 后台管理模板
 
-感谢所有贡献者！🎉
+感谢所有开源贡献者！🎉
 
 ---
 
