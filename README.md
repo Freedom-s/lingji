@@ -259,13 +259,26 @@
 
 ## 🚀 快速开始
 
+### 部署架构说明
+
+Lingji 采用混合部署架构：
+- **基础设施**：MySQL、Redis、Elasticsearch、MinIO 等通过 Docker Compose 启动
+- **AI 服务**：Qwen3-VL、MinerU 微服务通过 Docker 启动
+- **应用服务**：前台/后台的前端和后端需要独立启动（开发模式）
+
 ### 前置要求
 
 - **Docker** 20.10+ 和 **Docker Compose** 2.0+
+- **Python** 3.10-3.12（推荐使用 conda 管理环境）
+- **Node.js** 16+（前端开发）
 - **GPU**（推荐）：用于运行 Qwen3-VL 模型（至少 8GB 显存）
 - **内存**：建议 16GB+
 
-### 一键部署
+---
+
+### 方案 A：完整部署（生产环境）
+
+#### Step 1: 启动基础设施
 
 ```bash
 # 1. 克隆仓库
@@ -276,27 +289,149 @@ cd lingji
 cp conf/service_conf.yaml.example conf/service_conf.yaml
 # 编辑 conf/service_conf.yaml，配置数据库密码、API Key 等
 
-# 3. 启动所有服务
-docker compose -f docker/docker-compose.yml up -d
+cp docker/.env.example docker/.env
+# 编辑 docker/.env，配置端口、时区等
 
-# 4. 等待服务启动（首次启动需要下载模型，约 5-10 分钟）
-docker compose -f docker/docker-compose.yml logs -f
+# 3. 启动 Docker 基础设施（MySQL、Redis、ES、MinIO、AI 服务）
+cd docker
+docker compose up -d
 
-# 5. 访问服务
-# 前台：http://localhost:9222
-# 后台：http://localhost:8888
+# 4. 等待服务启动完成（约 3-5 分钟）
+docker compose logs -f
 ```
 
-### 默认账号
+#### Step 2: 启动应用服务
 
-| 系统 | 用户名 | 密码 |
-|------|--------|------|
-| 前台/后台 | `teacher1@qq.com` | `teacher1` |
+**方式 1：使用脚本启动（推荐）**
+
+```bash
+# 返回项目根目录
+cd ..
+
+# 构建并启动所有服务
+./deploy.sh
+
+# 服务将在后台运行：
+# - 前台后端: http://localhost:9380
+# - 前台前端: http://localhost:9222
+# - 后台后端: http://localhost:5000
+# - 后台前端: http://localhost:8888
+```
+
+**方式 2：手动启动各服务**
+
+需要打开 **4 个终端窗口**，分别启动：
+
+```bash
+# Terminal 1: 前台后端 API (端口 9380)
+conda create -n ragflowplus python=3.11
+conda activate ragflowplus
+pip install -r requirements.txt
+python -m api.ragflow_server
+
+# Terminal 2: 前台前端 (端口 9222)
+cd web
+npm install
+npm run dev
+
+# Terminal 3: 后台后端 (端口 5000)
+cd management/server
+conda activate ragflowplus  # 使用相同环境
+python app.py
+
+# Terminal 4: 后台前端 (端口 8888)
+cd management/web
+npm install
+npm run dev
+```
+
+#### Step 3: 访问系统
+
+| 系统 | 访问地址 | 默认账号 | 默认密码 |
+|------|----------|----------|----------|
+| **前台系统** | http://localhost:9222 | teacher1@qq.com | teacher1 |
+| **后台管理** | http://localhost:8888 | teacher1@qq.com | teacher1 |
 
 > ⚠️ **安全提示**：首次部署后请立即修改默认密码
 
 ---
 
+### 方案 B：开发模式（推荐开发者使用）
+
+详见 [`CLAUDE.md`](CLAUDE.md) 中的完整开发指南。
+
+**快速启动开发环境：**
+
+```bash
+# 1. 启动基础设施
+cd docker && docker compose up -d
+
+# 2. 创建 Python 环境
+conda create -n ragflowplus python=3.11
+conda activate ragflowplus
+pip install -r requirements.txt
+
+# 3. 启动 4 个服务（每个在单独的终端）
+# Terminal 1: 前台后端
+python -m api.ragflow_server
+
+# Terminal 2: 前台前端
+cd web && npm run dev
+
+# Terminal 3: 后台后端
+cd management/server && python app.py
+
+# Terminal 4: 后台前端
+cd management/web && npm run dev
+```
+
+---
+
+### 服务端口说明
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| **前台前端** | 9222 | React + Umi 4 |
+| **前台后端** | 9380 | Flask API |
+| **后台前端** | 8888 | Vue 3 + Element Plus |
+| **后台后端** | 5000 | Flask Management API |
+| **MySQL** | 5455 | 数据库 |
+| **Redis** | 6379 | 缓存/队列 |
+| **Elasticsearch** | 1200 | 全文检索 |
+| **MinIO** | 9000 | 对象存储 |
+| **Qwen3-VL Embedding** | 8000 | 嵌入模型服务 |
+| **Qwen3-VL Reranker** | 8001 | 重排序模型服务 |
+| **MinerU OCR** | 6060 | 文档解析服务 |
+
+---
+
+### 故障排查
+
+**问题 1：Docker 服务启动失败**
+```bash
+# 查看服务日志
+docker compose logs <service_name>
+
+# 重启服务
+docker compose restart <service_name>
+```
+
+**问题 2：前端无法访问后端**
+- 检查 `conf/service_conf.yaml` 中的端口配置
+- 确保防火墙允许相应端口
+
+**问题 3：AI 模型加载失败**
+- 检查 GPU 驱动是否正确安装
+- 确认显存至少 8GB
+
+**问题 4：数据库连接失败**
+```bash
+# 检查 MySQL 容器状态
+docker compose ps mysql
+
+# 重启 MySQL
+docker compose restart mysql
+```
 ## 📦 功能模块
 
 ### 👨‍🎓 学生端功能
